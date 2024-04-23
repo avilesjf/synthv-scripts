@@ -52,8 +52,8 @@ function renameOneGroup(maxLengthResult, noteGroup)
 				local lyrics = note:getLyrics()			
 				if string.len(lyrics) > 0 then
 				
-				  -- Filter char '+' & '-'
-				  if lyrics ~= "+" then 
+				  -- Filter char '+' & '-' & 'br'
+				  if lyrics ~= "+" and lyrics ~= "br"  then
 					-- Replace following note char '-'
 					if lyrics == "-" then lyrics = ".." end 
 					-- Add lyrics for each note

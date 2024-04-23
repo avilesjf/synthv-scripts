@@ -170,8 +170,8 @@ function getTrackLyrics(track, timeAxis, secondDecayInput)
 							firstSecNotePos = timeAxis:getSecondsFromBlick(notePos + TimeOffset)
 						end
 						
-						-- Filter char '+' & '-'
-						if lyrics ~= "+" and lyrics ~= "-"  then 
+						-- Filter char '+' & '-' & 'br'
+						if lyrics ~= "+" and lyrics ~= "-" and lyrics ~= "br"  then
 							-- add space between lyrics if they are stored in each note
 							sepChar = addSpaceChar(previousLyrics)
 
