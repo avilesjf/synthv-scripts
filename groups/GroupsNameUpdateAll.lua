@@ -30,6 +30,35 @@ function limitStringLength(resultLyrics, maxLengthResult)
 	return resultLyrics
 end
 
+-- Check lyrics "a" less than .1s for special effect
+function isLyricsEffect(timeAxis, note)
+	local result = false
+	local notelength = timeAxis:getSecondsFromBlick(note:getDuration())
+	-- ie: 0.0635
+	if notelength < 0.1 then
+		result = true
+	end
+	return result
+end
+
+-- Is lyrics is a text accepted
+function isTextAccepted(timeAxis, lyrics)
+	local result = false
+	
+	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
+	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
+		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
+		result = true
+	end
+	
+	-- Specific for personal vocal effect
+	if lyrics == "a" and isLyricsEffect(timeAxis, note) then
+		result = false
+	end
+
+	return result
+end
+
 -- Rename all groups name (if new lyrics only)
 function RenameGroups()
 	local maxLengthResult = 30
@@ -109,15 +138,14 @@ function renameOneGroup(maxLengthResult, timeAxis, noteGroup)
 				local lyrics = note:getLyrics()			
 				if string.len(lyrics) > 0 then
 				
-				  -- Filter char '+' & '-' & 'br'
-				  if lyrics ~= "+" and lyrics ~= "br"  then
-					-- Replace following note char '-'
-					if lyrics == "-" then lyrics = ".." end 
-					-- Add lyrics for each note
-					lyricsLine = lyricsLine .. sep .. lyrics
-					sep = " "
-				  end
-				  
+					-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+					if isTextAccepted(timeAxis, lyrics) then
+						-- Replace following note char '-'
+						if lyrics == "-" then lyrics = ".." end 
+						-- Add lyrics for each note
+						lyricsLine = lyricsLine .. sep .. lyrics
+						sep = " "
+					end				  
 				end
 			end
 		end

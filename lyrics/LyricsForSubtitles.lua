@@ -62,9 +62,34 @@ function addSpaceChar(previousLyrics)
 	return sepChar
 end
 
--- Check number notes, get track ref
--- Get each track, group number, start Blick + seconds, duration
--- process sequence, get first group for all track, if same track get group from track ref
+-- Check lyrics "a" less than .1s for special effect
+function isLyricsEffect(timeAxis, note)
+	local result = false
+	local notelength = timeAxis:getSecondsFromBlick(note:getDuration())
+	-- ie: 0.0635
+	if notelength < 0.1 then
+		result = true
+	end
+	return result
+end
+
+-- Is lyrics is a text accepted
+function isTextAccepted(timeAxis, lyrics)
+	local result = false
+	
+	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
+	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
+		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
+		result = true
+	end
+	
+	-- Specific for personal vocal effect
+	if lyrics == "a" and isLyricsEffect(timeAxis, note) then
+		result = false
+	end
+
+	return result
+end
 
 -- Get lyrics from groups notes
 function getLyrics(secondDecayInput) 
@@ -148,8 +173,9 @@ function getLyrics(secondDecayInput)
 							firstNotePos = note:getOnset()
 							firstSecNotePos = timeAxis:getSecondsFromBlick(notePos + TimeOffset)
 						end
-						-- Filter char '+' & '-' & 'br'
-						if lyrics ~= "+" and lyrics ~= "-" and lyrics ~= "br"  then
+						
+						-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+						if isTextAccepted(timeAxis, lyrics) then
 							-- add space between lyrics if they are stored in each note
 							sepChar = addSpaceChar(previousLyrics)
 
