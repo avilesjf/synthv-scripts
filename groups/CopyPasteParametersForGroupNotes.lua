@@ -510,7 +510,7 @@ function main()
 			local resultAction = notesObject:promptForCopy()
 			
 			if resultAction then
-				-- Copy parameters to clipboard
+				-- save parameters to clipboard
 				notesObject:saveParameters()
 				
 				-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters copy done!") )
@@ -526,17 +526,20 @@ function main()
 				end
 			end
 		else
+			notesObject:getParameters()
+			-- Save new parameters to clipboard
+			notesObject:saveParameters()
+
 			local timeBeginConvClipBoard = notesObject.timeBeginFromClipboard
 			if type(timeBeginConvClipBoard) == "string" then timeBeginConvClipBoard = tonumber(timeBeginConvClipBoard) end
 			
 			if notesObject.timeBegin == timeBeginConvClipBoard then
 				local groupRefTimeoffset = notesObject.currentGroupRef:getTimeOffset()
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("!! STOP !!") .. "\r" .. SV:T("You cannot paste on the same selected notes!") .. "\r"
+				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("!! STOP !!") .. "\r" .. SV:T("You cannot paste on the same selected notes!") .. "\r\r"
 					.. SV:T("(Current note time begin is ") 
 					.. notesObject:secondsToClock(notesObject:getBlickToSecond(notesObject.timeBegin + groupRefTimeoffset))
-					.. ")" .. "\r\r"
-					.. SV:T("Clear the clipboard to select again these selected notes parameters!")
-					.. SV:T("tips: Copy to the clipboard any text to clean it!")
+					.. ")" .. "\r"
+					.. SV:T("Parameters type count: ") .. tostring(notesObject.parametersFoundCount)
 					)
 			else
 				-- Paste action
