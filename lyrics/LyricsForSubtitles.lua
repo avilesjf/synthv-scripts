@@ -74,8 +74,9 @@ function isLyricsEffect(timeAxis, note)
 end
 
 -- Is lyrics is a text accepted
-function isTextAccepted(timeAxis, lyrics)
+function isTextAccepted(timeAxis, note)
 	local result = false
+	local lyrics = note:getLyrics()
 	
 	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
 	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
@@ -175,7 +176,7 @@ function getLyrics(secondDecayInput)
 						end
 						
 						-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
-						if isTextAccepted(timeAxis, lyrics) then
+						if isTextAccepted(timeAxis, note) then
 							-- add space between lyrics if they are stored in each note
 							sepChar = addSpaceChar(previousLyrics)
 

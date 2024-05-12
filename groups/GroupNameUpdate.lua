@@ -42,8 +42,9 @@ function isLyricsEffect(timeAxis, note)
 end
 
 -- Is lyrics is a text accepted
-function isTextAccepted(timeAxis, lyrics)
+function isTextAccepted(timeAxis, note)
 	local result = false
+	local lyrics = note:getLyrics()
 	
 	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
 	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
@@ -64,6 +65,8 @@ function RenameGroup()
 	local maxLengthResult = 30
 	local editor = SV:getMainEditor()
 	local ref = editor:getCurrentGroup()
+	local project = SV:getProject()
+	local timeAxis = project:getTimeAxis()
 
 	if ref == nil then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No group selected found!"))
@@ -76,7 +79,7 @@ function RenameGroup()
 			 .. SV:T("Please select one group!")
 			SV:showMessageBox(SV:T(SCRIPT_TITLE), resultMessage)
 		else
-			local resultLyrics = renameOneGroup(maxLengthResult, noteGroup)
+			local resultLyrics = renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 
 			-- Result infos
 			if string.len(resultLyrics) > 0 then
@@ -94,7 +97,7 @@ function RenameGroup()
 end
 
 -- Rename one group
-function renameOneGroup(maxLengthResult, noteGroup)
+function renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 	local resultLyrics = ""
 	local groupName = noteGroup:getName()
 	local notesCount = noteGroup:getNumNotes()
@@ -112,7 +115,7 @@ function renameOneGroup(maxLengthResult, noteGroup)
 				if string.len(lyrics) > 0 then
 				
 					-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
-					if isTextAccepted(timeAxis, lyrics) then
+					if isTextAccepted(timeAxis, note) then
 						-- Replace following note char '-'
 						if lyrics == "-" then lyrics = ".." end 
 						-- Add lyrics for each note
