@@ -24,7 +24,8 @@ or message me on the SynthV Forums (https://forum.synthesizerv.com/u/jeanf/summa
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
-Also copy/paste all automation parameters corresponding to the selected notes.
+Copy/paste all automation parameters corresponding to the selected notes.
+Duplicate groups notes and shift them in current scale for vocal harmonies.
 
 ## lyrics-scripts
 Extracting lyrics easier to save all lyrics of a song. 
