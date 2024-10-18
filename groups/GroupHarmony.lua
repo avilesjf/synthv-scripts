@@ -351,7 +351,7 @@ scaleTools = {
 		local nextKey = InternalData.keysInScale[posTarget]
 		--local posNextKeyInScaleKey = scaleTools.getKeyPosInKeynames(InternalData.keysInScale, nextKey)
 		
-		local gapDegree = getShiftDegrees(pitchTarget, posKeyInScaleKey)	
+		local gapDegree = scaleTools.getShiftDegrees(pitchTarget, posKeyInScaleKey)	
 		local notePitchNew = notePitch + gapDegree
 		
 		InternalData.logs:add("" .. notePitch .. " / " .. notePitchNew .. ", gap: " .. gapDegree
