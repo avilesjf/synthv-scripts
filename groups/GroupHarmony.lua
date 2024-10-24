@@ -72,9 +72,10 @@ commonTools = {
 		
 		if keyScaleFound == "" then
 			keyFoundDisplay = SV:T("No common scale key found!")
-			InternalData.keyScaleChoice = keyNames
+			InternalData.keyScaleChoice = InternalData.keyNames
 		else
 			InternalData.keyScaleChoice = commonTools.getKeyScaleChoice(keyScaleFound)
+			SV:showMessageBox(SV:T(SCRIPT_TITLE), "keyScaleFound: " .. keyScaleFound)
 			
 			if string.len(keyScaleFoundTrack) > 0 then
 				if keyScaleFound ~= keyScaleFoundTrack then
@@ -264,7 +265,6 @@ scaleTools = {
 		local scaleFound = ""
 		local notes = {}
 		local sep = ""
-		local keyNames = InternalData.keyNames
 		local trackinfos = ""
 		
 		if paramTrack == "track" then
@@ -294,16 +294,16 @@ scaleTools = {
 		InternalData.logs:add(SV:T("Group or track: ") .. groupOrTrackNotes .. SV:T(", notes count:") .. #notes .. " " .. trackinfos)
 		
 		-- loop each scales
-		for key = 1, #keyNames do
+		for key = 1, #InternalData.keyNames do
 			local isInScale = false
 			local posKeyInScale = key - 1
 			
 			-- Loop on pitch notes
-			isInScale = scaleTools.loopNotes(notes, posKeyInScale, keyNames, key)
+			isInScale = scaleTools.loopNotes(notes, posKeyInScale, InternalData.keyNames, key)
 			if isInScale then
 				-- scale found
-				scaleFound = scaleFound .. sep .. keyNames[key]
-				InternalData.logs:add(SV:T("key: ") .. keyNames[key] .. " " .. SV:T("YES") .. "\r")
+				scaleFound = scaleFound .. sep .. InternalData.keyNames[key]
+				InternalData.logs:add(SV:T("key: ") .. InternalData.keyNames[key] .. " " .. SV:T("YES") .. "\r")
 				sep = InternalData.SEP_KEYS
 				--break
 			end
@@ -390,7 +390,7 @@ scaleTools = {
 			if notePitch ~= nil then
 				isInScale = scaleTools.isInScale(notePitch, posKeyInScale)
 				if not isInScale then
-					-- InternalData.logs:add(SV:T("pitch: ") .. keyNames[(notePitch % 12) + 1] .. SV:T(", key: ") ..  keyNames[key] .. " " .. SV:T("NOT"))
+					-- InternalData.logs:add(SV:T("pitch: ") .. InternalData.keyNames[(notePitch % 12) + 1] .. SV:T(", key: ") ..  InternalData.keyNames[key] .. " " .. SV:T("NOT"))
 					break
 				end
 			end
