@@ -75,7 +75,6 @@ commonTools = {
 			InternalData.keyScaleChoice = InternalData.keyNames
 		else
 			InternalData.keyScaleChoice = commonTools.getKeyScaleChoice(keyScaleFound)
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), "keyScaleFound: " .. keyScaleFound)
 			
 			if string.len(keyScaleFoundTrack) > 0 then
 				if keyScaleFound ~= keyScaleFoundTrack then
