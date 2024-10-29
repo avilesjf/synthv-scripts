@@ -31,6 +31,9 @@ Duplicate groups notes and shift them in current scale for vocal harmonies.
 Extracting lyrics easier to save all lyrics of a song. 
 Also extracting lyrics into the specific .SRT text format to use within a video.
 
+## tools-scripts
+Extracting (and copy into the clipboard) all existing shortcuts into the file: settings.xml.
+
 ## Modifying these scripts or making your own
 If you copy, modify, fork, etc. these scripts, crediting me for the original source could be a good choice and be free to notify me.
 
