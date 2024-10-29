@@ -11,19 +11,23 @@ And copy result into the Clipboard.
 
 Example:
 Defined:
-"Lyrics tracks to Clipboard V1.0" = "ctrl + shift + L"
-"Group name udate V1.0" = "ctrl + shift + R"
-"Group name update V1.0" = "ctrl + shift + R"
-"Groups name update All V1.0" = "ctrl + shift + U"
-"Lyrics tracks in .SRT format to Clipboard V1.0" = "ctrl + shift + L"
-"Lyrics from midi to Clipboard V1.0" = "ctrl + shift + K"
-..
+<ScriptItem name="Lyrics tracks to Clipboard V1.0" keyMapping=="ctrl + shift + L"/>
+<ScriptItem name="Group name udate V1.0" keyMapping=="ctrl + shift + R"/>
+<ScriptItem name="Group name update V1.0" keyMapping=="ctrl + shift + R"/>
+<ScriptItem name="Groups name update All V1.0" keyMapping=="ctrl + shift + U"/>
+<ScriptItem name="Lyrics tracks in .SRT format to Clipboard V1.0" keyMapping=="ctrl + shift + L"/>
+
 -------------------------
 Not defined:
-"Merge Selected Notes" = ""
-"Play with Smooth Page Turning" = ""
-"Randomize Parameters" = ""
-..
+<ScriptItem name="Merge Selected Notes" keyMapping==""/>
+<ScriptItem name="Play with Smooth Page Turning" keyMapping==""/>
+<ScriptItem name="Randomize Parameters" keyMapping==""/>
+<ScriptItem name="Remove Short Silences" keyMapping==""/>
+<ScriptItem name="Scale Selected Notes" keyMapping==""/>
+<ScriptItem name="Silence Skipping Play" keyMapping==""/>
+<ScriptItem name="Split Selected Groups" keyMapping==""/>
+<ScriptItem name="Split Selected Notes" keyMapping==""/>
+<ScriptItem name="add cl to the beginning of selected phonemes" keyMapping==""/>
 
 2024 - JF AVILES
 --]]
@@ -96,7 +100,8 @@ commonTools = {
 						for i=1, #parsedXml.ApplicationSettings.Scripts.ScriptItem do
 							local keyMap = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@keyMapping"]
 							if string.len(keyMap)> 0 then
-								result = result .. "\"" .. parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@name"] .. "\"" .. " = \"".. keyMap .. "\"\r"
+								local scriptName = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@name"]
+								result = result .. commonTools.getFormatScriptItem(scriptName, keyMap)
 							end
 						end
 						
@@ -107,7 +112,9 @@ commonTools = {
 						for i=1, #parsedXml.ApplicationSettings.Scripts.ScriptItem do
 							local keyMap = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@keyMapping"]
 							if string.len(keyMap) == 0 then
-								result = result .. "\"" .. parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@name"] .. "\"" .. " = \"".. keyMap .. "\"\r"
+								-- <ScriptItem name="Lyrics tracks to Clipboard V1.0" keyMapping="ctrl + shift + L"/>
+								local scriptName = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@name"]
+								result = result .. commonTools.getFormatScriptItem(scriptName, "")
 							end
 						end
 						error = false
@@ -126,6 +133,20 @@ commonTools = {
 			end
 		end
 	end,
+	
+	getFormatScriptItem = function(item, keymap)
+		local scriptItemBegin = "<ScriptItem name="
+		local scriptItemKeyMapping = "keyMapping=="
+		local scriptItemEnd = "/>"
+		local sepQuote = "\""
+		
+		local result = scriptItemBegin .. sepQuote .. item .. sepQuote 
+			.. " " 
+			.. scriptItemKeyMapping .. sepQuote .. keymap .. sepQuote 
+			.. scriptItemEnd .. "\r"
+			
+		return result
+	end
 		
 }
 
