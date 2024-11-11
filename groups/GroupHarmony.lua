@@ -1,15 +1,22 @@
-local SCRIPT_TITLE = 'Group Harmony V1.0'
+local SCRIPT_TITLE = 'Group Harmony V1.1'
 
 --[[
 
 lua file name: GroupHarmony.lua
 
-Copy selected groups to a new track and transpose all notes
-or update them directly with the transposed notes
+Copy selected groups to a new track and transpose all included notes
+Add only one track or multiple tracks depending on user selection.
 
-1/	Transpose all notes in current key scale 0..+1 ..+6 (C, D to B)
+1/	Transpose all notes in current key scale 0..+1 ..+7 (C, D to B)
 2/	Display current key scale found in selected group(s) (and current track if different).
 3/	A comboBox to choose the desire key scale (if multiple key scale is found for group notes).
+4/	A comboBox to choose harmony model.
+
+Degrees I     II     III  IV      V       VI       VII   +I
+Major C 1      2      3    4      5        6         7    8
+		0     +1     +2   +3     +4       +5        +6   +7
+		C  Db  D  Eb  E    F  Gb  G   Ab   A   Bb    B    C
+		1  2   3  4   5    6  7   8   9   10   11   12
 
 2024 - JF AVILES
 --]]
@@ -20,7 +27,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Tools",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -32,7 +39,15 @@ InternalData = {
 	keysInScale = {},
 	relativeKeys = {{"C","Am"},{"Db","Bbm"},{"D","Bm"},{"Eb","Cm"},{"E","C#m"},{"F","Dm"},
 				{"Gb","Ebm"},{"G","Em"},{"Ab","Fm"},{"A", "F#m"},{"Bb","Gm"},{"B", "G#m"}},
-	transposition = {"+6", "+5", "+4", "+3", "+2", "+1", "0", "Fixed"},
+	transposition = { 
+		{"1 note", 5, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "Fixed", "-3", "-5", "-7"}},
+		{"2 notes", 2, {"+3,+6", "+3,+5", "+2,+4", "+1,+3", "-3,-5"}},
+		{"3 notes", 1, {"+2,+3,+5", "+1,+3,+5"}},
+		{"Octaves", 1, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}}
+	},
+	transpositionRefLabel = 1,
+	transpositionRefPosition = 2,
+	transpositionRefData = 3,
 	tonalScale = {2, 2, 1, 2, 2, 2, 1},
 	SEP_KEYS = "/",
 	keyScaleChoice = {},
@@ -65,51 +80,75 @@ commonTools = {
 		return newTrack
 	end,
 	
+	-- Get harmony list
+	getHarmonyList = function()
+		local resultList = {}
+		for iList = 1, #InternalData.transposition do
+			table.insert(resultList, InternalData.transposition[iList][InternalData.transpositionRefLabel])
+		end
+		return resultList
+	end,
+	
 	-- Create user input form
-	getForm = function(keyScaleFound, keyScaleFoundTrack, numGroupsSelected)
-		local keyFoundDisplay = SV:T("Scale key found: ") .. keyScaleFound
-		InternalData.keyScaleChoice = {}
-		
-		if keyScaleFound == "" then
-			keyFoundDisplay = SV:T("No common scale key found!")
-			InternalData.keyScaleChoice = InternalData.keyNames
-		else
-			InternalData.keyScaleChoice = commonTools.getKeyScaleChoice(keyScaleFound)
+	getForm = function(formId, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
+						groupSelected, transposition, transpositionLabel,  posTranposition)
+		local comboChoice = {}
+		local harmonySelected = ""
+		local scaleChoice = {}
+		local scaleInfo1 = SV:T("Degrees")   .. "     " .. SV:T("I           II           III    IV          V          VI       VII      +I")
+		local scaleInfo2 = SV:T("Major C")   .. "      " .. SV:T("1          2            3      4          5           6          7       8")
+		local scaleInfo3 = SV:T("Position")  .. "     " .. SV:T("0        +1         +2    +3       +4        +5        +6    +7")
+		local scaleInfo4 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
+		local scaleInfo5 = SV:T("Half tone") .. "   " .. SV:T("1   2    3     4     5      6   7    8    9   10  11  12   13")
 			
-			if string.len(keyScaleFoundTrack) > 0 then
-				if keyScaleFound ~= keyScaleFoundTrack then
-					keyFoundDisplay = keyScaleFound .. SV:T(", on track: ") .. keyScaleFoundTrack
-				end
-			end
+		if formId == 0 then
+			local harmonyList = commonTools.getHarmonyList()
+			comboChoice = {
+					  name = "harmonyChoice", type = "ComboBox", label = SV:T("Harmony type"), 
+					  choices = harmonyList, default = 0
+					}
+					
+			scaleChoice = {
+						name = "scaleKeyChoice", type = "ComboBox", label = SV:T("Key scale"),
+						choices = InternalData.keyScaleChoice, default = #InternalData.keyScaleChoice -1
+					}
+		else
+			harmonySelected = SV:T("Transpose mode: ") .. transpositionLabel
+			comboChoice = {name = "pitch", type = "ComboBox", label = harmonySelected,
+				choices = transposition, default = #transposition - posTranposition}
+				
+			scaleChoice = {
+					name = "scaleKeySelected", type = "TextArea", 
+					label = SV:T("Key scale selected: ") .. InternalData.keyScaleFound, 
+					height = 0
+				}
 		end
 		
 		local form = {
 			title = SV:T(SCRIPT_TITLE),
-			message = SV:T("Create track and duplicate transposed group of notes") .. "\r" .. SV:T("Groups selected: ") .. numGroupsSelected,
+			message = SV:T("Create track and duplicate transposed group of notes") .. "\r" .. SV:T("Groups selected: ") .. #groupSelected,
 			buttons = "OkCancel",
 			widgets = {
 				{
-					name = "scaleKey", type = "TextArea", label = keyFoundDisplay, height = 0
+					name = "scaleInfos1", type = "TextArea", label = SV:T("Scale degrees model"),
+					height = 90, default = scaleInfo1 .. "\r" .. scaleInfo2 
+					.. "\r" .. scaleInfo3 .. "\r" .. scaleInfo4 .. "\r" .. scaleInfo5
 				},
 				{
-					name = "scaleKeyChoice", type = "ComboBox", label = SV:T("Key scale"),
-					choices = InternalData.keyScaleChoice, default = #InternalData.keyScaleChoice -1
+					name = "scaleKey", type = "TextArea", 
+					label = keyFoundDisplay, 
+					height = 0
 				},
+				scaleChoice,
+				comboChoice,
 				{
-					name = "pitch", type = "ComboBox", label = SV:T("Pitch transpose"),
-					choices = InternalData.transposition, default = #InternalData.transposition -2
-				},
-				{
-					name = "", type = "TextArea", label = "", height = 0
-				},
-				{
-				  name = "createNewTrack", type = "CheckBox", text =  SV:T("Create a new track (Uncheck to update notes!)"), default = true
+					name = "separator", type = "TextArea", label = "", height = 0
 				}
 			}
 		}
 		return SV:showCustomDialog(form)
 	end,
-	
+
 	-- get scale Key Found in choice format
 	getKeyScaleChoice = function(keyScaleFound)
 		local choice = {}
@@ -135,25 +174,79 @@ commonTools = {
 			local keyScaleFound = scaleTools.getScale(groupsSelected)
 			-- Track notes to check
 			local keyScaleFoundTrack = scaleTools.getScaleTrack(groupsSelected)
-			
-			local userInput = commonTools.getForm(keyScaleFound, keyScaleFoundTrack, #groupsSelected)
-			
-			if userInput.status then
-				local numGroups = commonTools.duplicateNotes(groupsSelected, userInput.answers)
+			local keyFoundDisplay = SV:T("Scale key found: ") .. keyScaleFound
+			InternalData.keyScaleChoice = {}
+
+			if keyScaleFound == "" then
+				keyFoundDisplay = SV:T("No common scale key found!")
+				InternalData.keyScaleChoice = InternalData.keyNames
+			else
+				InternalData.keyScaleChoice = commonTools.getKeyScaleChoice(keyScaleFound)
+				
+				if string.len(keyScaleFoundTrack) > 0 then
+					if keyScaleFound ~= keyScaleFoundTrack then
+						keyFoundDisplay = keyScaleFound .. SV:T(", on track: ") .. keyScaleFoundTrack
+					end
+				end
 			end
+			
+			local userInput = commonTools.callForms(keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected, 0)
+			--if userInput.status then				
+			--end
 		end
 	end,
 	
+	-- Call dialog forms
+	callForms = function(keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected, formId)
+		local userInput = nil
+		local transposition = nil
+		local transpositionLabel = ""
+		if formId == 0 then
+			-- Selection of action 1 note, 2 notes etc..
+			userInput = commonTools.getForm(formId, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
+							groupsSelected, transposition, transpositionLabel, 0)
+			
+			if userInput.status then
+				-- call itself to display next dialog box for Harmony selection
+				InternalData.keyScaleFound = scaleTools.getkeyScaleChoiceFromPos(userInput.answers.scaleKeyChoice)
+				commonTools.callForms(keyScaleFound, keyFoundDisplay, keyScaleFoundTrack,
+									groupsSelected, userInput.answers.harmonyChoice + 1)
+			end
+		else 
+			-- harmony selection
+			transposition = InternalData.transposition[formId][InternalData.transpositionRefData]
+			local defaultPosTransposition = InternalData.transposition[formId][InternalData.transpositionRefPosition]
+			transpositionLabel = InternalData.transposition[formId][InternalData.transpositionRefLabel]
+			
+			userInput = commonTools.getForm(formId, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
+							groupsSelected, transposition, transpositionLabel, defaultPosTransposition)
+			
+			if userInput.status then
+				
+				-- Duplicate note groups & create tracks
+				local numGroups = commonTools.duplicateNotes(groupsSelected, userInput.answers, formId)
+			end		
+		end
+		
+		return userInput
+	end,
+	
 	-- Duplicate and transpose notes
-	duplicateNotes = function(groupsSelected, userInputData)
+	duplicateNotes = function(groupsSelected, userInputAnswer, formId)
 
 		local project = SV:getProject()
-		local pitchPosInput = userInputData.pitch
-		local isNewTrackMode = userInputData.createNewTrack
-		local pitchTarget = keyTools.getPitchActionFromPos(pitchPosInput)
+		local pitchPosInput = userInputAnswer.pitch
+		local pitchTarget = keyTools.getPitchActionFromPos(pitchPosInput, formId)
+		
 		local isFixed = (pitchTarget == "Fixed")
-		local numGroups = 0 
-		InternalData.keyScaleFound = scaleTools.getkeyScaleChoiceFromPos(userInputData.scaleKeyChoice)
+		local isMultiple = false
+		local numGroups = 0
+		
+		if string.find(pitchTarget, ",") ~= nil then
+			isMultiple = true
+			pitchTargets = keyTools.split(pitchTarget, ",")
+		end
+		
 		local posKeyInScale = scaleTools.getKeyPosInKeynames(InternalData.keyNames, InternalData.keyScaleFound) -1
 		
 		InternalData.currentKeyNames = keyTools.copyTable(InternalData.keyNames)
@@ -169,6 +262,39 @@ commonTools = {
 			return posKeyInScale
 		end
 		
+		-- Only one track to add
+		if not isMultiple then
+			local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isMultiple, 
+														isFixed, pitchTarget, posKeyInScale)
+			local newTrack = commonTools.createTrack(project)
+			newTrack:setName(SV:T("Track ") .. pitchTarget)
+			for iGroupRef = 1, #newGrouptRefs do
+				newTrack:addGroupReference(newGrouptRefs[iGroupRef])
+				numGroups = numGroups + 1
+			end
+		else
+			-- add multiple tracks
+			for iTrack = 1, #pitchTargets do
+			
+				pitchTarget = pitchTargets[iTrack]
+				local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isMultiple, 
+															isFixed, pitchTarget, posKeyInScale)
+				local newTrack = commonTools.createTrack(project)
+				newTrack:setName(SV:T("Track ") .. pitchTarget)
+				for iGroupRef = 1, #newGrouptRefs do
+					newTrack:addGroupReference(newGrouptRefs[iGroupRef])
+					numGroups = numGroups + 1
+				end
+			end
+		end
+
+		InternalData.logs:showLogs()
+		return numGroups
+	end,
+	
+	-- Loop into groups to duplicate & transpose notes
+	groupLoop = function(project, groupsSelected, isMultiple, isFixed, pitchTarget, posKeyInScale, newGrouptRefs)
+		local newGrouptRefs = {}
 		for _, refGroup in pairs(groupsSelected) do
 			local groupName = refGroup:getTarget():getName()
 			
@@ -176,52 +302,34 @@ commonTools = {
 			if groupName ~= "main" then
 				local noteGroup = refGroup:getTarget()			
 				local groupRefTimeoffset = refGroup:getTimeOffset()
+
+				-- Clone source group
+				local newNoteGroup = noteGroup:clone()
+				local selectedNotes = newNoteGroup:getNumNotes()
 				
-				-- Duplicate transposed notes into a new track to create
-				if isNewTrackMode then
-					-- Clone source group
-					local newNoteGroup = noteGroup:clone()
-					local selectedNotes = newNoteGroup:getNumNotes()
+				if selectedNotes >= 0 then
+				
+					-- Duplicate transposed notes into a new track to create
+					-- Tranpose notes
+					local firstNotePitch = newNoteGroup:getNote(1):getPitch()
+					for iNote = 1, selectedNotes do
+						local note = newNoteGroup:getNote(iNote)			
+						local notePitch = scaleTools.getNewPitch(isFixed, firstNotePitch, 
+							note:getPitch(), tonumber(pitchTarget), posKeyInScale)
+						note:setPitch(notePitch)
+					end			
+					project:addNoteGroup(newNoteGroup)
 					
-					if selectedNotes >= 0 then
-						-- Tranpose notes
-						local firstNotePitch = newNoteGroup:getNote(1):getPitch()
-						for iNote = 1, selectedNotes do
-							local note = newNoteGroup:getNote(iNote)			
-							local notePitch = scaleTools.getNewPitch(isFixed, firstNotePitch, note:getPitch(), tonumber(pitchTarget), posKeyInScale)
-							note:setPitch(notePitch)
-						end			
-						project:addNoteGroup(newNoteGroup)
-						
-						-- Add group reference to project new track
-						local newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
-						-- Adjust time offset
-						newGrouptRef:setTimeOffset(groupRefTimeoffset)
-						
-						local newTrack = commonTools.createTrack(project)
-						newTrack:setName(SV:T("Track ") .. pitchTarget)					
-						newTrack:addGroupReference(newGrouptRef)
-						numGroups = numGroups + 1
-					end
-				else
-					-- Update notes in selected groups
-					local selectedNotes = noteGroup:getNumNotes()
-					if selectedNotes >= 0 then
-						-- Tranpose notes
-						local firstNotePitch = noteGroup:getNote(1):getPitch()
-						for iNote = 1, selectedNotes do
-							local note = noteGroup:getNote(iNote)			
-							local notePitch = scaleTools.getNewPitch(isFixed, firstNotePitch, note:getPitch(), tonumber(pitchTarget), posKeyInScale)
-							note:setPitch(notePitch)
-						end			
-						
-						numGroups = numGroups + 1
-					end					
+					-- Add group reference to project new track
+					local newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
+					-- Adjust time offset
+					newGrouptRef:setTimeOffset(groupRefTimeoffset)
+					table.insert(newGrouptRefs, newGrouptRef)
 				end
 			end
 		end
-		InternalData.logs:showLogs()
-		return numGroups
+		
+		return newGrouptRefs
 	end
 }
 
@@ -339,19 +447,25 @@ scaleTools = {
 	
 	-- Get next valid key in scale
 	getNextKeyInScale = function(keyScaleFound, notePitch, pitchTarget)		
+		local octave = 0
 		
-		if pitchTarget > #InternalData.keysInScale then
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Pitch value is too much for the key: ") .. keyScaleFound)
+		-- Octave -1
+		if pitchTarget < 0 then
+			pitchTarget = 7 + pitchTarget
+			octave = -12
 		end
+		--C  Db D  Eb E    F  Gb  G   Ab  A   Bb   B    C
+		--1  2  3  4  5    6  7   8   9  10   11   12
+		--0  1  2  3  4    5  6   7   8   9   10   11  
+ 		--1     2     3    4      5       6         7   8 Major Key C
 		
 		local noteKey = scaleTools.getKeyFromPitch(notePitch)
 		local posKeyInScaleKey = scaleTools.getKeyPosInKeynames(InternalData.keysInScale, noteKey)
-		local posTarget = ((posKeyInScaleKey + pitchTarget - 1) % 7) + 1		
+		local posTarget = ((posKeyInScaleKey + pitchTarget - 1) % 7) + 1
 		local nextKey = InternalData.keysInScale[posTarget]
-		--local posNextKeyInScaleKey = scaleTools.getKeyPosInKeynames(InternalData.keysInScale, nextKey)
 		
 		local gapDegree = scaleTools.getShiftDegrees(pitchTarget, posKeyInScaleKey)	
-		local notePitchNew = notePitch + gapDegree
+		local notePitchNew = notePitch + gapDegree + octave
 		
 		InternalData.logs:add("" .. notePitch .. " / " .. notePitchNew .. ", gap: " .. gapDegree
 		.. ", posKey: " .. posKeyInScaleKey .. ", pitch/pos: " .. pitchTarget	.. " / " .. posTarget
@@ -462,8 +576,8 @@ keyTools = {
 	end,
 
 	-- Get pitch action from position
-	getPitchActionFromPos = function(pos)
-		return InternalData.transposition[pos + 1]
+	getPitchActionFromPos = function(pos, formId)
+		return InternalData.transposition[formId][InternalData.transpositionRefData][pos + 1]
 	end,
 	
 	-- Split string by sep char
