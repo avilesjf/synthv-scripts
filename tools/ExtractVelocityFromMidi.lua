@@ -56,7 +56,7 @@ local channelPressure = {}
 local modeMessage = {}
 local timeSignature = {}
 local listAllTracks = {}
-local CCControler = 1  -- CC1
+local controllerCC = 1  -- CC 1
 
 local CURRENT_LYRIC = ""
 local INDEX_NOTE = 0
@@ -491,7 +491,7 @@ function getForm()
 				default = false
 			},
 			{
-				name = "controller", type = "CheckBox", text = SV:T("Replace loudness by midi controller CC = 1"),
+				name = "controller", type = "CheckBox", text = SV:T("Replace loudness by midi controller CC = " .. controllerCC),
 				default = true
 			},
 			{
@@ -630,7 +630,7 @@ function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, velocityGain, r
 			if currentTrack == trackFilterMidi then
 								
 				-- Controller CC = 1 modulation wheel
-				if ctrlData.number == CCControler then
+				if ctrlData.number == controllerCC then
 					-- if DEBUG then
 						-- if firstData then
 							-- firstMidiTime = ctrlData.ticksBegin
