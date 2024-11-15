@@ -25,25 +25,38 @@ function getClientInfo()
 	}
 end
 
--- Get string format from seconds
-function SecondsToClock(timestamp)
-	return string.format("%02d:%06.3f", 
-	  math.floor(timestamp/60)%60, 
-	  timestamp%60):gsub("%.",",")
-end
+-- 7971 08,303
+-- 236160 4:49,279
 
+-- 224640
+-- 236160 midi
+-- 11520 synthV
+-- note : 16934400000
+
+-- A flick (frame-tick) is a very small unit of time. It is 1/705600000 of a second, exactly.
+local blicksPerQuarter = SV.QUARTER -- 705600000 
 local ticksPerQuarter = nil
-local blicksPerQuarter = 705600000
 local DEBUG = false
+local DEBUG_RESULT = ""
 
 local DEFAULT_FILE_PATH = "D:\\Cubase Projects\\"
 if DEBUG then 
-	DEFAULT_FILE_PATH = "D:\\Cubase Projects\\I can't hear you\\i can't hear you2.mid" 
+	--DEFAULT_FILE_PATH = "D:\\Cubase Projects\\I can't hear you\\i can't hear you3.mid" 
+	DEFAULT_FILE_PATH = "D:\\Cubase Projects\\rjhuang-test1\\Test.mid"
 end
 
 local ticks = 0
 local tempoMarkers = {}
+local tempoActive = 120
+local metronomeActive = 24
+local signatureActive = 4
 local notesTable = {}
+local controllersTable = {}
+local channelPressure = {}
+local modeMessage = {}
+local timeSignature = {}
+local listAllTracks = {}
+local CCControler = 1  -- CC1
 
 local CURRENT_LYRIC = ""
 local INDEX_NOTE = 0
@@ -52,14 +65,24 @@ local DELTA_TIME = 0
 local project = SV:getProject()
 local timeAxis = project:getTimeAxis()
 local formatCount = "Count: %04d"
+local formatNumber = "%4d"
 local formatTrack = "%2d"
 local handlers = {}
 
+-- Get string format from seconds
+function SecondsToClock(timestamp)
+	return string.format("%02d:%06.3f", 
+	  math.floor(timestamp/60)%60, 
+	  timestamp%60):gsub("%.",",")
+end
+
 -- Store data from midi file
-function recordDeltaTimes(timeBegin, timeSecond, channel, key, velocity)
+function recordDeltaTimes(timeBegin, ticks, timeSecond, channel, key, velocity)
     table.insert(notesTable, {
         index = INDEX_NOTE,
 		track = CURRENT_TRACK,
+		ticksBegin  =  ticks,
+		ticksEnd  = nil,
 		timeBegin  =  timeBegin,
 		timeEnd  =  nil,
 		timeSecondBegin = timeSecond,
@@ -68,6 +91,62 @@ function recordDeltaTimes(timeBegin, timeSecond, channel, key, velocity)
 		key = key, 
 		velocity = velocity,
         lyric = CURRENT_LYRIC
+    })
+end
+
+-- Store controller data from midi file
+function recordControllerDeltaTimes(timeBegin, ticks, timeSecond, channel, number, value)
+    table.insert(controllersTable, {
+        index = INDEX_NOTE,
+		track = CURRENT_TRACK,
+		ticksBegin  =  ticks,
+		timeBegin  =  timeBegin,
+		timeSecondBegin = timeSecond,
+		channel = channel,
+		number = number, 
+		value = value
+    })
+end
+
+-- Store mode Message data from midi file
+function recordModeMessageDeltaTimes(timeBegin, ticks, timeSecond, channel, number, value)
+    table.insert(modeMessage, {
+        index = INDEX_NOTE,
+		track = CURRENT_TRACK,
+		ticksBegin  =  ticks,
+		timeBegin  =  timeBegin,
+		timeSecondBegin = timeSecond,
+		channel = channel,
+		number = number, 
+		value = value
+    })
+end
+
+-- Store channel pressure data from midi file
+function recordChannelPressureDeltaTimes(timeBegin, ticks, timeSecond, channel, pressure)
+    table.insert(channelPressure, {
+        index = INDEX_NOTE,
+		track = CURRENT_TRACK,
+		ticksBegin  =  ticks,
+		timeBegin  =  timeBegin,
+		timeSecondBegin = timeSecond,
+		channel = channel,
+		pressure = pressure
+    })
+end
+
+-- Store time Signature data from midi file
+function recordtimeSignatureDeltaTimes(timeBegin, ticks, timeSecond, numerator, denominator, metronome, dotted)
+    table.insert(timeSignature, {
+        index = INDEX_NOTE,
+		track = CURRENT_TRACK,
+		ticksBegin  =  ticks,
+		timeBegin  =  timeBegin,
+		timeSecondBegin = timeSecond,
+		numerator = numerator,
+		denominator = denominator,
+		metronome = metronome,
+		dotted = dotted
     })
 end
 
@@ -88,7 +167,7 @@ function handlers.noteOn(channel, key, velocity)
 	
 	local secNotePos = timeAxis:getSecondsFromBlick(ticksToBlicks(ticks))
 	local timeSecond = SecondsToClock(secNotePos)
-	recordDeltaTimes(DELTA_TIME, timeSecond, channel, key, velocity)
+	recordDeltaTimes(DELTA_TIME, ticks, timeSecond, channel, key, velocity)
 end
 
 -- Get noteOff from midi file
@@ -98,6 +177,35 @@ function handlers.noteOff(channel, key, velocity)
 	local secNotePos = timeAxis:getSecondsFromBlick(ticksToBlicks(ticks))
 	local timeSecond = SecondsToClock(secNotePos)
 	notesTable[INDEX_NOTE].timeSecondEnd = timeSecond
+	notesTable[INDEX_NOTE].ticksEnd = ticks
+end
+
+-- Get controller from midi file
+function handlers.controller(channel, number, value)	
+	local secNotePos = timeAxis:getSecondsFromBlick(ticksToBlicks(ticks))
+	local timeSecond = SecondsToClock(secNotePos)
+	recordControllerDeltaTimes(DELTA_TIME, ticks, timeSecond, channel, number, value)
+end
+
+-- Get modeMessage from midi file
+function handlers.modeMessage(channel, number, value)
+	local secNotePos = timeAxis:getSecondsFromBlick(ticksToBlicks(ticks))
+	local timeSecond = SecondsToClock(secNotePos)	
+	recordModeMessageDeltaTimes(DELTA_TIME, ticks, timeSecond, channel, number, value)
+end
+
+-- Get channelPressure from midi file
+function handlers.channelPressure(channel, pressure)
+	local secNotePos = timeAxis:getSecondsFromBlick(ticksToBlicks(ticks))
+	local timeSecond = SecondsToClock(secNotePos)	
+	recordChannelPressureDeltaTimes(DELTA_TIME, ticks, timeSecond, channel, pressure)
+end
+
+-- Get time Signature from midi file
+function handlers.timeSignature(numerator, denominator, metronome, dotted)
+	local secNotePos = timeAxis:getSecondsFromBlick(ticksToBlicks(ticks))
+	local timeSecond = SecondsToClock(secNotePos)	
+	recordtimeSignatureDeltaTimes(DELTA_TIME, ticks, timeSecond, numerator, denominator, metronome, dotted)
 end
 
 -- Get lyrics from midi file
@@ -114,6 +222,7 @@ end
 function handlers.setTempo(tempo)
     table.insert(tempoMarkers, {
         position = ticksToBlicks(ticks),
+        ticksBegin = ticks,
         tempo = tempo
     })
 end
@@ -123,9 +232,15 @@ function ticksToBlicks(ticks)
     return ticks / ticksPerQuarter * blicksPerQuarter
 end
 
+-- Convert blicks to ticks
+function blicksToTicks(blicks)
+	return blicks / blicksPerQuarter * ticksPerQuarter 
+end
+
 -- Call back to dispatch content data from midi file
 local function callback(name, ...)
     local handler = handlers[name]
+	-- DEBUG_RESULT = DEBUG_RESULT .. "handlers:" .. name .. "\r"
     if handler then
 		handler(...)
     end
@@ -141,6 +256,7 @@ end
 -- Get Midi track list
 function getMidiTrackList()
 	local list = {}
+	local listTracks = {}
 	local trackNotesCount = 0
 	local lyrics = ""
 	local velocity = 0
@@ -148,22 +264,24 @@ function getMidiTrackList()
 	local previousTrack = 1
 	local timeSecondBegin = 0
 	local trackLabel = SV:T("Track")
-	
+
 	for iMidiNote = 1, #notesTable do
 		local note = notesTable[iMidiNote]
 		currentTrack = note.track
 		
 		if previousTrack ~= currentTrack then
 			if trackNotesCount == 0 then
-				table.insert(list, trackLabel 
-							.. string.format(formatTrack, previousTrack) 
-							.. " (" .. string.format(formatCount, trackNotesCount) .. ")" )
+				lyricsStr = ""
 			else
-				table.insert(list, trackLabel 
-							.. string.format(formatTrack, previousTrack)
-							.. " (" .. string.format(formatCount, trackNotesCount) .. ")"
-							.. " : " .. string.sub(lyrics, 1, 15))
+				lyricsStr = " : " .. string.sub(lyrics, 1, 15)
 			end
+			
+			table.insert(list, trackLabel 
+						.. string.format(formatTrack, previousTrack)
+						.. " (" .. string.format(formatCount, trackNotesCount) .. ")"
+						.. lyricsStr)
+			table.insert(listTracks, previousTrack)
+						
 			trackNotesCount = 0
 			lyrics = ""
 		end
@@ -173,18 +291,119 @@ function getMidiTrackList()
 			velocity = note.velocity
 		end
 		lyrics = lyrics .. note.lyric .. " "
-		
 		previousTrack = currentTrack
 		trackNotesCount = trackNotesCount + 1
 	end
-	
 	table.insert(list, trackLabel 
 				.. string.format(formatTrack, previousTrack ) 
 				.. " (" .. string.format(formatCount, trackNotesCount)  .. ")"
 				.. " : " .. string.sub(lyrics, 1, 10) )	
+	table.insert(listTracks, previousTrack)
+	
+	return list, listTracks
+end
+
+-- Get Midi controller track list
+function getMidiControllersTrackList(trackFilterMidi, allTracks)
+	local list = {}
+	local listAllTracks = {}
+	local listOutput = {}
+	local value = 0
+	local currentTrack = 1
+	local previousTrack = 1
+	local ctrlTrackCount = 0
+	local ctrlInfosCount = 0
+	local previousTicksBegin = 0
+	local previousTimeSecondBegin = 0
+	local trackLabel = SV:T("Track")
+	
+	for iMidiInfo = 1, #controllersTable do
+		local ctrlData = controllersTable[iMidiInfo]
+		currentTrack = ctrlData.track
+		
+		if iMidiInfo == 1 then 
+			previousTrack = currentTrack
+		end
+		
+		if previousTrack ~= currentTrack then
+			table.insert(listAllTracks, trackLabel 
+				.. string.format(formatTrack, previousTrack)
+				.. " (" .. previousTicksBegin .. "/"
+				.. ": " .. previousTimeSecondBegin .. ": "
+				.. " Count: " .. string.format(formatNumber, ctrlInfosCount)
+				)
+				ctrlTrackCount = ctrlTrackCount + 1
+		end
+
+		if trackFilterMidi == currentTrack then
+			table.insert(list, trackLabel 
+				.. string.format(formatTrack, currentTrack)
+				.. " (" .. ctrlData.ticksBegin .. "/"
+				.. ": " .. ctrlData.timeSecondBegin .. ": "
+				.. " CC: " .. string.format(formatNumber, ctrlData.number)
+				.. " val: " .. string.format(formatNumber, ctrlData.value)
+			)
+			ctrlInfosCount = ctrlInfosCount + 1
+		end
+		
+		previousTicksBegin = ctrlData.ticksBegin
+		previousTimeSecondBegin = ctrlData.timeSecondBegin
+		previousTrack = currentTrack
+	end
+	
+	table.insert(listAllTracks, trackLabel 
+		.. string.format(formatTrack, previousTrack)
+		.. " (" .. previousTicksBegin .. "/"
+		.. ": " .. previousTimeSecondBegin .. ": "
+		.. " Count: " .. string.format(formatNumber, ctrlInfosCount)
+		)
+
+	if allTracks then
+		listOutput = listAllTracks
+	else
+		listOutput = list
+	end
+	
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), 
+		"ControllersTable count: " .. #controllersTable .. "\r" 
+		.. "tracks count: " .. ctrlTrackCount .. "\r" 
+		.. "track (" .. trackFilterMidi .. ") count: " .. ctrlInfosCount .. "\r" 
+		.. "MidiControllers:" .. "\r" 
+		..  string.sub(table.concat(listOutput, "\r"), 1, 1000) .. "\r"
+		.. "length: " ..  #listOutput
+		)
 	return list
 end
 
+-- Get time Signature track list
+function getMidiTimeSignatureTrackList()
+	local list = {}
+	local value = 0
+	local currentTrack = 1
+	local trackLabel = SV:T("Track")
+	
+	for iMidiInfo = 1, #timeSignature do
+		local data = timeSignature[iMidiInfo]
+		currentTrack = data.track
+		table.insert(list, trackLabel 
+					.. string.format(formatTrack, currentTrack)
+					.. " (" .. ticksToBlicks(data.ticksBegin) .. "/"
+					.. "" .. data.ticksBegin .. "/"
+					.. ""   .. data.timeBegin .. ")"
+					.. ": " .. data.timeSecondBegin .. ": "
+					.. " numerator: " .. string.format(formatNumber, data.numerator)
+					.. " denominator: " .. string.format(formatNumber, data.denominator)
+					.. " metronome: " .. string.format(formatNumber, data.metronome)
+					.. " dotted: " .. string.format(formatNumber, data.dotted)
+					)		
+	end
+
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), 
+		"timeSignature count: " .. #timeSignature .. "\r" 
+		.. "content:\r" ..  table.concat(list, "\r")
+		)
+	return list
+end
 
 --- Get first note lyrics
 function getFirstNotesLyrics(numNotes, groupNotesMain)
@@ -230,13 +449,15 @@ end
 -- Create user input form
 function getForm()
 	local trackList = getTracksList()
-	local midiTrackList = getMidiTrackList()
+	local midiTrackList, listTracks = getMidiTrackList()
 	local velocityGainDefaultValue = 10
 	local velocityGainMinValue =  0
 	local velocityGainMaxValue =  20
 	local velocityGainInterval =  5
 	local trackDefault =  0
-
+	
+	listAllTracks = listTracks
+	
 	local form = {
 		title = SV:T(SCRIPT_TITLE),
 		message =  SV:T("Select source & target track to update loudness,") .. "\r" 
@@ -270,13 +491,17 @@ function getForm()
 				default = false
 			},
 			{
+				name = "controller", type = "CheckBox", text = SV:T("Replace loudness by midi controller CC = 1"),
+				default = true
+			},
+			{
 				name = "separator", type = "TextArea", label = "", height = 0
 			}
 		}
 	}
 	return SV:showCustomDialog(form)
 end
-	
+
 -- Check tracks
 function checkTrack(trackFilterSynthV)
     local track = project:getTrack(trackFilterSynthV)
@@ -298,7 +523,6 @@ function setFirstParameterLoudnessInTrack(trackFilterSynthV)
 	local firstNote = groupNotesMain:getNote(1) -- First note
 
 	local loudness = groupNotesMain:getParameter("loudness")
-	local time1 = firstNote:getOnset()
 	
 	-- Decay before applying first loudness value in next steps
 	local newTimeOffset = firstNote:getOnset() - timeAxis:getBlickFromSeconds(0.1)
@@ -322,101 +546,267 @@ function setLastParameterLoudnessInTrack(trackFilterSynthV)
 	local loudness = groupNotesMain:getParameter("loudness")
 	
 	-- Decay after applying last loudness value
-	local time = lastNote:getEnd() + timeAxis:getBlickFromSeconds(0.1)
+	local time = lastNote:getEnd() + timeAxis:getBlickFromSeconds(1)
 	loudness:add(time, 0)
 	
 	return lastNote
 end
 
+-- Get tempo
+function getTempo(ticks)
+	local newTempo = tempoActive
+	
+	for iTempo = 1, #tempoMarkers do
+		local tempoMarker = tempoMarkers[iTempo]
+		if tempoMarker.ticksBegin <= ticks then
+			newTempo = tempoMarker.tempo
+		end
+	end
+	return newTempo
+end
+
+-- Get metronome
+function getMetronome(ticks)
+	local newMetronome = metronomeActive
+	
+	for iSignature = 1, #timeSignature do
+		local infoSignature = timeSignature[iSignature]
+		if infoSignature.ticksBegin <= ticks then
+			newMetronome = infoSignature.metronome
+		end
+	end
+	return newMetronome
+end
+
+-- Get signature
+function getSignature(ticks)
+	local newSignature = signatureActive
+	
+	for iSignature = 1, #timeSignature do
+		local infoSignature = timeSignature[iSignature]
+		if infoSignature.ticksBegin <= ticks then
+			newSignature = infoSignature.numerator
+			-- denominator = denominator,
+			-- metronome = metronome,
+			-- dotted = dotted
+		end
+	end
+	return newSignature
+end
+
 -- Set volume notes for each tracks
-function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, velocityGain, reduceGain)
+function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, velocityGain, reduceGain, controller)
 	local lyricContent = ""
 	local currentTrack = 1
 	local previousTrack = 1
 	local lastTrack = 0
 	local iSynthVNote = 0
 	local trackNotesCount = 0
+	local secondRef = 6
 	local lyrics = ""
-	
 	local result = ""
-
-	for iMidiNote = 1, #notesTable do
-		local midiNote = notesTable[iMidiNote]
-		currentTrack = midiNote.track
+	
+	-- Set first parameter loudness default value (0)
+	local firstNote = setFirstParameterLoudnessInTrack(trackFilterSynthV)
+	local blickFirstNoteSeconds = timeAxis:getSecondsFromBlick(firstNote:getOnset())
+	
+	-- Loudness from midi controller CC1
+	if controller then
+		local list = {}
+		local value = 0
+		local currentTrack = 1
+		local ctrlInfosCount = 0
+		local trackLabel = SV:T("Track")
+		local diff = 0
+		local firstData = true
+		local firstMidiTime = 0
+		local oldTempo = tempoActive
+		local oldSignature = signatureActive
 		
-		if previousTrack ~= currentTrack then
-			result = result .. "currentTrack: " .. previousTrack
-				.. "/Midi track: " .. trackFilterMidi
-				.. "/SynthV track:" .. trackFilterSynthV
-				.. ", trackNotesCount : " .. trackNotesCount 
-				.. ", lyric: " .. lyrics .. "\r"
-			trackNotesCount = 0
-			lyrics = ""
+		for iMidiInfo = 1, #controllersTable do
+			local ctrlData = controllersTable[iMidiInfo]
+			currentTrack = ctrlData.track
+			
+			if currentTrack == trackFilterMidi then
+								
+				-- Controller CC = 1 modulation wheel
+				if ctrlData.number == CCControler then
+					-- if DEBUG then
+						-- if firstData then
+							-- firstMidiTime = ctrlData.ticksBegin
+							-- if firstMidiTime ~= ticksFromFirstNote then
+								-- diff = ctrlData.ticksBegin - ticksFromFirstNote + 11520
+							-- end
+							-- firstData = false
+						-- end
+					-- end
+					
+					signatureActive = getSignature(ctrlData.ticksBegin)
+					-- if DEBUG then
+						-- if oldSignature ~= signatureActive then
+							-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "New signatureActive: " .. signatureActive .. "\r" 
+								-- .. ", oldSignature: " .. oldSignature .. "\r" 
+								-- .. ", oldSignature: " .. oldSignature .. "\r" 
+							-- )
+							-- oldSignature = signatureActive
+						-- end
+					-- end
+					
+					-- Set new tempo
+					tempoActive = getTempo(ctrlData.ticksBegin)
+					metronomeActive = getMetronome(ctrlData.ticksBegin)
+					local ticksPerQuarterNew = tempoActive * signatureActive
+					
+					local seconds = (ctrlData.ticksBegin / (ticksPerQuarterNew + ticksPerQuarter + metronomeActive + secondRef))
+					if firstData then
+						diff = blickFirstNoteSeconds - seconds
+						firstData = false
+					end
+					if math.floor(math.abs(diff)) > 0 then
+						seconds = seconds + diff - blickFirstNoteSeconds
+					end
+					
+					if DEBUG then
+						result = result .. "currentTrack: " .. currentTrack
+										.. ", tempo: " .. tempoActive
+										.. ", ctrlData.ticksBegin: " .. ctrlData.ticksBegin
+										.. ", blickFirstNoteSeconds: " .. blickFirstNoteSeconds
+										.. ", ticksPerQuarterNew: " .. ticksPerQuarterNew
+										.. ", ticksPerQuarter: " .. ticksPerQuarter
+										.. ", diff: " .. diff
+										.. ", metronomeActive: " .. metronomeActive
+										.. ", SecondsToClock: " .. SecondsToClock(timeAxis:getSecondsFromBlick(firstNote:getOnset()))
+										.. ", seconds: " .. seconds
+										.. ", seconds: " .. SecondsToClock(seconds)
+										.. "\r"
+					end	
+					
+					-- Get track infos for loudness
+					local track = project:getTrack(trackFilterSynthV)
+					local numGroups = track:getNumGroups()
+					local mainGroupRef = track:getGroupReference(1) -- main group
+					local groupNotesMain = mainGroupRef:getTarget()
+					local numNotes = groupNotesMain:getNumNotes()
+					local loudness = groupNotesMain:getParameter("loudness")					
+										
+					-- get Blicks with new tempo
+					--local timeInfo = ticksToBlicks(ctrlData.ticksBegin) -- error with tempo change
+					local timeInfo = timeAxis:getBlickFromSeconds(seconds)
+					
+					-- 0...127 => 0..24
+					local coef = 24/127
+					loudness:add(timeInfo, ctrlData.value * coef)
+					ctrlInfosCount = ctrlInfosCount + 1
+					
+				end
+			end
 		end
-		lyrics = midiNote.lyric
-		
-		if currentTrack == trackFilterMidi then
-			iSynthVNote = iSynthVNote + 1
-			
-			if previousTrack ~= currentTrack then
-				result = result .. "currentTrack: " .. previousTrack .. ", iSynthVNote: " .. iSynthVNote .. "\r"
-			end
-			
-			local track = project:getTrack(trackFilterSynthV)
-			local numGroups = track:getNumGroups()
-			local mainGroupRef = track:getGroupReference(1) -- main group
-			local groupNotesMain = mainGroupRef:getTarget()
-			local numNotes = groupNotesMain:getNumNotes()
-			local loudness = groupNotesMain:getParameter("loudness")
-			
-			if previousTrack ~= currentTrack then
-				result = result .. "numGroups: " .. numGroups .. "\r"
-			end
 
-			local noteSynthV = groupNotesMain:getNote(iSynthVNote)
-			if noteSynthV ~= nil then
-				local midiNoteVelocity = midiNote.velocity
-				if midiNoteVelocity == nil then
-					midiNoteVelocity = 0
+		if DEBUG then 			
+			--SV:showMessageBox(SV:T(SCRIPT_TITLE), "DEBUG: " .. DEBUG_RESULT)
+		end
+
+	else
+		-- Loudness from midi notes velocity
+		for iMidiNote = 1, #notesTable do
+			local midiNote = notesTable[iMidiNote]
+			currentTrack = midiNote.track
+			
+			if previousTrack ~= currentTrack then
+				-- if DEBUG then
+					-- result = result .. "currentTrack: " .. previousTrack
+						-- .. "/Midi track: " .. trackFilterMidi
+						-- .. "/SynthV track:" .. trackFilterSynthV
+						-- .. ", trackNotesCount : " .. trackNotesCount 
+						-- .. ", lyric: " .. lyrics .. "\r"
+					-- trackNotesCount = 0
+				-- end
+				lyrics = ""
+			end
+			lyrics = midiNote.lyric
+			
+			if currentTrack == trackFilterMidi then
+				iSynthVNote = iSynthVNote + 1
+				
+				if previousTrack ~= currentTrack then
+					-- if DEBUG then
+						-- result = result .. "currentTrack: " .. previousTrack .. ", iSynthVNote: " .. iSynthVNote .. "\r"
+					-- end
 				end
 				
-				-- ticksToBlicks(midiNote.timeBegin)
-				local timeNote = noteSynthV:getOnset()
-				loudness:add(timeNote, midiNoteVelocity * velocityGain)
+				local track = project:getTrack(trackFilterSynthV)
+				local numGroups = track:getNumGroups()
+				local mainGroupRef = track:getGroupReference(1) -- main group
+				local groupNotesMain = mainGroupRef:getTarget()
+				local numNotes = groupNotesMain:getNumNotes()
+				local loudness = groupNotesMain:getParameter("loudness")
 				
-				if iSynthVNote + 1 <= numNotes then
-					local noteNextSynthV = groupNotesMain:getNote(iSynthVNote + 1)
-					if noteNextSynthV ~= nil then
-						local timeNoteEnd = noteSynthV:getEnd()
-						local timeNoteNext = noteNextSynthV:getOnset()
-						
-						-- Decay after applying last loudness value
-						local timeEnd = noteSynthV:getEnd() + timeAxis:getBlickFromSeconds(0.01)
-						if timeNoteNext - timeNoteEnd > 10000 then
-							loudness:add(timeEnd, 0)
+				if previousTrack ~= currentTrack then
+					-- if DEBUG then
+						-- result = result .. "numGroups: " .. numGroups .. "\r"
+					-- end
+				end
+				
+				if iSynthVNote <= numNotes then
+					local noteSynthV = groupNotesMain:getNote(iSynthVNote)
+					
+					if noteSynthV ~= nil then
+						local midiNoteVelocity = midiNote.velocity
+						if midiNoteVelocity == nil then
+							midiNoteVelocity = 0
 						end
 						
-						if reduceGain then
-							-- Reduce ending value if notes are nearest
-							if timeNoteNext - timeNoteEnd > 100 then
-								local reduceVelocity = (midiNoteVelocity / 2) * velocityGain
-								loudness:add(timeEnd, reduceVelocity)
+						-- ticksToBlicks(midiNote.timeBegin)
+						local timeNote = noteSynthV:getOnset()
+						loudness:add(timeNote, midiNoteVelocity * velocityGain)
+					
+						-- Next note
+						if iSynthVNote + 1 <= numNotes then
+							local noteNextSynthV = groupNotesMain:getNote(iSynthVNote + 1)
+							if noteNextSynthV ~= nil then
+								local timeNoteEnd = noteSynthV:getEnd()
+								local timeNoteNext = noteNextSynthV:getOnset()
+								
+								-- Decay after applying last loudness value
+								local timeEnd = noteSynthV:getEnd() + timeAxis:getBlickFromSeconds(0.01)
+								
+								-- If end group of notes
+								if timeNoteNext - timeNoteEnd > 10000 then
+									loudness:add(timeEnd, 0)
+								end
+								
+								if reduceGain then
+									-- Reduce ending value if notes are nearest
+									if timeNoteNext - timeNoteEnd > 100 then
+										local reduceVelocity = (midiNoteVelocity / 2) * velocityGain
+										loudness:add(timeEnd, reduceVelocity)
+									end
+								end
 							end
 						end
 					end
 				end
 			end
+			previousTrack = currentTrack
+			trackNotesCount = trackNotesCount + 1
 		end
-		previousTrack = currentTrack
-		trackNotesCount = trackNotesCount + 1
+		-- if DEBUG then
+			-- result = result .. "currentTrack: " .. currentTrack .. "/Midi track: " 
+				-- .. trackFilterMidi .. "/SynthV track: " .. trackFilterSynthV 
+				-- .. ", trackNotesCount : " .. trackNotesCount 
+				-- .. ", lyric: " .. lyrics .. "\r"
+		-- end
 	end
 	
-	result = result .. "currentTrack: " .. currentTrack .. "/Midi track: " 
-		.. trackFilterMidi .. "/SynthV track: " .. trackFilterSynthV 
-		.. ", trackNotesCount : " .. trackNotesCount 
-		.. ", lyric: " .. lyrics .. "\r"
+	-- if DEBUG then SV:setHostClipboard(result) end
 
-	-- if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. result) end
+	-- Set last parameter loudness to default value  (0)
+	local lastNote = setLastParameterLoudnessInTrack(trackFilterSynthV)	
+
+	if DEBUG then 
+		SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. string.sub(result, 1, 1000)) 
+	end
+	
 	return result
 end
 
@@ -490,27 +880,32 @@ function getNotesFromMidiFile(MidiReader, midiFilename)
 	-- Result infos
 	if #notesTable > 0 then
 		-- Message result
-		-- local resultMessage = SV:T("Lyrics placed on clipboard!") .. "\r"
 		local resultMessage = ""
 		
 		if string.len(tracksCount) > 0 then
-			resultMessage = resultMessage .. SV:T("tracks:") .. " " .. tracksCount .. "\r"
+			resultMessage = resultMessage .. SV:T("tracks count:") .. " " .. tracksCount .. "\r"
 		end
 		
-		for i = 1, #tempoMarkers do
-			local tempoMarker = tempoMarkers[i]
-			resultMessage = resultMessage .. SV:T("Tempo pos:") .. " " .. tostring(tempoMarker.position) .. ", " .. SV:T("tempo:") .. " " .. tostring(tempoMarker.tempo) .. "\r"
+		for iTempo = 1, #tempoMarkers do
+			local tempoMarker = tempoMarkers[iTempo]
+			resultMessage = resultMessage 
+							.. SV:T("Tempo pos: ") .. tempoMarker.position .. ", " 
+							.. SV:T("ticks: ")     .. tempoMarker.ticksBegin .. ", " 
+							.. SV:T("tempo: ")     .. tempoMarker.tempo .. "\r"
 		end
-			
+		-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "resultMessage: " .. resultMessage)
+		
 		local userInput = getForm()
 		
-		if userInput.status then				
+		if userInput.status then
 			trackFilterSynthV = userInput.answers.trackSynthV + 1
-			trackFilterMidi = userInput.answers.trackMidi + 1
+			trackFilterMidi = listAllTracks[userInput.answers.trackMidi + 1]
+			if DEBUG then getMidiControllersTrackList(trackFilterMidi, true) end
+			-- if DEBUG then getMidiTimeSignatureTrackList(trackFilterMidi) end
 
-			--velocityGain = math.floor(userInput.answers.velocityGain)
 			velocityGain = userInput.answers.velocityGain
 			reduceGain = userInput.answers.reduceGain
+			controller = userInput.answers.controller
 			
 			-- check track contents
 			local numnotes = checkTrack(trackFilterSynthV)
@@ -519,7 +914,8 @@ function getNotesFromMidiFile(MidiReader, midiFilename)
 				return false
 			end
 		
-			setVelocityToSynthV(trackFilterMidi, trackFilterSynthV, velocityGain, reduceGain)
+			-- Set loudness from midi velocity
+			local result = setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, velocityGain, reduceGain, controller)
 		end
 
 		--if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), resultMessage ) end
@@ -530,25 +926,14 @@ function getNotesFromMidiFile(MidiReader, midiFilename)
 	return true
 end
 
--- Set velocity from midi file to SynthV
-function setVelocityToSynthV(trackFilterMidi, trackFilterSynthV, velocityGain, reduceGain)
-
-	-- Set first parameter loudness default value (0)
-	local firstNote = setFirstParameterLoudnessInTrack(trackFilterSynthV)
-
-	-- Set loudness from midi velocity
-	local result = setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, velocityGain, reduceGain)
-	
-	-- set last parameter loudness to default value  (0)
-	local lastNote = setLastParameterLoudnessInTrack(trackFilterSynthV)	
-end
-
 -- Main procedure
 function main()
 
 	local midiFilename = SV:showInputBox(SV:T(SCRIPT_TITLE), 'Enter the full path to your MIDI file.', DEFAULT_FILE_PATH)
-
-	getNotesFromMidiFile(getMidiReader(), midiFilename)
+	
+	if string.len(midiFilename) > 0 then
+		getNotesFromMidiFile(getMidiReader(), midiFilename)
+	end
 
 	SV:finish()
 end
@@ -565,11 +950,11 @@ function getMidiReader()
 	---@param count integer The count of bytes to read.
 	---@return string data The read bytes.
 	local function read(stream, count)
-	  local result = ""
-	  while #result ~= count do
-		result = result .. assert(stream:read(count), "missing value")
-	  end
-	  return result
+		local result = ""
+		while #result ~= count do
+			result = result .. assert(stream:read(count), "missing value")
+		end
+		return result
 	end
 
 	---Reads a variable length quantity from the given stream, raising an error if it can't.
@@ -577,57 +962,57 @@ function getMidiReader()
 	---@return integer value The read value.
 	---@return integer length How many bytes were read in total.
 	local function readVLQ(stream)
-	  local value = 0
-	  local length = 0
-	  repeat
-		local byte = assert(stream:read(1), "incomplete or missing variable length quantity"):byte()
-		value = value << 7
-		value = value | byte & 0x7F
-		length = length + 1
-	  until byte < 0x80
-	  return value, length
+		local value = 0
+		local length = 0
+		repeat
+			local byte = assert(stream:read(1), "incomplete or missing variable length quantity"):byte()
+			value = value << 7
+			value = value | byte & 0x7F
+			length = length + 1
+		until byte < 0x80
+		return value, length
 	end
-
+	
 	local midiEvent = {
-	  [0x80] = function(stream, callback, channel, fb)
-		local key, velocity = ("I1I1"):unpack(fb .. stream:read(1))
-		callback("noteOff", channel, key, velocity / 0x7F)
-		return 2
-	  end,
-	  [0x90] = function(stream, callback, channel, fb)
-		local key, velocity = ("I1I1"):unpack(fb .. stream:read(1))
-		callback("noteOn", channel, key, velocity / 0x7F)
-		return 2
-	  end,
-	  [0xA0] = function(stream, callback, channel, fb)
-		local key, pressure = ("I1I1"):unpack(fb .. stream:read(1))
-		callback("keyPressure", channel, key, pressure / 0x7F)
-		return 2
-	  end,
-	  [0xB0] = function(stream, callback, channel, fb)
+		[0x80] = function(stream, callback, channel, fb)
+			local key, velocity = ("I1I1"):unpack(fb .. stream:read(1))
+			callback("noteOff", channel, key, velocity / 0x7F)
+			return 2
+		end,
+		[0x90] = function(stream, callback, channel, fb)
+			local key, velocity = ("I1I1"):unpack(fb .. stream:read(1))
+			callback("noteOn", channel, key, velocity / 0x7F)
+			return 2
+		end,
+		[0xA0] = function(stream, callback, channel, fb)
+			local key, pressure = ("I1I1"):unpack(fb .. stream:read(1))
+			callback("keyPressure", channel, key, pressure / 0x7F)
+			return 2
+		end,
+		[0xB0] = function(stream, callback, channel, fb)
 		local number, value = ("I1I1"):unpack(fb .. stream:read(1))
-		if number < 120 then
-		  callback("controller", channel, number, value)
-		else
-		  callback("modeMessage", channel, number, value)
+			if number < 120 then
+			  callback("controller", channel, number, value)
+			else
+			  callback("modeMessage", channel, number, value)
+			end
+			return 2
+		end,
+		[0xC0] = function(stream, callback, channel, fb)
+			local program = fb:byte()
+			callback("program", channel, program)
+			return 1
+		end,
+		[0xD0] = function(stream, callback, channel, fb)
+			local pressure = fb:byte()
+			callback("channelPressure", channel, pressure / 0x7F)
+			return 1
+		end,
+		[0xE0] = function(stream, callback, channel, fb)
+			local lsb, msb = ("I1I1"):unpack(fb .. stream:read(1))
+			callback("pitch", channel, (lsb | msb << 7) / 0x2000 - 1)
+			return 2
 		end
-		return 2
-	  end,
-	  [0xC0] = function(stream, callback, channel, fb)
-		local program = fb:byte()
-		callback("program", channel, program)
-		return 1
-	  end,
-	  [0xD0] = function(stream, callback, channel, fb)
-		local pressure = fb:byte()
-		callback("channelPressure", channel, pressure / 0x7F)
-		return 1
-	  end,
-	  [0xE0] = function(stream, callback, channel, fb)
-		local lsb, msb = ("I1I1"):unpack(fb .. stream:read(1))
-		callback("pitch", channel, (lsb | msb << 7) / 0x2000 - 1)
-		return 2
-	  end
 	}
 
 	---Processes a manufacturer specific SysEx event.
@@ -636,50 +1021,50 @@ function getMidiReader()
 	---@param fb string The first already read byte, representing the manufacturer id.
 	---@return integer length The total length of the read SysEx event in bytes (including fb).
 	local function sysexEvent(stream, callback, fb)
-	  local manufacturer = fb:byte()
-	  local data = {}
-	  repeat
-		local char = stream:read(1)
-		table.insert(data, char)
-	  until char:byte() == 0xF7
-	  callback("sysexEvent", data, manufacturer, table.concat(data))
-	  return 1 + #data
+		local manufacturer = fb:byte()
+		local data = {}
+		repeat
+			local char = stream:read(1)
+			table.insert(data, char)
+		until char:byte() == 0xF7
+		callback("sysexEvent", data, manufacturer, table.concat(data))
+		return 1 + #data
 	end
 
 	---Creates a simple function, forwarding the provided name and read data to a callback function.
 	---@param name string The name of the event, which is passed to the callback function.
 	---@return function function The function, calling the provided callback function with name and read data.
 	local function makeForwarder(name)
-	  return function(data, callback)
-		callback(name, data)
-	  end
+		return function(data, callback)
+			callback(name, data)
+		end
 	end
 
 	local metaEvents = {
-	  [0x00] = makeForwarder("sequenceNumber"),
-	  [0x01] = makeForwarder("text"),
-	  [0x02] = makeForwarder("copyright"),
-	  [0x03] = makeForwarder("sequencerOrTrackName"),
-	  [0x04] = makeForwarder("instrumentName"),
-	  [0x05] = makeForwarder("lyric"),
-	  [0x06] = makeForwarder("marker"),
-	  [0x07] = makeForwarder("cuePoint"),
-	  [0x20] = makeForwarder("channelPrefix"),
-	  [0x2F] = makeForwarder("endOfTrack"),
-	  [0x51] = function(data, callback)
-		local rawTempo = (">I3"):unpack(data)
-		callback("setTempo", 6e7 / rawTempo)
-	  end,
-	  [0x54] = makeForwarder("smpteOffset"),
-	  [0x58] = function(data, callback)
-		local numerator, denominator, metronome, dotted = (">I1I1I1I1"):unpack(data)
-		callback("timeSignature", numerator, 1 << denominator, metronome, dotted)
-	  end,
-	  [0x59] = function(data, callback)
-		local count, minor = (">I1I1"):unpack(data)
-		callback("keySignature", math.abs(count), count < 0 and "flat" or count > 0 and "sharp" or "C", minor == 0 and "major" or "minor")
-	  end,
-	  [0x7F] = makeForwarder("sequenceEvent")
+		[0x00] = makeForwarder("sequenceNumber"),
+		[0x01] = makeForwarder("text"),
+		[0x02] = makeForwarder("copyright"),
+		[0x03] = makeForwarder("sequencerOrTrackName"),
+		[0x04] = makeForwarder("instrumentName"),
+		[0x05] = makeForwarder("lyric"),
+		[0x06] = makeForwarder("marker"),
+		[0x07] = makeForwarder("cuePoint"),
+		[0x20] = makeForwarder("channelPrefix"),
+		[0x2F] = makeForwarder("endOfTrack"),
+		[0x51] = function(data, callback)
+			local rawTempo = (">I3"):unpack(data)
+			callback("setTempo", 6e7 / rawTempo)
+		end,
+		[0x54] = makeForwarder("smpteOffset"),
+		[0x58] = function(data, callback)
+			local numerator, denominator, metronome, dotted = (">I1I1I1I1"):unpack(data)
+			callback("timeSignature", numerator, 1 << denominator, metronome, dotted)
+		end,
+		[0x59] = function(data, callback)
+			local count, minor = (">I1I1"):unpack(data)
+			callback("keySignature", math.abs(count), count < 0 and "flat" or count > 0 and "sharp" or "C", minor == 0 and "major" or "minor")
+		end,
+		[0x7F] = makeForwarder("sequenceEvent")
 	}
 
 	---Processes a midi meta event.
@@ -688,14 +1073,14 @@ function getMidiReader()
 	---@param fb string The first already read byte, representing the meta event type.
 	---@return integer length The total length of the read meta event in bytes (including fb).
 	local function metaEvent(stream, callback, fb)
-	  local event = fb:byte()
-	  local length, vlqLength = readVLQ(stream)
-	  local data = read(stream, length)
-	  local handler = metaEvents[event]
-	  if handler then
-		handler(data, callback)
-	  end
-	  return 1 + vlqLength + length
+		local event = fb:byte()
+		local length, vlqLength = readVLQ(stream)
+		local data = read(stream, length)
+		local handler = metaEvents[event]
+		if handler then
+			handler(data, callback)
+		end
+		return 1 + vlqLength + length
 	end
 
 	---Reads the four magic bytes and length of a midi chunk.
@@ -703,12 +1088,12 @@ function getMidiReader()
 	---@return string type The four magic bytes the chunk type (usually `MThd` or `MTrk`).
 	---@return integer length The length of the chunk in bytes.
 	local function readChunkInfo(stream)
-	  local chunkInfo = stream:read(8)
-	  if not chunkInfo then
-		return false
-	  end
-	  assert(#chunkInfo == 8, "incomplete chunk info")
-	  return (">c4I4"):unpack(chunkInfo)
+		local chunkInfo = stream:read(8)
+		if not chunkInfo then
+			return false
+		end
+		assert(#chunkInfo == 8, "incomplete chunk info")
+		return (">c4I4"):unpack(chunkInfo)
 	end
 
 	---Reads the content in a header chunk of a midi file.
@@ -718,11 +1103,11 @@ function getMidiReader()
 	---@return integer format The format of the midi file (0, 1 or 2).
 	---@return integer tracks The total number of tracks in the midi file.
 	local function readHeader(stream, callback, chunkLength)
-	  local header = read(stream, chunkLength)
-	  assert(header and #header == 6, "incomplete or missing header")
-	  local format, tracks, division = (">I2I2I2"):unpack(header)
-	  callback("header", format, tracks, division)
-	  return format, tracks
+		local header = read(stream, chunkLength)
+		assert(header and #header == 6, "incomplete or missing header")
+		local format, tracks, division = (">I2I2I2"):unpack(header)
+		callback("header", format, tracks, division)
+		return format, tracks
 	end
 
 	---Reads only a single event from the midi stream.
@@ -731,35 +1116,35 @@ function getMidiReader()
 	---@param runningStatus? integer A running status of a previous midi event.
 	---@return integer length, integer runningStatus Returns both read length and the updated running status.
 	local function processEvent(stream, callback, runningStatus)
-	  local firstByte = assert(stream:read(1), "missing event")
-	  local status = firstByte:byte()
+		local firstByte = assert(stream:read(1), "missing event")
+		local status = firstByte:byte()
 
-	  local length = 0
+		local length = 0
 
-	  if status < 0x80 then
-		status = assert(runningStatus, "no running status")
-	  else
-		firstByte = stream:read(1)
-		length = 1
-		runningStatus = status
-	  end
+		if status < 0x80 then
+			status = assert(runningStatus, "no running status")
+		else
+			firstByte = stream:read(1)
+			length = 1
+			runningStatus = status
+		end
 
 
-	  if status >= 0x80 and status < 0xF0 then
-		length = length + midiEvent[status & 0xF0](stream, callback, (status & 0x0F) + 1, firstByte)
-	  elseif status == 0xF0 then
-		length = length + sysexEvent(stream, callback, firstByte)
-	  elseif status == 0xF2 then
-		length = length + 2
-	  elseif status == 0xF3 then
-		length = length + 1
-	  elseif status == 0xFF then
-		length = length + metaEvent(stream, callback, firstByte)
-	  else
-		callback("ignore", status)
-	  end
+		if status >= 0x80 and status < 0xF0 then
+			length = length + midiEvent[status & 0xF0](stream, callback, (status & 0x0F) + 1, firstByte)
+		elseif status == 0xF0 then
+			length = length + sysexEvent(stream, callback, firstByte)
+		elseif status == 0xF2 then
+			length = length + 2
+		elseif status == 0xF3 then
+			length = length + 1
+		elseif status == 0xFF then
+			length = length + metaEvent(stream, callback, firstByte)
+		else
+			callback("ignore", status)
+		end
 
-	  return length, runningStatus
+		return length, runningStatus
 	end
 
 	---Reads the content of a track chunk of a midi file.
@@ -768,20 +1153,21 @@ function getMidiReader()
 	---@param chunkLength number The length of the chunk in bytes.
 	---@param track integer The one-based index of the track, used in the "track" callback.
 	local function readTrack(stream, callback, chunkLength, track)
-	  callback("track", track)
+		callback("track", track)
 
-	  local runningStatus
+		local runningStatus
 
-	  while chunkLength > 0 do
-		local ticks, vlqLength = readVLQ(stream)
-		if ticks > 0 then
-		  callback("deltatime", ticks)
+		while chunkLength > 0 do
+			local ticks, vlqLength = readVLQ(stream)
+
+			if ticks > 0 then
+				callback("deltatime", ticks)
+			end
+
+			local readChunkLength
+			readChunkLength, runningStatus = processEvent(stream, callback, runningStatus)
+			chunkLength = chunkLength - readChunkLength - vlqLength
 		end
-
-		local readChunkLength
-		readChunkLength, runningStatus = processEvent(stream, callback, runningStatus)
-		chunkLength = chunkLength - readChunkLength - vlqLength
-	  end
 	end
 
 	---Processes a midi file by calling the provided callback for midi events.
@@ -791,50 +1177,50 @@ function getMidiReader()
 	---@param onlyTrack? integer If specified, only this single track (one-based) will be processed.
 	---@return integer tracks Returns the total number of tracks in the midi file.
 	local function process(stream, callback, onlyHeader, onlyTrack)
-	  callback = callback or function() end
+		callback = callback or function() end
 
-	  local format, tracks
-	  local track = 0
-	  while true do
-		local chunkType, chunkLength = readChunkInfo(stream)
+		local format, tracks
+		local track = 0
+		while true do
+			local chunkType, chunkLength = readChunkInfo(stream)
 
-		if not chunkType then
-		  break
-		end
-
-		if chunkType == "MThd" then
-		  assert(not format, "only a single header chunk is allowed")
-		  format, tracks = readHeader(stream, callback, chunkLength)
-		  assert(tracks == 1 or format ~= 0, "midi format 0 can only contain a single track")
-		  assert(not onlyTrack or onlyTrack >= 1 and onlyTrack <= tracks, "track out of range")
-		  if onlyHeader then
-			break
-		  end
-		elseif chunkType == "MTrk" then
-		  track = track + 1
-		  assert(format, "no header chunk before the first track chunk")
-		  assert(track <= tracks, "found more tracks than specified in the header")
-		  assert(track == 1 or format ~= 0, "midi format 0 can only contain a single track")
-
-		  if not onlyTrack or track == onlyTrack then
-			readTrack(stream, callback, chunkLength, track)
-			if onlyTrack then
-			  break
+			if not chunkType then
+				break
 			end
-		  else
-			stream:seek("cur", chunkLength)
-		  end
-		else
-		  local data = read(chunkLength)
-		  callback("unknownChunk", chunkType, data)
+
+			if chunkType == "MThd" then
+				assert(not format, "only a single header chunk is allowed")
+				format, tracks = readHeader(stream, callback, chunkLength)
+				assert(tracks == 1 or format ~= 0, "midi format 0 can only contain a single track")
+				assert(not onlyTrack or onlyTrack >= 1 and onlyTrack <= tracks, "track out of range")
+				if onlyHeader then
+					break
+				end
+			elseif chunkType == "MTrk" then
+				track = track + 1
+				assert(format, "no header chunk before the first track chunk")
+				assert(track <= tracks, "found more tracks than specified in the header")
+				assert(track == 1 or format ~= 0, "midi format 0 can only contain a single track")
+
+				if not onlyTrack or track == onlyTrack then
+					readTrack(stream, callback, chunkLength, track)
+					if onlyTrack then
+						break
+					end
+					else
+					stream:seek("cur", chunkLength)
+				end
+			else
+				local data = read(chunkLength)
+				callback("unknownChunk", chunkType, data)
+			end
 		end
-	  end
 
-	  if not onlyHeader and not onlyTrack then
-		assert(track == tracks, "found less tracks than specified in the header")
-	  end
+		if not onlyHeader and not onlyTrack then
+			assert(track == tracks, "found less tracks than specified in the header")
+		end
 
-	  return tracks
+		return tracks
 	end
 
 	---Processes only the header chunk.
@@ -842,7 +1228,7 @@ function getMidiReader()
 	---@param callback function The callback function, reporting the midi events.
 	---@return integer tracks Returns the total number of tracks in the midi file.
 	local function processHeader(stream, callback)
-	  return process(stream, callback, true)
+		return process(stream, callback, true)
 	end
 
 	---Processes only the header chunk and a single, specified track.
@@ -851,14 +1237,14 @@ function getMidiReader()
 	---@param track integer The one-based track index to read.
 	---@return integer tracks Returns the total number of tracks in the midi file.
 	local function processTrack(stream, callback, track)
-	  return process(stream, callback, false, track)
+		return process(stream, callback, false, track)
 	end
 
 	return {
-	  process = process,
-	  processHeader = processHeader,
-	  processTrack = processTrack,
-	  processEvent = processEvent
+		process = process,
+		processHeader = processHeader,
+		processTrack = processTrack,
+		processEvent = processEvent
 	}
 
 end
