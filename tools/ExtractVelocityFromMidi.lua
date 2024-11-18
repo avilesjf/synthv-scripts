@@ -31,6 +31,7 @@ local ticksPerQuarter = nil
 local DEBUG = false
 local DEBUG_RESULT = ""
 local midiFileNameFromTrack = ""
+local midiFileExtension = ".mid"
 local DEFAULT_FILE_PATH = ""
 if DEBUG then 
 	--DEFAULT_FILE_PATH = "D:\\Cubase Projects\\I can't hear you\\i can't hear you3.mid" 
@@ -426,6 +427,7 @@ end
 
 --- Get track list
 function getTracksList()
+	
 	local list = {}
 	local tracks = project:getNumTracks()
 	for iTrack = 1, tracks do
@@ -436,11 +438,13 @@ function getTracksList()
 		local numNotes = groupNotesMain:getNumNotes()
 		local lyrics = getFirstNotesLyrics(numNotes, groupNotesMain)
 		local trackName = track:getName()
-		table.insert(list, trackName
-							.. " (" .. string.format(formatCount, numNotes) .. ")"
-							.. lyrics
-							)
-		if string.find(trackName, ".mid") ~= nil then
+		if (string.find(trackName, midiFileExtension) == nil and numNotes > 0) then
+			table.insert(list, trackName
+								.. " (" .. string.format(formatCount, numNotes) .. ")"
+								.. lyrics
+								)
+		end
+		if string.find(trackName, midiFileExtension) ~= nil then
 			midiFileNameFromTrack = getCleanFilename(trackName)
 		end
 	end
@@ -907,7 +911,7 @@ function main()
 	local filenameInit = DEFAULT_FILE_PATH
 	
 	-- Get file name from last clipboard
-	if string.find(contentInfo, ".mid") ~= nil then
+	if string.find(contentInfo, midiFileExtension) ~= nil then
 		filenameInit = getCleanFilename(contentInfo)
 	end
 	
