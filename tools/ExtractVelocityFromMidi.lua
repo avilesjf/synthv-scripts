@@ -255,14 +255,19 @@ function getMidiTrackList()
 	local velocity = 0
 	local currentTrack = 1
 	local positionTrack = 0
-	local previousTrack = 1
+	local previousTrack = 0
 	local timeSecondBegin = 0
 	local firstTrackWithNotes = 0
 	local trackLabel = SV:T("Track")
-
+	local isFirst = false
+	
 	for iMidiNote = 1, #notesTable do
 		local note = notesTable[iMidiNote]
 		currentTrack = note.track
+		
+		if iMidiNote == 1 then
+			previousTrack = currentTrack
+		end
 		
 		if previousTrack ~= currentTrack then
 			if trackNotesCount == 0 then
@@ -276,8 +281,9 @@ function getMidiTrackList()
 						.. " (" .. string.format(formatCount, trackNotesCount) .. ")"
 						.. lyricsStr)
 			table.insert(listTracks, previousTrack)
-			if firstTrackWithNotes == 0 and trackNotesCount > 0 then
+			if not isFirst and firstTrackWithNotes == 0 and trackNotesCount > 0 then
 				firstTrackWithNotes = positionTrack
+				isFirst = true
 			end
 			positionTrack = positionTrack  + 1			
 			trackNotesCount = 0
@@ -292,12 +298,17 @@ function getMidiTrackList()
 		previousTrack = currentTrack
 		trackNotesCount = trackNotesCount + 1
 	end
+	
+	if not isFirst and firstTrackWithNotes == 0 and trackNotesCount > 0 then
+		firstTrackWithNotes = positionTrack
+		isFirst = true
+	end
 	table.insert(list, trackLabel 
 				.. string.format(formatTrack, previousTrack ) 
 				.. " (" .. string.format(formatCount, trackNotesCount)  .. ")"
 				.. " : " .. string.sub(lyrics, 1, 10) )	
 	table.insert(listTracks, previousTrack)
-	
+
 	return list, listTracks, firstTrackWithNotes
 end
 
