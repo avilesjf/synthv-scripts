@@ -1,12 +1,12 @@
-local SCRIPT_TITLE = 'Extract velocity from midi file V1.0'
+local SCRIPT_TITLE = 'Extract regions from midi file V1.0'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: ExtractVelocityFromMidi.lua
+lua file name: ExtractRegionsFromMidi.lua
 
-This script will extract the velocity notes (or CC controller) coming a midi file
+This script will extract the regions (maskers) inside a midi file
 and copy them to loudness SynthV parameter.
 
 Midi extracting source code comming from:
@@ -34,7 +34,7 @@ local midiFileNameFromTrack = ""
 local midiFileExtension = ".mid"
 local DEFAULT_FILE_PATH = ""
 if DEBUG then 
-	DEFAULT_FILE_PATH = "D:\\Cubase Projects\\rjhuang-test1\\Test.mid"
+	DEFAULT_FILE_PATH = "D:\\Cubase Projects\\SimpleLife\\SimpleLifeLead1.mid"
 end
 
 local ticks = 0
@@ -46,9 +46,12 @@ local signatureActive = 4 -- numerator
 local denominatorActive = 4
 local dottedActive = 8
 
-local notesTable = {}
 local tempoMarkers = {}
+local markers = {}
 local midiTrackNames = {}
+local markerTickActive = 0
+local markerSecondActive = 0
+local notesTable = {}
 local controllersTable = {}
 local channelPressure = {}
 local modeMessage = {}
@@ -77,8 +80,8 @@ end
 
 -- Store data from midi file
 function recordDeltaTimes(timeBegin, ticks, timeSecond, channel, key, velocity)
-	table.insert(notesTable, {
-		index = INDEX_NOTE,
+    table.insert(notesTable, {
+        index = INDEX_NOTE,
 		track = CURRENT_TRACK,
 		ticksBegin  =  ticks,
 		ticksEnd  = nil,
@@ -89,8 +92,8 @@ function recordDeltaTimes(timeBegin, ticks, timeSecond, channel, key, velocity)
 		channel = channel,
 		key = key, 
 		velocity = velocity,
-		lyric = CURRENT_LYRIC
-	})
+        lyric = CURRENT_LYRIC
+    })
 end
 
 -- Store controller data from midi file
@@ -186,7 +189,7 @@ function handlers.noteOff(channel, key, velocity)
 end
 
 -- Get controller from midi file
-function handlers.controller(channel, number, value)
+function handlers.controller(channel, number, value)	
 	local timeSecond = 0
 	if ticks > 0 then
 		local secNotePos = timeAxis:getSecondsFromBlick(ticksToBlicks(ticks))
@@ -225,9 +228,27 @@ function handlers.timeSignature(numerator, denominator, metronome, dotted)
 	recordtimeSignatureDeltaTimes(DELTA_TIME, ticks, timeSecond, numerator, denominator, metronome, dotted)
 end
 
+-- Get markers from midi file
+function handlers.marker(marker)
+    table.insert(markers, {
+        position = ticksToBlicks(ticks),
+        ticksBegin = ticks,
+        timeBegin = 0,
+        marker = marker
+    })
+end
+
 -- Get lyrics from midi file
 function handlers.lyric(data)
 	CURRENT_LYRIC = data
+end
+
+-- Get sequencer or track name from midi file
+function handlers.sequencerOrTrackName(data)
+    table.insert(midiTrackNames, {
+		track = CURRENT_TRACK,
+        trackName = data
+    })
 end
 
 -- Get track number from midi file
@@ -249,22 +270,14 @@ function handlers.setTempo(tempo)
     })
 end
 
--- Get sequencer or track name from midi file
-function handlers.sequencerOrTrackName(data)
-    table.insert(midiTrackNames, {
-		track = CURRENT_TRACK,
-        trackName = data
-    })
-end
-
 -- Convert ticks to Blicks
 function ticksToBlicks(ticks)
-    return (ticks / ticksPerQuarter) * blicksPerQuarter
+    return ticks / ticksPerQuarter * blicksPerQuarter
 end
 
 -- Convert blicks to ticks
 function blicksToTicks(blicks)
-	return (blicks / blicksPerQuarter) * ticksPerQuarter
+	return blicks / blicksPerQuarter * ticksPerQuarter 
 end
 
 -- Call back to dispatch content data from midi file
@@ -310,7 +323,7 @@ function getMidiTrackList()
 				
 		if previousTrack >= 0 and previousTrack ~= currentTrack then
 			if trackNotesCount > 0 then
-				addTrackList(list, listTracks, previousTrack, trackNotesCount, positionTrack)
+				addTrackList(list, listTracks, previousTrack, trackNotesCount)
 				
 				if firstTrackWithNotes < 0 then
 					firstTrackWithNotes = positionTrack
@@ -327,22 +340,22 @@ function getMidiTrackList()
 	if firstTrackWithNotes < 0 and trackNotesCount > 0 then
 		firstTrackWithNotes = positionTrack
 	end
-	addTrackList(list, listTracks, previousTrack, trackNotesCount, positionTrack)
+	addTrackList(list, listTracks, previousTrack, trackNotesCount)
 	
-	-- if DEBUG then SV:showMessageBox("", "firstTrackWithNotes: " .. firstTrackWithNotes) end
+	-- if DEBUG then SV:showMessageBox("", "infos: " .. infos) end
 	
 	return list, listTracks, firstTrackWithNotes
 end
 
 -- Add track list
-function addTrackList(list, listTracks, iTrack, trackNotesCount, positionTrack)
+function addTrackList(list, listTracks, iTrack, trackNotesCount)
 	local trackLabel = SV:T("Track")
 	
 	table.insert(list, trackLabel 
 				.. string.format(formatTrack, iTrack)
 				.. " '" .. getTrackName(iTrack) .. "'"
 				.. " (" .. string.format(formatCount, trackNotesCount) .. ")")
-	table.insert(listTracks,  iTrack)
+	table.insert(listTracks, iTrack)
 end
 
 -- Get list of tempo infos
@@ -357,80 +370,6 @@ function getTempoList()
 						.. SV:T("tempo: ")     .. tempoMarker.tempo .. "\r"
 	end
 	if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), "list tempo: " .. list) end
-	return list
-end
-
--- Get Midi controller track list
-function getMidiControllersTrackList(trackFilterMidi, allTracks)
-	local list = {}
-	local listAllTracks = {}
-	local listOutput = {}
-	local value = 0
-	local currentTrack = 1
-	local previousTrack = 0
-	local ctrlTrackCount = 0
-	local ctrlInfosCount = 0
-	local previousTicksBegin = 0
-	local previousTimeSecondBegin = 0
-	local trackLabel = SV:T("Track")
-	
-	for iMidiInfo = 1, #controllersTable do
-		local ctrlData = controllersTable[iMidiInfo]
-		currentTrack = ctrlData.track
-		
-		if previousTrack == 0 then 
-			previousTrack = currentTrack
-		end
-		
-		if previousTrack ~= currentTrack then
-			table.insert(listAllTracks, trackLabel 
-				.. string.format(formatTrack, previousTrack)
-				.. " (" .. previousTicksBegin .. "/"
-				.. ": " .. previousTimeSecondBegin .. ": "
-				.. " Count: " .. string.format(formatNumber, ctrlInfosCount)
-				)
-				ctrlTrackCount = ctrlTrackCount + 1
-		end
-
-		if trackFilterMidi == currentTrack then
-			table.insert(list, trackLabel 
-				.. string.format(formatTrack, currentTrack)
-				.. " (" .. ctrlData.ticksBegin .. "/"
-				.. ": " .. ctrlData.timeSecondBegin .. ": "
-				.. " CC: " .. string.format(formatNumber, ctrlData.number)
-				.. " val: " .. string.format(formatNumber, ctrlData.value)
-			)
-			ctrlInfosCount = ctrlInfosCount + 1
-		end
-		
-		previousTicksBegin = ctrlData.ticksBegin
-		previousTimeSecondBegin = ctrlData.timeSecondBegin
-		previousTrack = currentTrack
-	end
-	
-	table.insert(listAllTracks, trackLabel 
-		.. string.format(formatTrack, previousTrack)
-		.. " (" .. previousTicksBegin .. "/"
-		.. ": " .. previousTimeSecondBegin .. ": "
-		.. " Count: " .. string.format(formatNumber, ctrlInfosCount)
-		)
-
-	if allTracks then
-		listOutput = listAllTracks
-	else
-		listOutput = list
-	end
-	
-	if DEBUG then
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), 
-			"ControllersTable count: " .. #controllersTable .. "\r" 
-			.. "tracks count: " .. ctrlTrackCount .. "\r" 
-			.. "track (" .. trackFilterMidi .. ") count: " .. ctrlInfosCount .. "\r" 
-			.. "MidiControllers:" .. "\r" 
-			..  string.sub(table.concat(listOutput, "\r"), 1, 1000) .. "\r"
-			.. "length: " ..  #listOutput
-			)
-	end
 	return list
 end
 
@@ -488,45 +427,42 @@ end
 
 --- Get track list
 function getTracksList()
-	
 	local list = {}
+	local listPos = {}
 	local tracks = project:getNumTracks()
 	for iTrack = 1, tracks do
 		local track = project:getTrack(iTrack)
 		local mainGroupRef = track:getGroupReference(1) -- main group
 		local groupNotesMain = mainGroupRef:getTarget()
-		
+		local numGroups = track:getNumGroups()
 		local numNotes = groupNotesMain:getNumNotes()
 		local lyrics = getFirstNotesLyrics(numNotes, groupNotesMain)
 		local trackName = track:getName()
+		
 		if (string.find(trackName, midiFileExtension) == nil and numNotes > 0) then
 			table.insert(list, trackName
-								.. " (" .. string.format(formatCount, numNotes) .. ")"
-								.. lyrics
-								)
+							.. " ("  .. string.format(formatCount, numNotes) .. ") "
+							.. lyrics
+							)
+			table.insert(listPos, iTrack - 1)
 		end
 		if string.find(trackName, midiFileExtension) ~= nil then
 			midiFileNameFromTrack = getCleanFilename(trackName)
 		end
 	end
-	return list
+	return list, listPos
 end
 
 -- Create user input form
-function getForm(midiTrackList, trackList, firstTrackWithNotes)
-	local velocityGainDefaultValue = 5
-	local velocityGainMinValue =  1
-	local velocityGainMaxValue =  20
-	local velocityGainInterval =  5
-	local reduceControllerGainDefaultValue = 80
-	local reduceControllerGainMinValue =  0
-	local reduceControllerGainMaxValue =  95
-	local reduceControllerGainInterval =  10
+function getForm(trackList)	
+	local midiTrackList, listTracks, firstTrackWithNotes = getMidiTrackList()
 	local trackDefault =  0
+	
+	listAllTracks = listTracks
 	
 	local form = {
 		title = SV:T(SCRIPT_TITLE),
-		message =  SV:T("Select source & target track to update loudness,") .. "\r" 
+		message =  SV:T("Select source & target track to create groups,") .. "\r" 
 				.. SV:T("Seleted track must match the midi file track!"),
 		buttons = "OkCancel",
 		widgets = {
@@ -538,78 +474,16 @@ function getForm(midiTrackList, trackList, firstTrackWithNotes)
 			},
 			{
 				name = "trackSynthV", type = "ComboBox",
-				label = SV:T("Select target track to update loudness"),
+				label = SV:T("Select target track to create groups"),
 				choices = trackList, 
 				default = trackDefault
 			},
-			{
-				name = "velocityGain", type = "Slider",
-				label = SV:T("Notes velocity gain"),
-				format = "%3.0f",
-				minValue = velocityGainMinValue, 
-				maxValue = velocityGainMaxValue, 
-				interval = velocityGainInterval, 
-				default = velocityGainDefaultValue
-			},			
-			{
-				name = "controller", type = "CheckBox", text = SV:T("Replace loudness by midi controller CC = " .. controllerCC),
-				default = true
-			},
-			{
-				name = "reduceControllerGain", type = "Slider",
-				label = SV:T("Reduce controller gain %"),
-				format = "%3.0f",
-				minValue = reduceControllerGainMinValue, 
-				maxValue = reduceControllerGainMaxValue, 
-				interval = reduceControllerGainInterval, 
-				default = reduceControllerGainDefaultValue
-			},			
 			{
 				name = "separator", type = "TextArea", label = "", height = 0
 			}
 		}
 	}
 	return SV:showCustomDialog(form)
-end
-
--- Check tracks
-function checkTrack(trackFilterSynthV)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local numNotes = groupNotesMain:getNumNotes()
-	return numNotes
-end
-
--- Set first parameter Loudness in track
-function setFirstParameterLoudnessInTrack(trackFilterSynthV)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local loudness = groupNotesMain:getParameter("loudness")
-	local numNotes = groupNotesMain:getNumNotes()
-	local firstNote = groupNotesMain:getNote(1) -- First note
-	local loudness = groupNotesMain:getParameter("loudness")
-	
-	-- Decay before applying first loudness value in next steps
-	local newTimeOffset = firstNote:getOnset() - timeAxis:getBlickFromSeconds(0.1)
-	if newTimeOffset <  0 then newTimeOffset = 0 end  -- Negative is not possible
-	
-	loudness:add(newTimeOffset, 0)
-	
-	return firstNote
-end
-
--- Set last parameter Loudness in track
-function setLastParameterLoudnessInTrack(trackFilterSynthV, lastValue)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local numNotes = groupNotesMain:getNumNotes()
-	local lastNote = groupNotesMain:getNote(numNotes) -- last note
-
-	local loudness = groupNotesMain:getParameter("loudness")
-	
-	loudness:add(lastNote:getEnd(), lastValue)
-	-- Decay after applying last loudness value
-	local time = lastNote:getEnd() + timeAxis:getBlickFromSeconds(2)
-	loudness:add(time, 0)
-	
-	return lastNote
 end
 
 -- Get tempo
@@ -623,6 +497,57 @@ function getTempo(ticks)
 		end
 	end
 	return newTempo
+end
+
+-- Get marker from ticks
+function getMarkerFromTicks(ticks)
+	local newMarker = markerTickActive
+	
+	for iMarker = 1, #markers do
+		local markerTemp = markers[iMarker]
+		if markerTemp.ticksBegin <= ticks then
+			newMarker = marker.ticksBegin
+		end
+	end
+	return newMarker
+end
+
+-- Get markers
+function getMarkers()
+	local result = ""
+	for iMarker = 1, #markers do
+		local markerTemp = markers[iMarker]
+		result = result 
+						.. SV:T("iMarker: ") .. iMarker .. ", " 
+						.. SV:T("Marker pos: ") .. timeAxis:getSecondsFromBlick(markerTemp.position) .. ", " 
+						.. SV:T("Ticks: ")     .. markerTemp.ticksBegin .. ", " 
+						-- .. SV:T("Time: ")     .. markerTemp.timeBegin .. ", " 
+						.. SV:T("Seconds: ")     .. SecondsToClock(ticksToBlicks(markerTemp.ticksBegin)) .. ", " 
+						-- .. SV:T("Marker: ")     .. markerTemp.marker 
+						.. "\r"
+	end
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. result)
+end
+
+-- Set marker in seconds
+function updateMarkersInSeconds()
+	-- local result = ""
+	
+	for iMarker = 1, #markers do
+		local markerTemp = markers[iMarker]
+		
+		local markerTempSecond = timeAxis:getSecondsFromBlick(ticksToBlicks(markerTemp.ticksBegin))
+		
+		-- result = result
+			-- .. "S: " .. string.format(formatNumber, math.floor(markerTempSecond)) .. ", "
+			-- .. "\r"
+		
+		markers[iMarker].timeBegin = markerTempSecond
+	end
+	
+	-- if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. result) end
+	
+	return markers
 end
 
 -- Get metronome
@@ -657,168 +582,229 @@ function getSignature(ticks)
 	return numerator, denominator, metronome, dotted
 end
 
--- Get loudness from track
-function getLoudnessFromTrack(trackFilterSynthV)
-	local loudness = nil
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local loudness = groupNotesMain:getParameter("loudness")
-	
-	return loudness
-end
-
 -- Get group main from track
 function getGroupMainFromTrack(trackFilterSynthV)
-	local loudness = nil
 	local track = project:getTrack(trackFilterSynthV)
 	local mainGroupRef = track:getGroupReference(1) -- main group
 	local groupNotesMain = mainGroupRef:getTarget()
 	
-	return groupNotesMain
+	return track, mainGroupRef, groupNotesMain
 end
 
--- Set volume notes for each tracks
-function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, 
-								velocityGain, controller, reduceControllerGain)
-	local lyricContent = ""
-	local currentTrack = 1
-	local previousTrack = 1
-	local iSynthVNote = 0
-	local trackNotesCount = 0
-	local lyrics = ""
-	local result = ""
-	local loudness = getLoudnessFromTrack(trackFilterSynthV)
-	loudness:removeAll()
-	
-	-- Loudness from midi controller CC1
-	if controller then
-		local currentTrack = 1
-		local ctrlInfosCount = 0
-		
-		for iMidiInfo = 1, #controllersTable do
-			local ctrlData = controllersTable[iMidiInfo]
-			currentTrack = ctrlData.track
-			
-			if currentTrack == trackFilterMidi then
-			
-				-- Controller CC = 1 modulation wheel
-				if ctrlData.number == controllerCC then
-					-- Set signature 4/4 or 3/4 etc.
-					-- signatureActive = getSignature(ctrlData.ticksBegin)
-					-- local seconds = timeAxis:getSecondsFromBlick(ticksToBlicks(ctrlData.ticksBegin))
-					
-					-- if DEBUG then
-						-- result = result 
-										-- -- .. "Tr: " .. currentTrack .. ", "
-										-- .. "ticks: " .. ctrlData.ticksBegin .. ", "
-										-- .. "timeBegin: " .. ctrlData.timeBegin .. ", "
-										-- .. "t: " .. ctrlData.timeSecondBegin .. ", "
-										-- -- .. "c: " .. ctrlData.channel .. ", "
-										-- -- .. "n: " .. ctrlData.number .. ", "
-										-- -- .. "v: " .. ctrlData.value .. ", "
-										-- .. "s1: " .. SecondsToClock(seconds) .. ", "
-										-- .. "s: " .. string.format(formatNumber, math.floor(seconds)) .. ", "
-										-- -- .. "s0: " .. timeAxis:getBlickFromSeconds(seconds1)
-										-- -- .. ", seconds: " .. SecondsToClock(seconds)
-										-- .. "\r"
-					-- end	
-					
-					-- get Blicks with new tempo
-					local timeInfo = ticksToBlicks(ctrlData.ticksBegin)
-					
-					-- 0...127 => 0..24
-					local coef = (24/127)
-					local newValue = ctrlData.value * coef
-					newValue = newValue - (newValue * (reduceControllerGain/100))
-					
-					-- Get track infos for loudness
-					loudness:add(timeInfo, newValue) -- Add loudness
-					ctrlInfosCount = ctrlInfosCount + 1
-					
-				end
-			end
-			
-		end
-	else
-		-- Set first parameter loudness default value (0)
-		local firstNote = setFirstParameterLoudnessInTrack(trackFilterSynthV)
-		
-		-- Loudness from midi notes velocity
-		for iMidiNote = 1, #notesTable do
-			local midiNote = notesTable[iMidiNote]
-			currentTrack = midiNote.track
-			
-			if previousTrack ~= currentTrack then
-				lyrics = ""
-			end
-			lyrics = midiNote.lyric
-			
-			if currentTrack == trackFilterMidi then
-				iSynthVNote = iSynthVNote + 1
-				
-				-- Get track infos for loudness
-				local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-				local numNotes = groupNotesMain:getNumNotes()
-				
-				if iSynthVNote <= numNotes then
-					local noteSynthV = groupNotesMain:getNote(iSynthVNote)
+-- Get seconds 
+function getSecondsFromTicks(ticksBegin,  ticksPerQuarterNew, dottedActive)
+	local seconds = (ticksBegin / (ticksPerQuarterNew * dottedActive) )	
+	return seconds
+end
 
-					if noteSynthV ~= nil then
-						local midiNoteVelocity = midiNote.velocity
-						if midiNoteVelocity == nil then
-							midiNoteVelocity = 0
-						end
-						
-						-- local timeNote = ticksToBlicks(ctrlData.ticksBegin)
-						local timeNote = noteSynthV:getOnset()
-						local newValue = midiNoteVelocity * velocityGain
-						local loudness = groupNotesMain:getParameter("loudness")
-						loudness:add(timeNote, newValue)
-					end
-				end
+-- Create groups from midi markers
+function createGroupsFromMarkers(trackFilterMidi, trackFilterSynthV)
+	local secondRef = 6
+	local result = ""
+	local groups = {}
+	local groupNotes = {}
+	local groupNb = 0
+	local iOldMarkerFound = 0
+
+	-- Update makers ticks with time in second
+	updateMarkersInSeconds()
+	
+	if DEBUG then getMarkers() end
+
+	local track, mainGroupRef, groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
+
+	local numNotes = groupNotesMain:getNumNotes()	
+	
+	for iNotes = 1, numNotes do
+		local note = groupNotesMain:getNote(iNotes)
+		local noteSeconds = timeAxis:getSecondsFromBlick(note:getOnset())
+		local markerFirst, markerSecond, iMarkerFound = getMarkerRangeFromSecond(noteSeconds)
+		
+		-- result = result .. "markerFirst: " .. tostring(SecondsToClock(markerFirst))
+				-- .. ", markerSecond: " .. tostring(SecondsToClock(markerSecond))
+				-- .. ", iMarkerFound: " .. tostring(iMarkerFound)
+				-- .. ", noteSeconds: " .. tostring(SecondsToClock(noteSeconds))
+				-- .. "\r"
+		
+		if iMarkerFound > 0  then
+			
+			if iOldMarkerFound > 0 and iOldMarkerFound < iMarkerFound then
+				table.insert(groups, {iOldMarkerFound, groupNotes} )
+				groupNotes = {}
 			end
-			previousTrack = currentTrack
-			trackNotesCount = trackNotesCount + 1
+			table.insert(groupNotes, {iMarkerFound, note, noteSeconds} )
+
 		end
-		-- if DEBUG then
-			-- result = result .. "currentTrack: " .. currentTrack .. "/Midi track: " 
-				-- .. trackFilterMidi .. "/SynthV track: " .. trackFilterSynthV 
-				-- .. ", trackNotesCount : " .. trackNotesCount 
-				-- .. ", lyric: " .. lyrics .. "\r"
-		-- end
+		iOldMarkerFound = iMarkerFound
 	end
 	
-	-- if DEBUG then SV:setHostClipboard(result) end
+	if #groupNotes > 0 then
+		table.insert(groups, {iOldMarkerFound, groupNotes} )
+		groupNotes = {}
+	end
 
-	-- Set last parameter loudness to default value  (0)
-	local lastNote = setLastParameterLoudnessInTrack(trackFilterSynthV, newValue)
-
+	for iGroup = 1, #groups do
+		CreateGroup(track, groups[iGroup][2])
+	end
+	
+	-- Remove previous notes
+	for iGroup = 1, #groups do
+		local gNotes = groups[iGroup][2]
+		for igNotes = 1, #gNotes do
+			-- Remove previous selected notes
+			groupNotesMain:removeNote(gNotes[igNotes][2]:getIndexInParent())
+		end
+	end
+	
 	-- if DEBUG then 
-		-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. string.sub(result, 1, 1000)) 
+		-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. string.sub(result, 1, 2000)) 
 	-- end
 	
 	return result
 end
 
--- Get fist note position in current track
-function getFirstNoteInTrack(trackFilter)
-    local track = project:getTrack(trackFilter)
-	local mainGroupRef = track:getGroupReference(1)
-	local groupNotesMain = mainGroupRef:getTarget()
-	local numGroups = track:getNumGroups()
-	local numNotes = groupNotesMain:getNumNotes()
-	local loudness = groupNotesMain:getParameter("loudness")
-	local firstNote = nil
-	local time1 = nil
+-- Get marker range in second
+function getMarkerRangeFromSecond(noteSeconds)
+	local markerFirst  = 1200
+	local markerSecondInit = 9999
+	local iMarkerFound = 0
+	local endOfMarkers = false
 	
-	if numNotes > 0 then
-		firstNote = groupNotesMain:getNote(1)
-		time1 = firstNote:getOnset()
+	for iMarker = 1, #markers do
+		if iMarker + 1 <= #markers then
+			markerSecond = markers[iMarker + 1].timeBegin
+		else
+			markerSecond = markerSecondInit
+		end
+		if noteSeconds >= markers[iMarker].timeBegin and noteSeconds < markerSecond then
+			markerFirst = markers[iMarker].timeBegin
+			iMarkerFound = iMarker
+			break
+		end
 	end
 	
-	SV:showMessageBox(SV:T(SCRIPT_TITLE), "numGroups: " .. numGroups .. ", numNotes: " 
-		.. numNotes .. ", firstNote: " .. firstNote:getLyrics() .. ", time1:" .. tostring(time1))
+	return markerFirst, markerSecond, iMarkerFound
+end
+
+-- Create group from selected note and starting group from first nearest bar
+function CreateGroup(track, groupNotes)
+	local maxLengthResult = 30
+	local measurePos = 0
+	local measureBlick = 0
+	-- local noteFirst = selectedNotes[1]	
+	local noteFirst = groupNotes[1][2]
 	
-	return note
+	local measureFirst = timeAxis:getMeasureAt(noteFirst:getOnset())
+	local checkExistingMeasureMark = timeAxis:getMeasureMarkAt(measureFirst)
+	
+	if checkExistingMeasureMark ~= nil then
+		if checkExistingMeasureMark.position == measureFirst then
+			measurePos = checkExistingMeasureMark.position
+			measureBlick = checkExistingMeasureMark.positionBlick
+		else 
+			timeAxis:addMeasureMark(measureFirst, 4, 4)
+			local measureMark = timeAxis:getMeasureMarkAt(measureFirst)
+			measurePos = measureMark.position
+			measureBlick = measureMark.positionBlick
+			timeAxis:removeMeasureMark(measureFirst)
+		end
+	else
+		timeAxis:addMeasureMark(measureFirst, 4, 4)
+		local measureMark = timeAxis:getMeasureMarkAt(measureFirst)
+		measurePos = measureMark.position
+		measureBlick = measureMark.positionBlick
+		timeAxis:removeMeasureMark(measureFirst)
+	end
+	
+	local groupRefMain = track:getGroupReference(1)
+	local groupNotesMain = groupRefMain:getTarget()
+
+	-- Create new group 
+	local noteGroup = SV:create("NoteGroup")
+	for iNote = 1, #groupNotes do
+		local note = groupNotes[iNote][2]:clone()
+		note:setOnset(note:getOnset() - measureBlick)
+		noteGroup:addNote(note)
+	end
+
+	noteGroup:setName("")
+	SV:getProject():addNoteGroup(noteGroup)
+	local resultLyrics = renameOneGroup(maxLengthResult, noteGroup)
+	
+	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
+	newGrouptRef:setTimeOffset(measureBlick)
+	track:addGroupReference(newGrouptRef)
+
+	return true
+end
+
+-- Rename one group
+function renameOneGroup(maxLengthResult, noteGroup)
+	local resultLyrics = ""
+	local groupName = noteGroup:getName()
+	local notesCount = noteGroup:getNumNotes()
+
+	if notesCount > 0 then
+		local lyricsLine = ""
+		local sep = ""
+
+		for i = 1, notesCount do
+			local infos = ""
+			local note = noteGroup:getNote(i)
+			
+			if note ~= nil then
+				local lyrics = note:getLyrics()
+				if string.len(lyrics) > 0 then
+				
+					-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+					if isTextAccepted(timeAxis, note) then
+						-- Replace following note char '-'
+						if lyrics == "-" then lyrics = ".." end 
+						-- Add lyrics for each note
+						lyricsLine = lyricsLine .. sep .. lyrics
+						sep = " "
+					end				  
+				end
+			end
+		end
+
+		-- Add lyrics
+		resultLyrics = limitStringLength(lyricsLine, maxLengthResult)
+		-- Update if new lyrics only
+		if noteGroup:getName() ~= resultLyrics then noteGroup:setName(resultLyrics)	end
+	end
+
+	return resultLyrics
+end
+
+-- Limit string max length
+function limitStringLength(resultLyrics, maxLengthResult)
+	-- Limit string max length
+	if string.len(resultLyrics) > maxLengthResult then
+		local posStringChar = string.find(resultLyrics," ", maxLengthResult - 10)
+		if posStringChar == nil then posStringChar = maxLengthResult end
+		resultLyrics = string.sub(resultLyrics, 1, posStringChar)
+	end
+	return resultLyrics
+end
+
+-- Is lyrics is a text accepted
+function isTextAccepted(timeAxis, note)
+	local result = false
+	local lyrics = note:getLyrics()
+	
+	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
+	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
+		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
+		result = true
+	end
+	
+	-- Specific for personal vocal effect
+	if lyrics == "a" and isLyricsEffect(timeAxis, note) then
+		result = false
+	end
+
+	return result
 end
 
 -- Extract data from midi file
@@ -844,19 +830,18 @@ function extractMidiData(MidiReader, midiFilename)
 end
 
 -- Get notes from midi file
-function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
+function getNotesFromMidiFile(MidiReader, midiFilename, trackList, trackPos)
 	local project = SV:getProject()
 	local timeSecondEndPhrase = ""
 	local lyricsIndice = 0
 	local endTrack = false
 	local trackFilterSynthV = 1
 	local trackFilterMidi = 1
-	local velocityGain = 0
-	local reduceControllerGain = 0
+	local done = false
 	
 	if not checkExternalFile(midiFilename) then 
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), 'Failed to open MIDI from ' .. midiFilename)
-		return false
+		return done
 	end
 	
 	local resultExtractMidi = extractMidiData(MidiReader, midiFilename)
@@ -865,7 +850,7 @@ function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
 	
 	if not resultExtractMidiStatus  then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Nothing found during processing the MIDI file!"))
-		return false
+		return done
 	end
 	
 	-- Result infos
@@ -873,48 +858,43 @@ function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
 		-- Message result
 		local resultMessage = ""
 		
-		if string.len(tracksCount) > 0 then
-			resultMessage = resultMessage .. SV:T("tracks count:") .. " " .. tracksCount .. "\r"
-		end
+		if #markers == 0 then
+			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No markers found!"))
+		end 
 		
-		local midiTrackList, listTracks, firstTrackWithNotes = getMidiTrackList()
-
-		local userInput = getForm(midiTrackList, trackList, firstTrackWithNotes)
+		-- if string.len(tracksCount) > 0 then
+			-- if DEBUG then resultMessage = resultMessage .. SV:T("tracks count:") 
+				-- .. " " .. tracksCount .. "\r"
+			-- end
+		-- end
+			
+		local userInput = getForm(trackList)
 		
 		if userInput.status then
-			
-			trackFilterMidi = listTracks[userInput.answers.trackMidi + 1]
-			trackFilterSynthV = userInput.answers.trackSynthV + 1
-			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "trackFilterMidi: " .. trackFilterMidi  .. "\r"
-				-- .. "trackFilterSynthV: " .. trackFilterSynthV  .. "\r"
-				-- .. "listTracks: " .. table.concat(listTracks, ",  ") .. "\r"
-				-- .. "midiTrackList:\r" .. table.concat(midiTrackList, "\r")
-			-- )
+			trackFilterSynthV = trackPos[userInput.answers.trackSynthV + 1] + 1
+			trackFilterMidi = listAllTracks[userInput.answers.trackMidi + 1]
 			-- if DEBUG then getTempoList() end
-			-- if DEBUG then getMidiControllersTrackList(trackFilterMidi, true) end
 			-- if DEBUG then getMidiTimeSignatureTrackList(trackFilterMidi) end
-
-			velocityGain = userInput.answers.velocityGain
-			controller = userInput.answers.controller
-			reduceControllerGain = userInput.answers.reduceControllerGain
-			
+	
 			-- check track contents
-			local numnotes = checkTrack(trackFilterSynthV)
+			local track, mainGroupRef, groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
+			local numNotes = groupNotesMain:getNumNotes()
 			if numnotes == 0 then
 				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes found in tracks!"))
-				return false
+				return done
 			end
 		
-			-- Set loudness from midi velocity
-			local result = setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, velocityGain, controller, reduceControllerGain)
+			-- Create groups form markers
+			local result = createGroupsFromMarkers(trackFilterMidi, trackFilterSynthV)
+			done = true
 		end
 
-		--if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), resultMessage ) end
+		-- if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), resultMessage ) end
 	else
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Nothing found!"))
 	end
 	
-	return true
+	return done
 end
 
 -- getCleanFilename
@@ -932,13 +912,13 @@ end
 function main()
 	local contentInfo = SV:getHostClipboard()
 	local filenameInit = DEFAULT_FILE_PATH
-	
+
 	-- Get file name from last clipboard
 	if string.find(contentInfo, midiFileExtension) ~= nil then
 		filenameInit = getCleanFilename(contentInfo)
 	end
 	
-	local trackList = getTracksList()
+	local trackList, trackPos = getTracksList()
 	
 	-- Get file name with path from a track name in SynthV
 	if string.len(midiFileNameFromTrack) > 0 then
@@ -949,7 +929,7 @@ function main()
 	
 	if string.len(midiFilename) > 0 then
 		local filename = getCleanFilename(midiFilename)
-		getNotesFromMidiFile(getMidiReader(), filename, trackList)
+		getNotesFromMidiFile(getMidiReader(), filename, trackList, trackPos)
 	end
 
 	SV:finish()
@@ -1064,7 +1044,10 @@ function getMidiReader()
 		[0x03] = makeForwarder("sequencerOrTrackName"),
 		[0x04] = makeForwarder("instrumentName"),
 		[0x05] = makeForwarder("lyric"),
-		[0x06] = makeForwarder("marker"),
+		-- [0x06] = makeForwarder("marker"),
+		[0x06] = function(data, callback)
+			callback("marker", data)
+		end,
 		[0x07] = makeForwarder("cuePoint"),
 		[0x20] = makeForwarder("channelPrefix"),
 		[0x2F] = makeForwarder("endOfTrack"),
