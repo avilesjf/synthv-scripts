@@ -1,10 +1,10 @@
-local SCRIPT_TITLE = 'Lyrics one tracks to Clipboard V1.0'
+local SCRIPT_TITLE = 'Lyrics one track to Clipboard V1.0'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: LyricsOneTracks.lua
+lua file name: LyricsOneTrack.lua
 
 Copy into clipboard, all lyrics inside all group of notes
 in text format for current track.
