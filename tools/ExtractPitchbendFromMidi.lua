@@ -616,12 +616,12 @@ function setPitchDeviationOnTracks(trackFilterMidi, trackFilterSynthV, reduceGai
 			-- get Blicks with new tempo
 			local timeInfo = ticksToBlicks(pitchData.ticksBegin)
 			
-			-- -100 to +100 => -1200 to +1200
 			-- midi values => -16 0 +16
 			-- midi value base pitchbend = 15
-			-- 1200/16 = 75
+			-- -100 to +100 => -200 to +200 (eq. 2 semitones)
+			-- 200/16 = 12
 			local midiPitchBase = 15
-			local coef = 75
+			local coef = 12
 			local newValue = (pitchData.value - midiPitchBase) * coef
 			newValue = newValue - (newValue * (reduceGain/100))
 				
