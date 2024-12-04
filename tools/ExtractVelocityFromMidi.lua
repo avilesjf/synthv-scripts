@@ -585,7 +585,6 @@ function setFirstParameterLoudnessInTrack(trackFilterSynthV)
 	local loudness = groupNotesMain:getParameter("loudness")
 	local numNotes = groupNotesMain:getNumNotes()
 	local firstNote = groupNotesMain:getNote(1) -- First note
-	local loudness = groupNotesMain:getParameter("loudness")
 	
 	-- Decay before applying first loudness value in next steps
 	local newTimeOffset = firstNote:getOnset() - timeAxis:getBlickFromSeconds(0.1)
@@ -659,7 +658,6 @@ end
 
 -- Get loudness from track
 function getLoudnessFromTrack(trackFilterSynthV)
-	local loudness = nil
 	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
 	local loudness = groupNotesMain:getParameter("loudness")
 	
@@ -668,7 +666,6 @@ end
 
 -- Get group main from track
 function getGroupMainFromTrack(trackFilterSynthV)
-	local loudness = nil
 	local track = project:getTrack(trackFilterSynthV)
 	local mainGroupRef = track:getGroupReference(1) -- main group
 	local groupNotesMain = mainGroupRef:getTarget()
@@ -676,7 +673,7 @@ function getGroupMainFromTrack(trackFilterSynthV)
 	return groupNotesMain
 end
 
--- Set volume notes for each tracks
+-- Set volume notes for tracks
 function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, 
 								velocityGain, controller, reduceControllerGain)
 	local lyricContent = ""
@@ -702,25 +699,6 @@ function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV,
 			
 				-- Controller CC = 1 modulation wheel
 				if ctrlData.number == controllerCC then
-					-- Set signature 4/4 or 3/4 etc.
-					-- signatureActive = getSignature(ctrlData.ticksBegin)
-					-- local seconds = timeAxis:getSecondsFromBlick(ticksToBlicks(ctrlData.ticksBegin))
-					
-					-- if DEBUG then
-						-- result = result 
-										-- -- .. "Tr: " .. currentTrack .. ", "
-										-- .. "ticks: " .. ctrlData.ticksBegin .. ", "
-										-- .. "timeBegin: " .. ctrlData.timeBegin .. ", "
-										-- .. "t: " .. ctrlData.timeSecondBegin .. ", "
-										-- -- .. "c: " .. ctrlData.channel .. ", "
-										-- -- .. "n: " .. ctrlData.number .. ", "
-										-- -- .. "v: " .. ctrlData.value .. ", "
-										-- .. "s1: " .. SecondsToClock(seconds) .. ", "
-										-- .. "s: " .. string.format(formatNumber, math.floor(seconds)) .. ", "
-										-- -- .. "s0: " .. timeAxis:getBlickFromSeconds(seconds1)
-										-- -- .. ", seconds: " .. SecondsToClock(seconds)
-										-- .. "\r"
-					-- end	
 					
 					-- get Blicks with new tempo
 					local timeInfo = ticksToBlicks(ctrlData.ticksBegin)
@@ -779,16 +757,8 @@ function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV,
 			previousTrack = currentTrack
 			trackNotesCount = trackNotesCount + 1
 		end
-		-- if DEBUG then
-			-- result = result .. "currentTrack: " .. currentTrack .. "/Midi track: " 
-				-- .. trackFilterMidi .. "/SynthV track: " .. trackFilterSynthV 
-				-- .. ", trackNotesCount : " .. trackNotesCount 
-				-- .. ", lyric: " .. lyrics .. "\r"
-		-- end
 	end
 	
-	-- if DEBUG then SV:setHostClipboard(result) end
-
 	-- Set last parameter loudness to default value  (0)
 	local lastNote = setLastParameterLoudnessInTrack(trackFilterSynthV, newValue)
 
@@ -885,14 +855,6 @@ function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
 			
 			trackFilterMidi = listTracks[userInput.answers.trackMidi + 1]
 			trackFilterSynthV = userInput.answers.trackSynthV + 1
-			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "trackFilterMidi: " .. trackFilterMidi  .. "\r"
-				-- .. "trackFilterSynthV: " .. trackFilterSynthV  .. "\r"
-				-- .. "listTracks: " .. table.concat(listTracks, ",  ") .. "\r"
-				-- .. "midiTrackList:\r" .. table.concat(midiTrackList, "\r")
-			-- )
-			-- if DEBUG then getTempoList() end
-			-- if DEBUG then getMidiControllersTrackList(trackFilterMidi, true) end
-			-- if DEBUG then getMidiTimeSignatureTrackList(trackFilterMidi) end
 
 			velocityGain = userInput.answers.velocityGain
 			controller = userInput.answers.controller
