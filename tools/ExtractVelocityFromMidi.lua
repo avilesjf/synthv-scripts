@@ -9,6 +9,10 @@ lua file name: ExtractVelocityFromMidi.lua
 This script will extract the velocity notes (or CC controller) coming a midi file
 and copy them to loudness SynthV parameter.
 
+Midi file path:
+To avoid copy/paste the midi file path each time running this script:
+Midi file path is retrieved from: Clipboard or trackname
+
 Midi extracting source code comming from:
 https://github.com/Possseidon/lua-midi/blob/main/lib/midi.lua
 
@@ -33,9 +37,6 @@ local DEBUG_RESULT = ""
 local midiFileNameFromTrack = ""
 local midiFileExtension = ".mid"
 local DEFAULT_FILE_PATH = ""
-if DEBUG then 
-	DEFAULT_FILE_PATH = "D:\\Cubase Projects\\rjhuang-test1\\Test.mid"
-end
 
 local ticks = 0
 
