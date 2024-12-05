@@ -499,13 +499,13 @@ function getTracksList()
 		local numNotes = groupNotesMain:getNumNotes()
 		local lyrics = getFirstNotesLyrics(numNotes, groupNotesMain)
 		local trackName = track:getName()
-		if (string.find(trackName, midiFileExtension) == nil and numNotes > 0) then
+		if (string.find(trackName, midiFileExtension, 1, true) == nil and numNotes > 0) then
 			table.insert(list, trackName
 								.. " (" .. string.format(formatCount, numNotes) .. ")"
 								.. lyrics
 								)
 		end
-		if string.find(trackName, midiFileExtension) ~= nil then
+		if string.find(trackName, midiFileExtension, 1, true) ~= nil then
 			midiFileNameFromTrack = getCleanFilename(trackName)
 		end
 	end
@@ -896,7 +896,7 @@ function main()
 	local filenameInit = DEFAULT_FILE_PATH
 	
 	-- Get file name from last clipboard
-	if string.find(contentInfo, midiFileExtension) ~= nil then
+	if string.find(contentInfo, midiFileExtension, 1, true) ~= nil then
 		filenameInit = getCleanFilename(contentInfo)
 	end
 	

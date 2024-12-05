@@ -451,13 +451,13 @@ function getTracksList()
 		local numNotes = groupNotesMain:getNumNotes()
 		local lyrics = getFirstNotesLyrics(numNotes, groupNotesMain)
 		local trackName = track:getName()
-		if (string.find(trackName, midiFileExtension) == nil and numNotes > 0) then
+		if (string.find(trackName, midiFileExtension, 1, true) == nil and numNotes > 0) then
 			table.insert(list, trackName
 								.. " (" .. string.format(formatCount, numNotes) .. ")"
 								.. lyrics
 								)
 		end
-		if string.find(trackName, midiFileExtension) ~= nil then
+		if string.find(trackName, midiFileExtension, 1, true) ~= nil then
 			midiFileNameFromTrack = getCleanFilename(trackName)
 		end
 	end
@@ -490,15 +490,15 @@ function getForm(midiTrackList, trackList, firstTrackWithNotes)
 				choices = trackList, 
 				default = trackDefault
 			},
-			{
-				name = "reduceGain", type = "Slider",
-				label = SV:T("Reduce gain %"),
-				format = "%3.0f",
-				minValue = reduceGainMinValue, 
-				maxValue = reduceGainMaxValue, 
-				interval = reduceGainInterval, 
-				default = reduceGainDefaultValue
-			},			
+			-- {
+				-- name = "reduceGain", type = "Slider",
+				-- label = SV:T("Reduce gain %"),
+				-- format = "%3.0f",
+				-- minValue = reduceGainMinValue, 
+				-- maxValue = reduceGainMaxValue, 
+				-- interval = reduceGainInterval, 
+				-- default = reduceGainDefaultValue
+			-- },			
 			{
 				name = "separator", type = "TextArea", label = "", height = 0
 			}
@@ -623,6 +623,7 @@ function setPitchDeviationOnTracks(trackFilterMidi, trackFilterSynthV, reduceGai
 			local midiPitchBase = 15
 			local coef = 12
 			local newValue = (pitchData.value - midiPitchBase) * coef
+			-- useless reduceGain, pitch relates to 2 semitones only, default value is: 0
 			newValue = newValue - (newValue * (reduceGain/100))
 				
 			-- Get track infos for pitch deviation
@@ -707,7 +708,8 @@ function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
 			trackFilterMidi = listTracks[userInput.answers.trackMidi + 1]
 			trackFilterSynthV = userInput.answers.trackSynthV + 1
 
-			reduceGain = userInput.answers.reduceGain
+			-- useless reduceGain, pitch relates to 2 semitones only
+			-- reduceGain = userInput.answers.reduceGain
 			
 			-- check track contents
 			local numnotes = checkTrack(trackFilterSynthV)
@@ -745,7 +747,7 @@ function main()
 	local filenameInit = DEFAULT_FILE_PATH
 	
 	-- Get file name from last clipboard
-	if string.find(contentInfo, midiFileExtension) ~= nil then
+	if string.find(contentInfo, midiFileExtension, 1, true) ~= nil then
 		filenameInit = getCleanFilename(contentInfo)
 	end
 	
