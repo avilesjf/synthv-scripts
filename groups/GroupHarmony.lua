@@ -11,6 +11,7 @@ Add only one track or multiple tracks depending on user selection.
 2/	Display current key scale found in selected group(s) (and current track if different).
 3/	A comboBox to choose the desire key scale (if multiple key scale is found for group notes).
 4/	A comboBox to choose harmony model.
+5/  A special case to input and build user model (input text: +3,+6,-4 etc.)
 
 Degrees I     II     III  IV      V       VI       VII   +I
 Major C 1      2      3    4      5        6         7    8
@@ -43,7 +44,8 @@ InternalData = {
 		{"1 note", 5, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "Fixed", "-3", "-5", "-7"}},
 		{"2 notes", 2, {"+3,+6", "+3,+5", "+2,+4", "+1,+3", "-3,-5"}},
 		{"3 notes", 1, {"+2,+3,+5", "+1,+3,+5"}},
-		{"Octaves", 1, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}}
+		{"Octaves", 1, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
+		{"Build your own", 1, {"+0"}}
 	},
 	transpositionRefLabel = 1,
 	transpositionRefPosition = 2,
@@ -95,11 +97,11 @@ commonTools = {
 		local comboChoice = {}
 		local harmonySelected = ""
 		local scaleChoice = {}
-		local scaleInfo1 = SV:T("Degrees")   .. "     " .. SV:T("I           II           III    IV          V          VI       VII      +I")
+		local scaleInfo1 = SV:T("Degrees")   .. "     " .. 	SV:T("I           II           III    IV          V          VI       VII      +I")
 		local scaleInfo2 = SV:T("Major C")   .. "      " .. SV:T("1          2            3      4          5           6          7       8")
-		local scaleInfo3 = SV:T("Position")  .. "     " .. SV:T("0        +1         +2    +3       +4        +5        +6    +7")
+		local scaleInfo3 = SV:T("Position")  .. "     " .. 	SV:T("0        +1         +2    +3       +4        +5        +6    +7")
 		local scaleInfo4 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
-		local scaleInfo5 = SV:T("Half tone") .. "   " .. SV:T("1   2    3     4     5      6   7    8    9   10  11  12   13")
+		local scaleInfo5 = SV:T("Half tone") .. "   " .. 	SV:T("1   2    3     4     5      6   7    8    9   10  11  12   13")
 			
 		if formId == 0 then
 			local harmonyList = commonTools.getHarmonyList()
@@ -114,8 +116,17 @@ commonTools = {
 					}
 		else
 			harmonySelected = SV:T("Transpose mode: ") .. transpositionLabel
-			comboChoice = {name = "pitch", type = "ComboBox", label = harmonySelected,
-				choices = transposition, default = #transposition - posTranposition}
+			if transpositionLabel == "Build your own" then
+				comboChoice = {
+					name = "pitchText", type = "TextBox",
+					label = SV:T("Input notes (+3, +5, +7 etc..):"),
+					default = ""
+				}
+
+			else
+				comboChoice = {name = "pitch", type = "ComboBox", label = harmonySelected,
+								choices = transposition, default = #transposition - posTranposition}
+			end
 				
 			scaleChoice = {
 					name = "scaleKeySelected", type = "TextArea", 
@@ -236,7 +247,18 @@ commonTools = {
 
 		local project = SV:getProject()
 		local pitchPosInput = userInputAnswer.pitch
-		local pitchTarget = keyTools.getPitchActionFromPos(pitchPosInput, formId)
+		local pitchInputText = userInputAnswer.pitchText
+		local pitchTarget = ""
+		if pitchInputText ~= nil then			
+			if string.len(pitchInputText) > 0 then
+				pitchTarget = pitchInputText
+			else
+				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Nothing to do!"))
+				return -1
+			end
+		else 
+			pitchTarget = keyTools.getPitchActionFromPos(pitchPosInput, formId)
+		end
 		
 		local isFixed = (pitchTarget == "Fixed")
 		local isMultiple = false
