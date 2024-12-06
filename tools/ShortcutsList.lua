@@ -7,7 +7,7 @@ lua file name: ShortcutsList.lua
 List all defined shortcuts from settings.xml
 And copy result into the Clipboard.
 
-!! Update settingsPath for your own system !!
+!! Search variables settingsPath below in this script to update them for your own system (MAC, International) !!
 
 Example:
 Defined:
@@ -16,7 +16,7 @@ Defined:
 <ScriptItem name="Group name update V1.0" keyMapping=="ctrl + shift + R"/>
 <ScriptItem name="Groups name update All V1.0" keyMapping=="ctrl + shift + U"/>
 <ScriptItem name="Lyrics tracks in .SRT format to Clipboard V1.0" keyMapping=="ctrl + shift + L"/>
-
+...
 -------------------------
 Not defined:
 <ScriptItem name="Merge Selected Notes" keyMapping==""/>
@@ -28,6 +28,24 @@ Not defined:
 <ScriptItem name="Split Selected Groups" keyMapping==""/>
 <ScriptItem name="Split Selected Notes" keyMapping==""/>
 <ScriptItem name="add cl to the beginning of selected phonemes" keyMapping==""/>
+...
+-------------------------
+Defined:
+Add Breaths											 => ctrl + shift + B
+Move Note Down										 => ctrl + cursor down
+Move Note Up										 => ctrl + cursor up
+Move Notes Down										 => ctrl + shift + cursor down
+Move Notes Up										 => ctrl + shift + cursor up
+Clear parameters V1.0								 => ctrl + alt + #b2 (²)
+Clear the clipboard content V1.0					 => ctrl + shift + #b2 (²)
+Copy/Paste all parameters for group notes V1.0		 => ctrl + #b2 (²)
+...
+-------------------------
+Not defined:
+Add Minus, Add Note, Add Plus, ...
+Clone Parameter Curve, Continuous Scroll, ...
+...
+-------------------------
 
 2024 - JF AVILES
 --]]
@@ -44,6 +62,7 @@ function getClientInfo()
 end
 
 -- Define a class
+-- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\settings
 InternalData = {
 	SEP_KEYS = "/",
 	settingsPathBegin = "\\OneDrive",
@@ -70,57 +89,138 @@ InternalData = {
 
 -- Common tools
 commonTools = {
-
+	
+	getFilePathSettings = function(documents)
+		local hostinfo = SV:getHostInfo()
+		local osType = hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
+		local settingsFilePath = ""
+		local settingsFolder = ""
+		local windowsSepCharPath = "\\"
+		local macosPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/"
+		local windowsPathEnd = "\\Dreamtonics\\Synthesizer V Studio\\Settings\\"
+		local settingsPathTitle = SV:T("Settings full path for file settings.xml")
+		local settingsErrorText = SV:T("Cannot find automatically the settings path. Please insert the full path here:")
+		local settingsErrorUserProfileText = SV:T("Cannot find user profile. Please insert the full path here:")
+		
+		if osType ~= "Windows" then	
+			-- "macOS", "Linux", "Unknown"
+			settingsFilePath = macosPath .. InternalData.settingsFile
+			if not commonTools.isFileExists(settingsFilePath) then
+				settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsPathTitle)
+			end
+		else
+			-- Windows
+			local userProfile = os.getenv("USERPROFILE")
+			if userProfile then
+				-- if direct
+				settingsFolder = userProfile .. windowsSepCharPath .. documents .. windowsPathEnd
+				settingsFilePath = settingsFolder .. InternalData.settingsFile				
+				if not commonTools.isFileExists(settingsFilePath) then
+					-- trying with adding OneDrive
+					settingsFolder = userProfile .. windowsSepCharPath .. "OneDrive" .. windowsSepCharPath .. documents.. windowsPathEnd
+					settingsFilePath = settingsFolder .. InternalData.settingsFile
+					if not commonTools.isFileExists(settingsFilePath) then
+						settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsPathTitle)
+					end
+				end
+			else
+				settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorUserProfileText, settingsPathTitle)
+			end
+		end
+		return settingsFilePath
+	end,
+	
+	-- Check if file exists
+	isFileExists = function(fileName)
+		local result = false
+		local file = io.open(fileName, "r")
+		if file ~= nil then
+			io.close(file)
+			result = true
+		end
+		return result
+	end,
+	
 	-- Start process
-	start = function()
-		local userFolder = os.getenv("USERPROFILE")
-		local settingsPath = userFolder 
-			.. InternalData.settingsPathBegin 
-			.. InternalData.settingsPathDocument 
-			.. InternalData.settingsPathEnd 
-			.. InternalData.settingsFile
-
+	start = function()		
+		-- settings file path:
+		-- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\settings\settings.xml
+		-- C:\Users\YOUR_USER_NAME\OneDrive\Documenti\Dreamtonics\Synthesizer V Studio\settings\settings.xml
+		-- "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/settings/settings.xml
+		local settingsPath = commonTools.getFilePathSettings(InternalData.settingsPathDocument)
+		local fileNotFoundTitle = SV:T("File not found!")
+		local definedTitle = SV:T("Defined:")
+		local notDefinedTitle = SV:T("Not defined:")
+		local keyMapping = "@keyMapping"
+		local keyName = "@name"
+		local sepCharDisplay = ", "
 		InternalData.logs:clear()
 		local xml = newParser()	
 		local fhandle = io.open(settingsPath, 'r')
 		if fhandle == nil then
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("File not found!: ") .. settingsPath)
+			SV:showMessageBox(SV:T(SCRIPT_TITLE), fileNotFoundTitle .. " : " .. settingsPath)
 		else
 			-- read file
 			local data = fhandle:read("*a")
 			io.close(fhandle)
 			local parsedXml = xml:ParseXmlText(data)
 			local error = true
+			local sepline = "\r" .. "-------------------------" .. "\r"
 			
 			if parsedXml.ApplicationSettings ~= nil then 				
 				if parsedXml.ApplicationSettings.Scripts ~= nil then 
 					if parsedXml.ApplicationSettings.Scripts.ScriptItem ~= nil then 
-						local result = SV:T("Defined:") .. "\r"
+						local result = definedTitle .. "\r"						
+						local resultForDisplayOnly = definedTitle .. "\r"
+						local resultForDisplayOnlyLine = ""
+						local displayLimitNotDefined = 100
+						local tabCharCount = 4
+						local scriptItem = parsedXml.ApplicationSettings.Scripts.ScriptItem
+						local displayLimitDefined =  commonTools.getMaxLengthScriptName(scriptItem)
+						
 						-- Defined
-						for i=1, #parsedXml.ApplicationSettings.Scripts.ScriptItem do
-							local keyMap = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@keyMapping"]
+						for iItem = 1, #scriptItem do
+							local keyMap = scriptItem[iItem][keyMapping]
 							if string.len(keyMap)> 0 then
-								local scriptName = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@name"]
+								local scriptName = scriptItem[iItem][keyName]
 								result = result .. commonTools.getFormatScriptItem(scriptName, keyMap)
+								local tabCount = commonTools.getScriptNameTabs(tabCharCount, displayLimitDefined, scriptName)
+								local tabs = string.rep("\t", tabCount)
+								
+								keyMap = commonTools.getSpecialKeymap(keyMap) -- if #b2 => adding (²) for info only
+								resultForDisplayOnly = resultForDisplayOnly .. scriptName .. tabs .. " => ".. keyMap .. "\r"
 							end
 						end
 						
-						result = result .."\r"
-						result = result .. "-------------------------" .. "\r"
-						result = result .. SV:T("Not defined:") .. "\r"
+						result = result .. sepline
+						result = result .. notDefinedTitle .. "\r"
+						resultForDisplayOnly = resultForDisplayOnly .. sepline
+						resultForDisplayOnly = resultForDisplayOnly .. notDefinedTitle .. "\r"
+
 						-- Not defined
-						for i=1, #parsedXml.ApplicationSettings.Scripts.ScriptItem do
-							local keyMap = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@keyMapping"]
+						for iItem = 1, #scriptItem do
+							local keyMap = scriptItem[iItem][keyMapping]
 							if string.len(keyMap) == 0 then
 								-- <ScriptItem name="Lyrics tracks to Clipboard V1.0" keyMapping="ctrl + shift + L"/>
-								local scriptName = parsedXml.ApplicationSettings.Scripts.ScriptItem[i]["@name"]
+								local scriptName = scriptItem[iItem][keyName]
 								result = result .. commonTools.getFormatScriptItem(scriptName, "")
+								resultForDisplayOnly     = resultForDisplayOnly .. scriptName .. sepCharDisplay
+								resultForDisplayOnlyLine = resultForDisplayOnlyLine .. scriptName .. sepCharDisplay
+								
+								-- Adding return on string limit to displayLimit
+								if string.len(resultForDisplayOnlyLine) > displayLimitNotDefined then
+									resultForDisplayOnly = resultForDisplayOnly .. "\r"
+									resultForDisplayOnlyLine = ""
+								end
+								
 							end
-						end
+						end						
+						resultForDisplayOnly = resultForDisplayOnly .. sepline
+						
 						error = false
-						SV:setHostClipboard(result)
-						SV:showMessageBox(SV:T(SCRIPT_TITLE), "Shortcuts:\r" 
-							.. string.sub(result,1, InternalData.limitStringDisplay) 
+						SV:setHostClipboard(result .. sepline .. resultForDisplayOnly)
+						SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Shortcuts:") .. "\r" 
+							.. string.sub(resultForDisplayOnly,1, InternalData.limitStringDisplay) 
 							.. "\r"
 							.. "..."
 							.. "\r" 
@@ -134,6 +234,7 @@ commonTools = {
 		end
 	end,
 	
+	-- Get xml format for script item
 	getFormatScriptItem = function(item, keymap)
 		local scriptItemBegin = "<ScriptItem name="
 		local scriptItemKeyMapping = "keyMapping=="
@@ -146,8 +247,46 @@ commonTools = {
 			.. scriptItemEnd .. "\r"
 			
 		return result
-	end
+	end,
+	
+	-- Get tabs for script name
+	getScriptNameTabs = function(tabCharCount, maxLine, scriptName)
+		local scriptLen = string.len(scriptName)
+		local maxTabCount = math.floor((maxLine + tabCharCount) / tabCharCount)
+		local scriptTabCount = math.floor(scriptLen / tabCharCount)		
+		return maxTabCount - scriptTabCount
+	end,
+	
+	-- Get max string name with shortcuts dedined
+	getMaxLengthScriptName = function(scriptItem)
+		local maxLength = 0
+		local currentLength = 0
 		
+		-- Defined
+		for iItem = 1, #scriptItem do
+			local keyMap = scriptItem[iItem]["@keyMapping"]
+			
+			if string.len(keyMap)> 0 then
+				local scriptName = scriptItem[iItem]["@name"]
+				currentLength = string.len(scriptName)
+				
+				if currentLength > maxLength then
+					maxLength = currentLength
+				end
+			end
+		end
+
+		return maxLength
+	end,
+	
+	-- Get special keymap
+	getSpecialKeymap = function(keyMap)
+		if string.find(keyMap, "#b2") ~= nil then 
+			keyMap = keyMap .. " (²)" 
+		end
+		return keyMap
+	end
+
 }
 
 function newParser()
