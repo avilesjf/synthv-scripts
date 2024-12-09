@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group Harmony V1.1'
+local SCRIPT_TITLE = 'Group Harmony V1.3'
 
 --[[
 
@@ -7,11 +7,12 @@ lua file name: GroupHarmony.lua
 Copy selected groups to a new track and transpose all included notes
 Add only one track or multiple tracks depending on user selection.
 
-1/	Transpose all notes in current key scale 0..+1 ..+7 (C, D to B)
-2/	Display current key scale found in selected group(s) (and current track if different).
-3/	A comboBox to choose the desire key scale (if multiple key scale is found for group notes).
-4/	A comboBox to choose harmony model.
-5/  A special case to input and build user model (input text: +3,+6,-4 etc.)
+1/ Transpose all notes in current key scale 0..+1 ..+7 (C, D to B)
+2/ Display current key scale found in selected group(s) (and current track if different).
+3/ A comboBox to choose the desire key scale (if multiple key scale is found for group notes).
+4/ A comboBox to choose harmony model.
+5/ A special case to input and build user model (input text: +3,+6,-4 etc.)
+6/ Add scale key type (Major, Natural Minor, Melodic Minor etc..
 
 Degrees I     II     III  IV      V       VI       VII   +I
 Major C 1      2      3    4      5        6         7    8
@@ -28,7 +29,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Tools",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 65540
 	}
 end
@@ -41,19 +42,35 @@ InternalData = {
 	relativeKeys = {{"C","Am"},{"Db","Bbm"},{"D","Bm"},{"Eb","Cm"},{"E","C#m"},{"F","Dm"},
 				{"Gb","Ebm"},{"G","Em"},{"Ab","Fm"},{"A", "F#m"},{"Bb","Gm"},{"B", "G#m"}},
 	transposition = { 
-		{"1 note", 5, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "Fixed", "-3", "-5", "-7"}},
-		{"2 notes", 2, {"+3,+6", "+3,+5", "+2,+4", "+1,+3", "-3,-5"}},
-		{"3 notes", 1, {"+2,+3,+5", "+1,+3,+5"}},
-		{"Octaves", 1, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
-		{"Build your own", 1, {"+0"}}
+		{SV:T("1 note"), 5, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "Fixed", "-3", "-5", "-7"}},
+		{SV:T("2 notes"), 2, {"+3,+6", "+3,+5", "+2,+4", "+1,+3", "-3,-5"}},
+		{SV:T("3 notes"), 1, {"+2,+3,+5", "+1,+3,+5"}},
+		{SV:T("Octaves"), 1, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
+		{SV:T("Build your own"), 1, {"+0"}}
 	},
 	transpositionRefLabel = 1,
 	transpositionRefPosition = 2,
 	transpositionRefData = 3,
-	tonalScale = {2, 2, 1, 2, 2, 2, 1},
+    allScales = {
+			-- KeyScale type, Intervals, Gaps between degrees (for info only, not used)
+			{SV:T("Major"),			{0,2,4,5,7,9,11,12}, {2, 2, 1, 2, 2, 2, 1}},
+			{SV:T("Natural Minor"),	{0,2,3,5,7,8,10,12}, {2, 1, 2, 2, 1, 2, 2}},
+			{SV:T("Melodic Minor"),	{0,2,3,5,7,9,11,12}, {2, 1, 2, 2, 2, 2, 1}},
+			{SV:T("Harmonic Minor"),{0,2,3,5,7,8,11,12}, {2, 1, 2, 2, 1, 2, 1}},
+			{SV:T("Dorian"),		{0,2,3,5,7,9,10,12}, {2, 1, 2, 2, 2, 1, 2}},
+			{SV:T("Locrian"),		{0,1,3,5,6,8,10,12}, {1, 2, 2, 1, 2, 2, 2}},
+			{SV:T("Lydian"),		{0,2,4,6,7,9,11,12}, {2, 2, 2, 1, 2, 2, 1}},
+			{SV:T("Mixolydian"),	{0,2,4,5,7,9,10,12}, {2, 2, 1, 2, 2, 1, 2}},
+			{SV:T("Phrygian"),		{0,1,3,5,7,8,10,12}, {1, 2, 2, 2, 1, 2, 2}}
+		},
 	SEP_KEYS = "/",
 	keyScaleChoice = {},
+	relativeMinorScalekeysChoice = {},
+	relativeMinorScalekeys = "",
 	keyScaleFound = "",
+	keyScaleTypeFound  	 = 1, -- for Major
+	keyScaleTypeTitleFound  = SV:T("Major"),
+	keyScaleTypeValuesFound = {0,2,4,5,7,9,11,12},
 	DEBUG = false,
 	logs = {
 		logs = "",
@@ -91,29 +108,56 @@ commonTools = {
 		return resultList
 	end,
 	
+	-- Get scales title
+	getScalesTitle = function()
+		local scales = {}
+		for iScale = 1, #InternalData.allScales do
+			table.insert(scales, 
+				InternalData.allScales[iScale][1]
+			)
+			
+		end
+		return scales
+	end,
+	
+	-- Get scale from title
+	getScaleFromTitle = function(scaleSearch)
+		local scale = {}
+		for iScale = 1, #InternalData.allScales do
+			if scaleSearch == InternalData.allScales[iScale][1] then
+				scale = InternalData.allScales[iScale]
+			end
+		end
+		return scale
+	end,
+	
 	-- Create user input form
 	getForm = function(formId, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
 						groupSelected, transposition, transpositionLabel,  posTranposition)
 		local comboChoice = {}
+		local scaleKeyType = {}
 		local harmonySelected = ""
 		local scaleChoice = {}
 		local scaleInfo1 = SV:T("Degrees")   .. "     " .. 	SV:T("I           II           III    IV          V          VI       VII      +I")
 		local scaleInfo2 = SV:T("Major C")   .. "      " .. SV:T("1          2            3      4          5           6          7       8")
-		local scaleInfo3 = SV:T("Position")  .. "     " .. 	SV:T("0        +1         +2    +3       +4        +5        +6    +7")
-		local scaleInfo4 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
-		local scaleInfo5 = SV:T("Half tone") .. "   " .. 	SV:T("1   2    3     4     5      6   7    8    9   10  11  12   13")
+		local scaleInfo3 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
 			
 		if formId == 0 then
+			
 			local harmonyList = commonTools.getHarmonyList()
 			comboChoice = {
-					  name = "harmonyChoice", type = "ComboBox", label = SV:T("Harmony type"), 
-					  choices = harmonyList, default = 0
-					}
-					
+				name = "harmonyChoice", type = "ComboBox", label = SV:T("Harmony type"), 
+				choices = harmonyList, default = 0
+			}
+
 			scaleChoice = {
-						name = "scaleKeyChoice", type = "ComboBox", label = SV:T("Key scale"),
-						choices = InternalData.keyScaleChoice, default = #InternalData.keyScaleChoice -1
-					}
+				name = "scaleKeyChoice", type = "ComboBox", label = SV:T("Select a key scale"),
+				choices = InternalData.keyScaleChoice, default = 0
+			}
+			scaleKeyType = {
+				name = "scaleKeyType", type = "ComboBox", label = SV:T("Key scale type"),
+				choices = commonTools.getScalesTitle(), default = 0
+			}
 		else
 			harmonySelected = SV:T("Transpose mode: ") .. transpositionLabel
 			if transpositionLabel == "Build your own" then
@@ -127,12 +171,18 @@ commonTools = {
 				comboChoice = {name = "pitch", type = "ComboBox", label = harmonySelected,
 								choices = transposition, default = #transposition - posTranposition}
 			end
-				
+			
+			scaleKeyType = {
+				name = "scaleKeyType", type = "TextArea", 
+				label = SV:T("Key scale type selected: ") .. InternalData.keyScaleTypeTitleFound, 
+				height = 0
+			}
+			
 			scaleChoice = {
-					name = "scaleKeySelected", type = "TextArea", 
-					label = SV:T("Key scale selected: ") .. InternalData.keyScaleFound, 
-					height = 0
-				}
+				name = "scaleKeySelected", type = "TextArea", 
+				label = SV:T("Key scale selected: ") .. InternalData.keyScaleFound, 
+				height = 0
+			}
 		end
 		
 		local form = {
@@ -142,15 +192,16 @@ commonTools = {
 			widgets = {
 				{
 					name = "scaleInfos1", type = "TextArea", label = SV:T("Scale degrees model"),
-					height = 90, default = scaleInfo1 .. "\r" .. scaleInfo2 
-					.. "\r" .. scaleInfo3 .. "\r" .. scaleInfo4 .. "\r" .. scaleInfo5
+					height = 60, default = scaleInfo1 .. "\r" .. scaleInfo2 
+					.. "\r" .. scaleInfo3
 				},
 				{
-					name = "scaleKey", type = "TextArea", 
+					name = "scaleKeys", type = "TextArea", 
 					label = keyFoundDisplay, 
 					height = 0
 				},
 				scaleChoice,
+				scaleKeyType,
 				comboChoice,
 				{
 					name = "separator", type = "TextArea", label = "", height = 0
@@ -171,6 +222,16 @@ commonTools = {
 		return choice
 	end,
 	
+	-- get relative minor scale Keys
+	getRelativeMinorScaleKeys = function(keyScaleFound)
+		local keys = commonTools.getKeyScaleChoice(keyScaleFound)
+		local relativeMinor = {}
+		for iKey = 1, #keys do
+			table.insert(relativeMinor, keyTools.getKeyMajToMinor(keys[iKey]))
+		end
+		return relativeMinor
+	end,
+	
 	-- Start to transpose notes
 	start = function()
 		local maxLengthResult = 30
@@ -185,18 +246,22 @@ commonTools = {
 			local keyScaleFound = scaleTools.getScale(groupsSelected)
 			-- Track notes to check
 			local keyScaleFoundTrack = scaleTools.getScaleTrack(groupsSelected)
-			local keyFoundDisplay = SV:T("Scale key found: ") .. keyScaleFound
+			local keyFoundDisplay = SV:T("Keys found major (minor): ") .. keyScaleFound
 			InternalData.keyScaleChoice = {}
 
+			InternalData.keyScaleChoice = InternalData.keyNames
+			InternalData.relativeMinorkeyScaleChoice = {}
 			if keyScaleFound == "" then
 				keyFoundDisplay = SV:T("No common scale key found!")
-				InternalData.keyScaleChoice = InternalData.keyNames
 			else
-				InternalData.keyScaleChoice = commonTools.getKeyScaleChoice(keyScaleFound)
+				-- InternalData.keyScaleChoice = commonTools.getKeyScaleChoice(keyScaleFound)
+				InternalData.relativeMinorScaleKeysChoice = commonTools.getRelativeMinorScaleKeys(keyScaleFound)
+				InternalData.relativeMinorScalekeys = SV:T("Relative minor keys: ") 
+					.. table.concat(InternalData.relativeMinorScaleKeysChoice, "/")
 				
 				if string.len(keyScaleFoundTrack) > 0 then
 					if keyScaleFound ~= keyScaleFoundTrack then
-						keyFoundDisplay = keyScaleFound .. SV:T(", on track: ") .. keyScaleFoundTrack
+						keyFoundDisplay = keyScaleFound .. "\r" .. SV:T("Track: ") .. keyScaleFoundTrack
 					end
 				end
 			end
@@ -220,6 +285,10 @@ commonTools = {
 			if userInput.status then
 				-- call itself to display next dialog box for Harmony selection
 				InternalData.keyScaleFound = scaleTools.getkeyScaleChoiceFromPos(userInput.answers.scaleKeyChoice)
+				InternalData.keyScaleTypeFound  		= userInput.answers.scaleKeyType + 1
+				InternalData.keyScaleTypeTitleFound  	= InternalData.allScales[InternalData.keyScaleTypeFound][1]
+				InternalData.keyScaleTypeValuesFound	= InternalData.allScales[InternalData.keyScaleTypeFound][2]
+				
 				commonTools.callForms(keyScaleFound, keyFoundDisplay, keyScaleFoundTrack,
 									groupsSelected, userInput.answers.harmonyChoice + 1)
 			end
@@ -272,6 +341,8 @@ commonTools = {
 		local posKeyInScale = scaleTools.getKeyPosInKeynames(InternalData.keyNames, InternalData.keyScaleFound) -1
 		
 		InternalData.currentKeyNames = keyTools.copyTable(InternalData.keyNames)
+		
+		-- Rotate table content, start note to new key
 		keyTools.shiftTable(InternalData.currentKeyNames, posKeyInScale)
 		InternalData.keysInScale = scaleTools.getKeysInScale(InternalData.currentKeyNames, InternalData.keyScaleFound)
 		
@@ -431,7 +502,8 @@ scaleTools = {
 			isInScale = scaleTools.loopNotes(notes, posKeyInScale, InternalData.keyNames, key)
 			if isInScale then
 				-- scale found
-				scaleFound = scaleFound .. sep .. InternalData.keyNames[key]
+				scaleFound = scaleFound .. sep .. InternalData.keyNames[key] 
+					.. "(" .. keyTools.getKeyMajToMinor(InternalData.keyNames[key]) .. ")"
 				InternalData.logs:add(SV:T("key: ") .. InternalData.keyNames[key] .. " " .. SV:T("YES") .. "\r")
 				sep = InternalData.SEP_KEYS
 				--break
@@ -502,12 +574,26 @@ scaleTools = {
 		local shift = 0
 		if pitchTarget > 0 then
 			for key = 1, pitchTarget do
-				-- add all gaps to get shifting note
+				
+				-- Add all gaps to get shifting note
 				local dec = (posKeyInScaleKey + key - 2) % 7 + 1
-				shift = shift + InternalData.tonalScale[dec]
+				-- {0,2,4,5,7,9,11,12} => {2, 2, 1, 2, 2, 2, 1}
+				--                        {2, 1, 2, 2, 1, 2, 2} "Natural Minor" 
+				local keyScaleTypeGaps = scaleTools.getKeyScaleTypeToGap(InternalData.keyScaleTypeValuesFound)
+				shift = shift + keyScaleTypeGaps[dec]
 			end
 		end
 		return shift
+	end,
+	
+	-- Get key scale type to gap values
+	getKeyScaleTypeToGap = function(keyScaleTypeValuesFound)
+		-- {0,2,4,5,7,9,11,12} => {2, 2, 1, 2, 2, 2, 1}
+		local keyScaleGaps = {}
+			for iKey = 1, #keyScaleTypeValuesFound -1 do
+				table.insert(keyScaleGaps, keyScaleTypeValuesFound[iKey + 1] - keyScaleTypeValuesFound[iKey])
+			end
+		return keyScaleGaps
 	end,
 	
 	-- Get key pitch
