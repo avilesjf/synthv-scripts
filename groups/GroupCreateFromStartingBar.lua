@@ -65,7 +65,7 @@ function isTextAccepted(timeAxis, note)
 end
 
 -- Rename one group
-function renameOneGroup(maxLengthResult, noteGroup)
+function renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 	local resultLyrics = ""
 	local groupName = noteGroup:getName()
 	local notesCount = noteGroup:getNumNotes()
@@ -175,9 +175,9 @@ function CreateGroup()
 		groupNotesMain:removeNote(selectedNotes[iNote]:getIndexInParent())
 	end
 
-	noteGroup:setName(resultLyrics)
+	noteGroup:setName("")
 	SV:getProject():addNoteGroup(noteGroup)
-	local resultLyrics = renameOneGroup(maxLengthResult, noteGroup)
+	local resultLyrics = renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 	
 	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
 	newGrouptRef:setTimeOffset(measureBlick)
