@@ -62,12 +62,13 @@ function getClientInfo()
 end
 
 -- Define a class
--- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\settings
 InternalData = {
 	SEP_KEYS = "/",
-	settingsPathBegin = "\\OneDrive",
-	settingsPathDocument = "\\Documents", -- "\\Documenti",
-	settingsPathEnd = "\\Dreamtonics\\Synthesizer V Studio\\settings\\",
+	winSepCharPath = "\\",
+	winSettingsPathBegin = "OneDrive", -- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\settings
+	winSettingsPathDocument = "Documents", -- "\\Documenti", etc.
+	winSettingsPathEnd = "\\Dreamtonics\\Synthesizer V Studio\\settings\\",
+	macosPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/",
 	settingsFile = "settings.xml",
 	limitStringDisplay = 1500,
 	DEBUG = false,
@@ -95,16 +96,13 @@ commonTools = {
 		local osType = hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
 		local settingsFilePath = ""
 		local settingsFolder = ""
-		local windowsSepCharPath = "\\"
-		local macosPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/"
-		local windowsPathEnd = "\\Dreamtonics\\Synthesizer V Studio\\Settings\\"
 		local settingsPathTitle = SV:T("Settings full path for file settings.xml")
 		local settingsErrorText = SV:T("Cannot find automatically the settings path. Please insert the full path here:")
 		local settingsErrorUserProfileText = SV:T("Cannot find user profile. Please insert the full path here:")
 		
 		if osType ~= "Windows" then	
 			-- "macOS", "Linux", "Unknown"
-			settingsFilePath = macosPath .. InternalData.settingsFile
+			settingsFilePath = InternalData.macosPath .. InternalData.settingsFile
 			if not commonTools.isFileExists(settingsFilePath) then
 				settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsPathTitle)
 			end
@@ -113,11 +111,17 @@ commonTools = {
 			local userProfile = os.getenv("USERPROFILE")
 			if userProfile then
 				-- if direct
-				settingsFolder = userProfile .. windowsSepCharPath .. documents .. windowsPathEnd
+				settingsFolder = userProfile .. InternalData.winSepCharPath .. documents 
+								.. InternalData.winSettingsPathEnd
 				settingsFilePath = settingsFolder .. InternalData.settingsFile				
 				if not commonTools.isFileExists(settingsFilePath) then
 					-- trying with adding OneDrive
-					settingsFolder = userProfile .. windowsSepCharPath .. "OneDrive" .. windowsSepCharPath .. documents.. windowsPathEnd
+					settingsFolder = userProfile 
+									.. InternalData.winSepCharPath 
+									.. InternalData.winSettingsPathBegin 
+									.. InternalData.winSepCharPath 
+									.. documents
+									.. InternalData.winSettingsPathEnd
 					settingsFilePath = settingsFolder .. InternalData.settingsFile
 					if not commonTools.isFileExists(settingsFilePath) then
 						settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsPathTitle)
@@ -145,9 +149,8 @@ commonTools = {
 	start = function()		
 		-- settings file path:
 		-- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\settings\settings.xml
-		-- C:\Users\YOUR_USER_NAME\OneDrive\Documenti\Dreamtonics\Synthesizer V Studio\settings\settings.xml
 		-- "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/settings/settings.xml
-		local settingsPath = commonTools.getFilePathSettings(InternalData.settingsPathDocument)
+		local settingsPath = commonTools.getFilePathSettings(InternalData.winSettingsPathDocument)
 		local fileNotFoundTitle = SV:T("File not found!")
 		local definedTitle = SV:T("Defined:")
 		local notDefinedTitle = SV:T("Not defined:")
@@ -229,7 +232,9 @@ commonTools = {
 				end
 			end
 			if error then 
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("settingsPath: ") .. settingsPath .. "\r" .. SV:T("Error in parsing XML file!"))
+				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("settingsPath: ") 
+									.. settingsPath .. "\r" 
+									.. SV:T("Error in parsing XML file!"))
 			end
 		end
 	end,

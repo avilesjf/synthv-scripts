@@ -499,7 +499,7 @@ function getForm(midiTrackList, trackList, firstTrackWithNotes)
 				-- maxValue = reduceGainMaxValue, 
 				-- interval = reduceGainInterval, 
 				-- default = reduceGainDefaultValue
-			-- },			
+			-- },
 			{
 				name = "separator", type = "TextArea", label = "", height = 0
 			}
@@ -608,7 +608,7 @@ function setPitchDeviationOnTracks(trackFilterMidi, trackFilterSynthV, reduceGai
 	-- Pitchbend from midi
 	local currentTrack = 1
 	local pitchInfosCount = 0
-		
+	
 	for iMidiInfo = 1, #pitchbendTable do
 		local pitchData = pitchbendTable[iMidiInfo]
 		currentTrack = pitchData.track
