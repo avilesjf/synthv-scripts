@@ -14,7 +14,7 @@ on a another bar further into the song.
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Lyrics",
+		category = "_JFA_Groups",
 		author = "JFAVILES",
 		versionNumber = 1,
 		minEditorVersion = 65540
@@ -137,13 +137,16 @@ function CreateGroup()
 			measurePos = checkExistingMeasureMark.position
 			measureBlick = checkExistingMeasureMark.positionBlick
 		else 
-			timeAxis:addMeasureMark(measureFirst, 4, 4)
+			timeAxis:addMeasureMark(measureFirst, 
+						checkExistingMeasureMark.numerator, 
+						checkExistingMeasureMark.denominator)
 			local measureMark = timeAxis:getMeasureMarkAt(measureFirst)
 			measurePos = measureMark.position
 			measureBlick = measureMark.positionBlick
 			timeAxis:removeMeasureMark(measureFirst)
 		end
 	else
+		-- Temporary measure mark addition
 		timeAxis:addMeasureMark(measureFirst, 4, 4)
 		local measureMark = timeAxis:getMeasureMarkAt(measureFirst)
 		measurePos = measureMark.position

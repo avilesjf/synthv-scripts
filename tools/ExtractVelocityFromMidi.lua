@@ -712,10 +712,8 @@ function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV,
 					-- Get track infos for loudness
 					loudness:add(timeInfo, newValue) -- Add loudness
 					ctrlInfosCount = ctrlInfosCount + 1
-					
 				end
 			end
-			
 		end
 	else
 		-- Set first parameter loudness default value (0)
@@ -869,7 +867,8 @@ function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
 			end
 		
 			-- Set loudness from midi velocity
-			local result = setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, velocityGain, controller, reduceControllerGain)
+			local result = setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV, 
+								velocityGain, controller, reduceControllerGain)
 		end
 
 		--if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), resultMessage ) end

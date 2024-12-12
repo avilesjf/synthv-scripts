@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group Harmony V1.3'
+local SCRIPT_TITLE = 'Group Harmony V1.4'
 
 --[[
 
@@ -27,9 +27,9 @@ Major C 1      2      3    4      5        6         7    8
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Tools",
+		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 65540
 	}
 end
@@ -71,6 +71,9 @@ InternalData = {
 	keyScaleTypeFound  	 = 1, -- for Major
 	keyScaleTypeTitleFound  = SV:T("Major"),
 	keyScaleTypeValuesFound = {0,2,4,5,7,9,11,12},
+	harmonyChoice = 0,
+	tracks = {},
+	trackListChoice = {},
 	DEBUG = false,
 	logs = {
 		logs = "",
@@ -108,6 +111,27 @@ commonTools = {
 		return resultList
 	end,
 	
+	--- Get track list
+	getTracksList = function()		
+		local list = {}
+		local project = SV:getProject()
+		local formatCount = "%3d"
+		local iTracks = project:getNumTracks()
+		
+		for iTrack = 1, iTracks do
+			local track = project:getTrack(iTrack)
+			local mainGroupRef = track:getGroupReference(1) -- main group
+			local groupNotesMain = mainGroupRef:getTarget()
+			local numGroups = track:getNumGroups() - 1
+			local format = formatCount .. " " .. SV:T("groups")
+			if numGroups < 2 then
+				format = formatCount .. " " .. SV:T("group")
+			end
+			table.insert(list, track:getName() .. " (" .. string.format(format, numGroups) .. ")" )
+		end
+		return list
+	end,
+
 	-- Get scales title
 	getScalesTitle = function()
 		local scales = {}
@@ -132,7 +156,7 @@ commonTools = {
 	end,
 	
 	-- Create user input form
-	getForm = function(formId, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
+	getForm = function(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
 						groupSelected, transposition, transpositionLabel,  posTranposition)
 		local comboChoice = {}
 		local scaleKeyType = {}
@@ -141,22 +165,31 @@ commonTools = {
 		local scaleInfo1 = SV:T("Degrees")   .. "     " .. 	SV:T("I           II           III    IV          V          VI       VII      +I")
 		local scaleInfo2 = SV:T("Major C")   .. "      " .. SV:T("1          2            3      4          5           6          7       8")
 		local scaleInfo3 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
-			
-		if formId == 0 then
+		local newTimeGap = 0
+		local sliderTimeGap = ""
+		local timeGapDefaultValue = 0
+		local timeGapMinValue =  -15
+		local timeGapMaxValue =  15
+		local timeGapInterval =  5
+		local trackListCombo = ""
+		
+		if isFirst then
 			
 			local harmonyList = commonTools.getHarmonyList()
-			comboChoice = {
-				name = "harmonyChoice", type = "ComboBox", label = SV:T("Harmony type"), 
-				choices = harmonyList, default = 0
-			}
 
 			scaleChoice = {
 				name = "scaleKeyChoice", type = "ComboBox", label = SV:T("Select a key scale"),
 				choices = InternalData.keyScaleChoice, default = 0
 			}
+			
 			scaleKeyType = {
 				name = "scaleKeyType", type = "ComboBox", label = SV:T("Key scale type"),
 				choices = commonTools.getScalesTitle(), default = 0
+			}
+			
+			comboChoice = {
+				name = "harmonyChoice", type = "ComboBox", label = SV:T("Harmony type"), 
+				choices = harmonyList, default = 0
 			}
 		else
 			harmonySelected = SV:T("Transpose mode: ") .. transpositionLabel
@@ -183,6 +216,26 @@ commonTools = {
 				label = SV:T("Key scale selected: ") .. InternalData.keyScaleFound, 
 				height = 0
 			}
+			
+			sliderTimeGap = {
+				name = "newTimeGap", type = "Slider",
+				label = SV:T("Time gap % (time shift from original) "),
+				format = "%3.0f",
+				minValue = timeGapMinValue, 
+				maxValue = timeGapMaxValue, 
+				interval = timeGapInterval, 
+				default = timeGapDefaultValue
+			}
+			
+			-- is not multiple tracks
+			if InternalData.harmonyChoice == 1 then
+				InternalData.tracks = commonTools.getTracksList()
+				InternalData.trackListChoice = InternalData.tracks
+				table.insert(InternalData.trackListChoice, SV:T("New track")) -- default choice
+				
+				trackListCombo = {name = "trackChoice", type = "ComboBox", label = SV:T("Select destination track:"),
+								choices = InternalData.trackListChoice, default = #InternalData.trackListChoice - 1}
+			end
 		end
 		
 		local form = {
@@ -202,6 +255,8 @@ commonTools = {
 				},
 				scaleChoice,
 				scaleKeyType,
+				trackListCombo,
+				sliderTimeGap,
 				comboChoice,
 				{
 					name = "separator", type = "TextArea", label = "", height = 0
@@ -265,46 +320,47 @@ commonTools = {
 					end
 				end
 			end
-			
-			local userInput = commonTools.callForms(keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected, 0)
-			--if userInput.status then				
-			--end
+			local isFirst = true
+			local userInput = commonTools.callForms(isFirst, keyScaleFound, keyFoundDisplay, 
+													keyScaleFoundTrack, groupsSelected)
 		end
 	end,
 	
 	-- Call dialog forms
-	callForms = function(keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected, formId)
+	callForms = function(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected)
 		local userInput = nil
 		local transposition = nil
 		local transpositionLabel = ""
-		if formId == 0 then
+		
+		if isFirst then
 			-- Selection of action 1 note, 2 notes etc..
-			userInput = commonTools.getForm(formId, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
-							groupsSelected, transposition, transpositionLabel, 0)
+			userInput = commonTools.getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
+							groupsSelected, transposition, transpositionLabel)
 			
 			if userInput.status then
 				-- call itself to display next dialog box for Harmony selection
 				InternalData.keyScaleFound = scaleTools.getkeyScaleChoiceFromPos(userInput.answers.scaleKeyChoice)
 				InternalData.keyScaleTypeFound  		= userInput.answers.scaleKeyType + 1
 				InternalData.keyScaleTypeTitleFound  	= InternalData.allScales[InternalData.keyScaleTypeFound][1]
-				InternalData.keyScaleTypeValuesFound	= InternalData.allScales[InternalData.keyScaleTypeFound][2]
+				InternalData.keyScaleTypeValuesFound	= InternalData.allScales[InternalData.keyScaleTypeFound][2]		
+				InternalData.harmonyChoice 				= userInput.answers.harmonyChoice + 1
 				
-				commonTools.callForms(keyScaleFound, keyFoundDisplay, keyScaleFoundTrack,
-									groupsSelected, userInput.answers.harmonyChoice + 1)
+				isFirst = false
+				commonTools.callForms(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected)
 			end
-		else 
+		else
+			local formId = InternalData.harmonyChoice
 			-- harmony selection
 			transposition = InternalData.transposition[formId][InternalData.transpositionRefData]
 			local defaultPosTransposition = InternalData.transposition[formId][InternalData.transpositionRefPosition]
 			transpositionLabel = InternalData.transposition[formId][InternalData.transpositionRefLabel]
-			
-			userInput = commonTools.getForm(formId, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
+						
+			userInput = commonTools.getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
 							groupsSelected, transposition, transpositionLabel, defaultPosTransposition)
 			
-			if userInput.status then
-				
+			if userInput.status then			
 				-- Duplicate note groups & create tracks
-				local numGroups = commonTools.duplicateNotes(groupsSelected, userInput.answers, formId)
+				local numGroups = commonTools.duplicateNotes(groupsSelected, userInput.answers)
 			end		
 		end
 		
@@ -312,12 +368,16 @@ commonTools = {
 	end,
 	
 	-- Duplicate and transpose notes
-	duplicateNotes = function(groupsSelected, userInputAnswer, formId)
+	duplicateNotes = function(groupsSelected, userInputAnswer)
 
 		local project = SV:getProject()
 		local pitchPosInput = userInputAnswer.pitch
 		local pitchInputText = userInputAnswer.pitchText
+		local newTimeGap = math.floor(userInputAnswer.newTimeGap)
 		local pitchTarget = ""
+		local pitchTargets = {}
+		local trackChoice = 0
+		
 		if pitchInputText ~= nil then			
 			if string.len(pitchInputText) > 0 then
 				pitchTarget = pitchInputText
@@ -326,16 +386,20 @@ commonTools = {
 				return -1
 			end
 		else 
-			pitchTarget = keyTools.getPitchActionFromPos(pitchPosInput, formId)
+			pitchTarget = keyTools.getPitchActionFromPos(pitchPosInput, InternalData.harmonyChoice)
 		end
 		
 		local isFixed = (pitchTarget == "Fixed")
-		local isMultiple = false
 		local numGroups = 0
 		
-		if string.find(pitchTarget, ",") ~= nil then
-			isMultiple = true
-			pitchTargets = keyTools.split(pitchTarget, ",")
+		pitchTargets = keyTools.split(pitchTarget, ",")
+		
+		if #pitchTargets > 1 then
+			isMultipleTracks = true -- force for "build your own"
+		else 
+			if userInputAnswer.trackChoice ~= nil then
+				trackChoice = userInputAnswer.trackChoice + 1
+			end
 		end
 		
 		local posKeyInScale = scaleTools.getKeyPosInKeynames(InternalData.keyNames, InternalData.keyScaleFound) -1
@@ -356,13 +420,20 @@ commonTools = {
 		end
 		
 		-- Only one track to add
-		if not isMultiple then
-			local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isMultiple, 
-														isFixed, pitchTarget, posKeyInScale)
-			local newTrack = commonTools.createTrack(project)
-			newTrack:setName(SV:T("Track ") .. pitchTarget)
+		if not isMultipleTracks then
+			local track = nil
+			local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isFixed, pitchTarget, 
+															posKeyInScale, newTimeGap)
+			-- New track
+			if #InternalData.trackListChoice == trackChoice or trackChoice == 0 then
+				track = commonTools.createTrack(project)
+				track:setName(SV:T("Track ") .. pitchTarget)
+			else
+				track = project:getTrack(trackChoice)
+			end
+			
 			for iGroupRef = 1, #newGrouptRefs do
-				newTrack:addGroupReference(newGrouptRefs[iGroupRef])
+				track:addGroupReference(newGrouptRefs[iGroupRef])
 				numGroups = numGroups + 1
 			end
 		else
@@ -370,10 +441,12 @@ commonTools = {
 			for iTrack = 1, #pitchTargets do
 			
 				pitchTarget = pitchTargets[iTrack]
-				local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isMultiple, 
-															isFixed, pitchTarget, posKeyInScale)
+				local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isFixed, pitchTarget, 
+																posKeyInScale, newTimeGap)
+				
 				local newTrack = commonTools.createTrack(project)
 				newTrack:setName(SV:T("Track ") .. pitchTarget)
+				
 				for iGroupRef = 1, #newGrouptRefs do
 					newTrack:addGroupReference(newGrouptRefs[iGroupRef])
 					numGroups = numGroups + 1
@@ -386,7 +459,7 @@ commonTools = {
 	end,
 	
 	-- Loop into groups to duplicate & transpose notes
-	groupLoop = function(project, groupsSelected, isMultiple, isFixed, pitchTarget, posKeyInScale, newGrouptRefs)
+	groupLoop = function(project, groupsSelected, isFixed, pitchTarget, posKeyInScale, newTimeGap)
 		local newGrouptRefs = {}
 		for _, refGroup in pairs(groupsSelected) do
 			local groupName = refGroup:getTarget():getName()
@@ -410,6 +483,10 @@ commonTools = {
 						local notePitch = scaleTools.getNewPitch(isFixed, firstNotePitch, 
 							note:getPitch(), tonumber(pitchTarget), posKeyInScale)
 						note:setPitch(notePitch)
+						
+						-- Add time gap
+						local noteTimeGap = note:getOnset() + (SV.QUARTER * newTimeGap / 100)
+						note:setOnset(noteTimeGap)
 					end			
 					project:addNoteGroup(newNoteGroup)
 					
@@ -562,8 +639,8 @@ scaleTools = {
 		local notePitchNew = notePitch + gapDegree + octave
 		
 		InternalData.logs:add("" .. notePitch .. " / " .. notePitchNew .. ", gap: " .. gapDegree
-		.. ", posKey: " .. posKeyInScaleKey .. ", pitch/pos: " .. pitchTarget	.. " / " .. posTarget
-		.. ", Key: " .. noteKey .. " / " .. nextKey	.. "\r"
+			.. ", posKey: " .. posKeyInScaleKey .. ", pitch/pos: " .. pitchTarget	.. " / " .. posTarget
+			.. ", Key: " .. noteKey .. " / " .. nextKey	.. "\r"
 		)
 		
 		return notePitchNew
@@ -684,8 +761,8 @@ keyTools = {
 	end,
 
 	-- Get pitch action from position
-	getPitchActionFromPos = function(pos, formId)
-		return InternalData.transposition[formId][InternalData.transpositionRefData][pos + 1]
+	getPitchActionFromPos = function(pos, harmonyChoice)
+		return InternalData.transposition[harmonyChoice][InternalData.transpositionRefData][pos + 1]
 	end,
 	
 	-- Split string by sep char

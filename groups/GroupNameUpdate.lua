@@ -12,7 +12,7 @@ Update one selected group name with the updated lyrics inside.
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Lyrics",
+		category = "_JFA_Groups",
 		author = "JFAVILES",
 		versionNumber = 1,
 		minEditorVersion = 65540

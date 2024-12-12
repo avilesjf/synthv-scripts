@@ -55,7 +55,6 @@ local pitchbendTable = {}
 local channelPressure = {}
 local modeMessage = {}
 local timeSignature = {}
-local listAllTracks = {}
 local controllerCC = 1  -- CC 1
 
 local CURRENT_LYRIC = ""

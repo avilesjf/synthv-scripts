@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'ShortcutsList V1.0'
+local SCRIPT_TITLE = 'ShortcutsList V1.2'
 
 --[[
 
@@ -6,16 +6,30 @@ lua file name: ShortcutsList.lua
 
 List all defined shortcuts from settings.xml
 And copy result into the Clipboard.
+Detecting duplicates & display Keyboard mapping
 
 !! Search variables settingsPath below in this script to update them for your own system (MAC, International) !!
 
 Example:
+-------------------------
+Keyboard:
+<?xml version="1.0" encoding="UTF-8"?>
+
+<KEYMAPPINGS basedOnDefaults="1">
+  <MAPPING commandId="6001" description="Rescan" key="..."/>
+</KEYMAPPINGS>
+-------------------------
 Defined:
 <ScriptItem name="Lyrics tracks to Clipboard V1.0" keyMapping=="ctrl + shift + L"/>
 <ScriptItem name="Group name udate V1.0" keyMapping=="ctrl + shift + R"/>
 <ScriptItem name="Group name update V1.0" keyMapping=="ctrl + shift + R"/>
 <ScriptItem name="Groups name update All V1.0" keyMapping=="ctrl + shift + U"/>
 <ScriptItem name="Lyrics tracks in .SRT format to Clipboard V1.0" keyMapping=="ctrl + shift + L"/>
+...
+-------------------------
+Duplicates: 
+ShortcutsList V1.0 = ctrl + shift + O
+ShortcutsList V1.2 = ctrl + shift + O
 ...
 -------------------------
 Not defined:
@@ -56,7 +70,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Tools",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -71,6 +85,8 @@ InternalData = {
 	macosPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/",
 	settingsFile = "settings.xml",
 	limitStringDisplay = 1500,
+	htmlChars = {{"&lt;", "<"}, {"&quot;", "\""}, {"&gt;", ">"}, {"&#13;", "\r"}, {"&#10;", "\n"}},
+	duplicatesShortcuts = {},
 	DEBUG = false,
 	logs = {
 		logs = "",
@@ -153,13 +169,18 @@ commonTools = {
 		local settingsPath = commonTools.getFilePathSettings(InternalData.winSettingsPathDocument)
 		local fileNotFoundTitle = SV:T("File not found!")
 		local definedTitle = SV:T("Defined:")
+		local keyboardDefinedTitle = SV:T("Keyboard:")
 		local notDefinedTitle = SV:T("Not defined:")
 		local keyMapping = "@keyMapping"
 		local keyName = "@name"
 		local sepCharDisplay = ", "
-		InternalData.logs:clear()
+		local keymaps = {}
+		local keyboardMapping = ""
 		local xml = newParser()	
+		
+		InternalData.logs:clear()
 		local fhandle = io.open(settingsPath, 'r')
+		
 		if fhandle == nil then
 			SV:showMessageBox(SV:T(SCRIPT_TITLE), fileNotFoundTitle .. " : " .. settingsPath)
 		else
@@ -169,11 +190,21 @@ commonTools = {
 			local parsedXml = xml:ParseXmlText(data)
 			local error = true
 			local sepline = "\r" .. "-------------------------" .. "\r"
+			local seplineTitle = "-------------------------" .. "\r"
 			
 			if parsedXml.ApplicationSettings ~= nil then 				
+				if parsedXml.ApplicationSettings.Keyboard ~= nil then 
+					if parsedXml.ApplicationSettings.Keyboard[keyMapping] ~= nil then 
+						local KeyboardKeyMapping = parsedXml.ApplicationSettings.Keyboard[keyMapping]
+						if string.len(KeyboardKeyMapping) > 0 then
+							keyboardMapping = commonTools.getHTMLToText(KeyboardKeyMapping)
+						end
+					end					
+				end
+				
 				if parsedXml.ApplicationSettings.Scripts ~= nil then 
 					if parsedXml.ApplicationSettings.Scripts.ScriptItem ~= nil then 
-						local result = definedTitle .. "\r"						
+						local result = ""
 						local resultForDisplayOnly = definedTitle .. "\r"
 						local resultForDisplayOnlyLine = ""
 						local displayLimitNotDefined = 100
@@ -181,6 +212,14 @@ commonTools = {
 						local scriptItem = parsedXml.ApplicationSettings.Scripts.ScriptItem
 						local displayLimitDefined =  commonTools.getMaxLengthScriptName(scriptItem)
 						
+						if string.len(keyboardMapping) > 0 then
+							result = result .. seplineTitle
+							result = result .. keyboardDefinedTitle .. "\r"
+							result = result .. keyboardMapping
+							result = result .. sepline
+						end
+						
+						result = result .. definedTitle .. "\r"
 						-- Defined
 						for iItem = 1, #scriptItem do
 							local keyMap = scriptItem[iItem][keyMapping]
@@ -192,9 +231,25 @@ commonTools = {
 								
 								keyMap = commonTools.getSpecialKeymap(keyMap) -- if #b2 => adding (²) for info only
 								resultForDisplayOnly = resultForDisplayOnly .. scriptName .. tabs .. " => ".. keyMap .. "\r"
+								table.insert(keymaps, {scriptName, keyMap, iItem})
 							end
 						end
 						
+						-- Check if duplicate shortcuts exists
+						InternalData.duplicatesShortcuts = commonTools.getDuplicateShortcuts(keymaps)
+						
+						if #InternalData.duplicatesShortcuts > 0 then
+							local resultSC = commonTools.getDisplayDuplicateShortcuts(InternalData.duplicatesShortcuts)
+							
+							result = result .. sepline
+							result = result .. SV:T("Duplicates: ") .. "\r"
+							result = result .. resultSC
+							resultForDisplayOnly = resultForDisplayOnly .. sepline
+							resultForDisplayOnly = resultForDisplayOnly .. SV:T("Duplicates: ") .. "\r"
+							resultForDisplayOnly = resultForDisplayOnly .. resultSC
+						end
+						
+						-- Not Defined
 						result = result .. sepline
 						result = result .. notDefinedTitle .. "\r"
 						resultForDisplayOnly = resultForDisplayOnly .. sepline
@@ -239,10 +294,71 @@ commonTools = {
 		end
 	end,
 	
+	-- get HTML to text
+	getHTMLToText = function(KeyboardKeyMapping)
+		local text = KeyboardKeyMapping
+		
+		for iHTMLKeys = 1, #InternalData.htmlChars do
+			text = text:gsub(InternalData.htmlChars[iHTMLKeys][1], 
+				InternalData.htmlChars[iHTMLKeys][2])
+		end
+		
+		return text
+	end,
+	
+	-- Check doublon
+	getDuplicateShortcuts = function(keymaps)
+		local keymapsSortedSC = {}
+		local duplSC = {}
+		local duplSCResult = {}
+		
+		for iSC = 1, #keymaps do
+			table.insert(keymapsSortedSC, keymaps[iSC][2])
+		end
+		
+		table.sort(keymapsSortedSC, 
+			function(a, b)
+				return a > b
+			end
+		)
+		
+		-- Find duplicates
+		local oldSC = ""
+		for iSC = 1, #keymapsSortedSC do
+			if oldSC == keymapsSortedSC[iSC] then 
+				table.insert(duplSC, keymapsSortedSC[iSC])
+			end
+			oldSC = keymapsSortedSC[iSC]
+		end
+		
+		-- if duplicated shortcuts found, build a complete result array
+		for iSC = 1, #keymaps do
+			-- Check if shortcut exists into the duplicates array
+			for iDuplicatesSC = 1, #duplSC do
+				if duplSC[iDuplicatesSC] == keymaps[iSC][2] then
+					-- Get keymaps existing item found in duplicates array
+					table.insert(duplSCResult, {keymaps[iSC][1], keymaps[iSC][2]})
+				end
+			end
+		end
+			
+		return duplSCResult
+	end,
+	
+	-- Get duplicate shortcuts to display
+	getDisplayDuplicateShortcuts = function(duplicatesSC)
+		local resultSC = ""
+		
+		for iSC = 1, #duplicatesSC do
+			resultSC = resultSC .. table.concat(duplicatesSC[iSC], " = ") .. "\r"
+		end
+		return resultSC
+	end,
+	
 	-- Get xml format for script item
 	getFormatScriptItem = function(item, keymap)
 		local scriptItemBegin = "<ScriptItem name="
-		local scriptItemKeyMapping = "keyMapping=="
+		local scriptItemKeyMapping = "keyMapping="
 		local scriptItemEnd = "/>"
 		local sepQuote = "\""
 		
