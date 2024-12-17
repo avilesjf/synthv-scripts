@@ -129,7 +129,10 @@ function renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 		-- Add lyrics
 		resultLyrics = limitStringLength(lyricsLine, maxLengthResult)
 		-- Update if new lyrics only
-		if noteGroup:getName() ~= resultLyrics then noteGroup:setName(resultLyrics)	end
+		if string.len(resultLyrics)> 0 and
+			noteGroup:getName() ~= resultLyrics then
+			noteGroup:setName(resultLyrics)
+		end
 	end
 
 	return resultLyrics

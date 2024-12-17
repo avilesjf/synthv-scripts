@@ -95,9 +95,8 @@ InternalData = {
 commonTools = {
 	-- Create a new track
 	createTrack = function(project)
-		local currenTrack = SV:getMainEditor():getCurrentTrack()
 		local newTrack = SV:create("Track")
-		newTrackIndex = project:addTrack(newTrack)
+		local newTrackIndex = project:addTrack(newTrack)
 		newTrack = project:getTrack(newTrackIndex)
 		return newTrack
 	end,

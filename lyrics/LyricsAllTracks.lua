@@ -12,10 +12,6 @@ in text format for all tracks.
 This will extract the lyrics from all existing grouped notes (groups) inside all tracks,
 and separate all not linked notes.
 
-1
-00:00:06,873 --> 00:00:09,709
-Lyrics
-
 2024 - JF AVILES
 --]]
 

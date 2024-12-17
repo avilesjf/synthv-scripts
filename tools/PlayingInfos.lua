@@ -51,6 +51,7 @@ NotesObject = {
 	playBackStatus = SV:T("stopped"),
 	currentSeconds = 0,
 	noteInfo = nil,
+	projectDuration = 0,
 	trackName = "",
 	groups = {},
 	keyNames = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
@@ -73,8 +74,23 @@ function NotesObject:new()
 	notesObject.playBack = SV:getPlayback()	
 	notesObject.navigate = SV:getMainEditor():getNavigation()
 	notesObject.currentSeconds = notesObject.playBack:getPlayhead()
-
+	notesObject.projectDuration = notesObject:getProjectDuration()
+	
     return notesObject
+end
+
+-- Get project duration
+function NotesObject:getProjectDuration()
+	local maxDuration = 0	
+	local iTracks = self.project:getNumTracks()
+	
+	for iTrack = 1, iTracks do
+		local trackItem = self.project:getTrack(iTrack)
+		if trackItem:getDuration() > maxDuration then
+			maxDuration = trackItem:getDuration()
+		end
+	end
+	return maxDuration
 end
 
 -- Store groups name
@@ -137,11 +153,8 @@ function NotesObject:showDialogAsync(title)
 		buttons = "OkCancel",
 		widgets = {
 			{
-				name = "playBackStatus", type = "TextBox", label = SV:T("PlayBack status"), 
-				height = 2, default = self.playBackStatus
-			},
-			{
-				name = "separator", type = "TextArea", label = "", height = 0
+				name = "playBackStatus", type = "TextArea", label = SV:T("PlayBack status: ") .. self.playBackStatus, 
+				height = 0
 			},
 			{
 				name = "info", type = "TextArea", label = SV:T("OK to start, Cancel to stop!"), 
@@ -177,7 +190,8 @@ function NotesObject:setGroupNoteInfos()
 		SV:setTimeout(10, function() self:setGroupNoteInfos() end)
 	else
 		-- On ending song, restart to begin (automate looping song)
-		if self.currentSeconds > self.timeAxis:getSecondsFromBlick(self.track:getDuration()) then
+		-- if self.currentSeconds > self.timeAxis:getSecondsFromBlick(self.track:getDuration()) then
+		if self.currentSeconds > self.timeAxis:getSecondsFromBlick(self.projectDuration) then
 			-- Loop playing the song
 			SV:setTimeout(300, function() self:playfromStart() end)
 			-- Recursive loop to display infos again

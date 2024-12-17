@@ -53,6 +53,7 @@ local DEBUG = true
 local CURRENT_LYRIC = ""
 local INDEX_NOTE = 0
 local CURRENT_TRACK = 0
+local PREVIOUS_TRACK = 0
 local DELTA_TIME = 0
 local project = SV:getProject()
 local timeAxis = project:getTimeAxis()
@@ -111,6 +112,11 @@ end
 
 -- Get track number from midi file
 function handlers.track(track) 
+	if CURRENT_TRACK ~= track then
+		PREVIOUS_TRACK = CURRENT_TRACK
+		DELTA_TIME = 0
+		ticks = 0
+	end
 	CURRENT_TRACK = track
 end
 
@@ -236,14 +242,16 @@ function checkTracksWithLyrics(lyricsTable)
 end
 
 -- Store lyrics strings
-function storeLyricsInString(lyricsTable)
+function storeLyricsInString(lyricsTable, Track_Filter)
 	local result = {}
 	local resultLyrics = ""
+	local lyricsSRT = ""
 	local lyricInfoLast = ""
-
+	local lyricsIndice = 0
+	
 	for i = 1, #lyricsTable do
 		local lyrics = lyricsTable[i]
-		if DEBUG then resultLyrics = debugLyricsData(lyrics) end
+		--if DEBUG then resultLyrics = debugLyricsData(lyrics) end
 		
 		-- limit to one track 
 		if lyrics.track == Track_Filter then
@@ -253,13 +261,13 @@ function storeLyricsInString(lyricsTable)
 			if lyricInfo ~= "+" and lyricInfo ~= "-" then
 				if lyricInfoLast ~= nil and string.len(lyricInfoLast) > 0 then
 					lyricsSRT = lyricsSRT .. " --> " .. timeSecondEndPhrase .. "\r"
-					.. lyricInfoLast .. "\r\r"				
+					.. lyricInfoLast .. "\r\r"
+					resultLyrics = resultLyrics .. lyricInfoLast .. "\r"
 				end
 				lyricsIndice = lyricsIndice + 1
 				timeSecondEndPhrase = ""
 				lyricInfoLast = ""
-				lyricsSRT = lyricsSRT .. tostring(lyricsIndice) .. "\r"  
-				.. lyrics.timeSecondBegin 
+				lyricsSRT = lyricsSRT .. tostring(lyricsIndice) .. "\r"  .. lyrics.timeSecondBegin
 				lyricInfoLast = lyricInfo
 				timeSecondEndPhrase = lyrics.timeSecondEnd				
 			else
@@ -280,7 +288,6 @@ function storeLyricsInString(lyricsTable)
 		lyricsSRT = lyricsSRT,
 		lyrics = resultLyrics
 	}
-
 	return result
 end
 
@@ -348,7 +355,7 @@ function getLyrics(MidiReader, midiFilename)
 		trackFilter = resultCheck.trackFilter
 		lyricsExistingTracks = resultCheck.lyrics
 		
-		local resultStoreLyrics = storeLyricsInString(lyricsTable)
+		local resultStoreLyrics = storeLyricsInString(lyricsTable, trackFilter)
 		local lyricsSRT = resultStoreLyrics.lyricsSRT
 		local resultLyrics = resultStoreLyrics.lyrics
 		

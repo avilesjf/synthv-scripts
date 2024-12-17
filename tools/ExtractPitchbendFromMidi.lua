@@ -10,8 +10,8 @@ This script will extract the pitchbend variations coming a midi file
 and copy them to pitch deviation SynthV parameter.
 
 Midi file path:
-To avoid copy/paste the midi file path each time running this script:
-Midi file path is retrieved from: Clipboard or trackname
+To avoid copy/pasting the midi file path each time,
+midi file path is also retrieved from: Clipboard or trackname
 
 Midi extracting source code comming from:
 https://github.com/Possseidon/lua-midi/blob/main/lib/midi.lua
@@ -257,7 +257,7 @@ function handlers.lyric(data)
 end
 
 -- Get track number from midi file
-function handlers.track(track) 
+function handlers.track(track)
 	if CURRENT_TRACK ~= track then
 		PREVIOUS_TRACK = CURRENT_TRACK
 		DELTA_TIME = 0
