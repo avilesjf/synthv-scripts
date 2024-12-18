@@ -7,7 +7,8 @@ Synthesizer V Studio Pro Script
 lua file name: ImportMidiFile.lua
 
 This script will import a midi file
-and insert notes AND also regions into SynthV (not done by SynthV import).
+and insert notes AND create groups into a new track
+(not done by the default SynthV import).
 
 Midi file path:
 To avoid copy/pasting the midi file path each time,
@@ -57,8 +58,6 @@ function main()
 	if string.len(midiFilename) > 0 then
 		local filename = fileTools.getCleanFilename(midiFilename)
 		mainTools.getNotesFromMidiFile(InternalData.project, getMidiReader(), filename, trackList, trackPos)
-	else
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Midi file name is empty!"))
 	end
 
 	SV:finish()
@@ -113,8 +112,8 @@ mainTools = {
 		
 		local form = {
 			title = SV:T(SCRIPT_TITLE),
-			message =  SV:T("Select source & target track to create groups,") .. "\r" 
-					.. SV:T("Seleted track must match the midi file track!"),
+			message =  SV:T("Select a midi source track,") .. "\r" 
+					.. SV:T("A new track will be created with notes inside groups!"),
 			buttons = "OkCancel",
 			widgets = {
 				{
@@ -140,7 +139,7 @@ mainTools = {
 		local status, retval = pcall(function() resultTrack = MidiReader.process(file, callback) return resultTrack end)
 		if not status then
 			io.close(file)
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Failed to process MIDI file:") .. midiFilename .. "\r" .. retval)
+			mainTools.show(SV:T("Failed to process MIDI file:") .. midiFilename .. "\r" .. retval)
 		else
 			io.close(file)
 		end
@@ -163,7 +162,7 @@ mainTools = {
 		local done = false
 		
 		if not fileTools.checkExternalFile(midiFilename) then 
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Failed to open MIDI from ") .. midiFilename)
+			mainTools.show(SV:T("Failed to open MIDI from ") .. midiFilename)
 			return done
 		end
 		
@@ -172,7 +171,7 @@ mainTools = {
 		local tracksCount = resultExtractMidi.tracksCount
 		
 		if not resultExtractMidiStatus  then
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Nothing found during processing the MIDI file!"))
+			mainTools.show(SV:T("Nothing found during processing the MIDI file!"))
 			return done
 		end
 
@@ -187,16 +186,25 @@ mainTools = {
 		
 				-- Create groups from midi
 				local result = groupsTools.createGroupsFromMidi(project, trackFilterMidi)
-				if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("result: ") .. result) end
+				if DEBUG then mainTools.show(SV:T("result: ") .. result) end
 				done = true
 			end
 
 		else
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Nothing found!"))
+			mainTools.show(SV:T("Nothing found!"))
 		end
 		
 		return done
-	end
+	end,
+	
+	-- Show message
+	show = function(message)
+		SV:showMessageBox(SV:T(SCRIPT_TITLE), message) 
+	end,
+	
+	__FUNC__ = function() 
+		return debug.getinfo(2, 'n').name
+	end	
 }
 
 
@@ -207,9 +215,9 @@ recordTools = {
 			index = InternalData.INDEX_NOTE,
 			track = InternalData.CURRENT_TRACK,
 			ticksBegin  =  ticks,
-			ticksEnd  = nil,
+			ticksEnd  = nil, -- not a duration but ticks for end of note
 			timeBegin  =  timeBegin,
-			timeEnd  =  nil,
+			timeEnd  =  nil, -- note duration
 			timeSecondBegin = timeSecond,
 			timeSecondEnd = nil,
 			channel = channel,
@@ -279,7 +287,11 @@ recordTools = {
 timeTools = {
 	-- Convert ticks to Blicks
 	ticksToBlicks = function(ticks)
-		return ticks / ticksPerQuarter * InternalData.blicksPerQuarter
+		if ticks ~= nil then
+			return ticks / ticksPerQuarter * InternalData.blicksPerQuarter
+		else
+			return 1
+		end
 	end,
 
 	-- Convert blicks to ticks
@@ -292,6 +304,54 @@ timeTools = {
 		return string.format("%02d:%06.3f", 
 		  math.floor(timestamp/60)%60, 
 		  timestamp%60):gsub("%.",",")
+	end,
+	
+	-- Get time gap in blicks
+	getTimeGapInBlicks = function(seconds)
+		-- A flick (frame-tick) is a very small unit of time.
+		-- It is 1/705600000 (SV.QUARTER) of a second, exactly.
+		return InternalData.timeAxis:getBlickFromSeconds(seconds)
+	end,
+	
+	-- Get project tempo marks list
+	getProjectTempoMarksList = function()
+		local result = ""
+		local tempoMarks = InternalData.timeAxis:getAllTempoMarks()
+		
+		for iTempo = 1, #tempoMarks do
+			local tempoMark = tempoMarks[iTempo]
+			result = result .. "position: " .. tostring(tempoMark.position)
+					.. ", seconds: " .. tostring(tempoMark.positionSeconds)
+					.. ", bpm: " .. tostring(tempoMark.bpm)
+					.. "\r"
+		end
+		return result
+	end,
+
+	-- Get current project tempo
+	getProjectTempo = function(blicks)
+		local tempoActive = 120
+		local tempoMarks = InternalData.timeAxis:getAllTempoMarks()
+		for iTempo = 1, #tempoMarks do
+			local tempoMark = tempoMarks[iTempo]
+			if tempoMark ~= nil and blicks > tempoMark.position then
+				tempoActive = tempoMark.bpm
+			end
+		end
+		return tempoActive
+	end,
+	
+	getTimeLaps = function(blicks)
+		-- 1s = 1411200000 blicks at 120 and 705600000 at 60
+		--local posTempoMark, secondsTempoMark, bpmTempoMark = InternalData.timeAxis:getTempoMarkAt(blicks)
+		local bpmTempoMark = timeTools.getProjectTempo(blicks)
+		
+		local timeLapsMax = 1
+		if bpmTempoMark ~= nil then
+			local timeLapsSeconds = 1+ ((120-bpmTempoMark)/bpmTempoMark) -- Tempo 60 = 2s and tempo 120 = 1s
+			timeLapsMax = timeTools.getTimeGapInBlicks(timeLapsSeconds)
+		end
+		return timeLapsMax
 	end
 }
 
@@ -350,7 +410,7 @@ fileTools = {
 		end
 		trackTools.addTrackList(list, listTracks, previousTrack, trackNotesCount)
 		
-		-- if DEBUG then SV:showMessageBox("", "infos: " .. infos) end
+		-- if DEBUG then mainTools.show("infos: " .. infos) end
 		
 		return list, listTracks, firstTrackWithNotes
 	end,
@@ -372,10 +432,14 @@ trackTools = {
 	-- Add track list
 	addTrackList = function(list, listTracks, iTrack, trackNotesCount)
 		local trackLabel = SV:T("Track")
+		local trackName = fileTools.getTrackName(iTrack)
 		
+		if string.len(trackName) > 0 then
+			trackName = " '" .. trackName .. "'"
+		end
 		table.insert(list, trackLabel 
 					.. string.format(InternalData.formatTrack, iTrack)
-					.. " '" .. fileTools.getTrackName(iTrack) .. "'"
+					.. trackName
 					.. " (" .. string.format(InternalData.formatCount, trackNotesCount) .. ")")
 		table.insert(listTracks, iTrack)
 	end,
@@ -391,7 +455,7 @@ trackTools = {
 							.. SV:T("ticks: ")     .. tempoMarker.ticksBegin .. ", " 
 							.. SV:T("tempo: ")     .. tempoMarker.tempo .. "\r"
 		end
-		if DEBUG then SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("list tempo: ") .. list) end
+		if DEBUG then mainTools.show(SV:T("list tempo: ") .. list) end
 		return list
 	end,
 
@@ -418,10 +482,8 @@ trackTools = {
 						)		
 		end
 
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), 
-			"timeSignature count: " .. #InternalData.timeSignature .. "\r" 
-			.. "content:\r" ..  table.concat(list, "\r")
-			)
+		mainTools.show("timeSignature count: " .. #InternalData.timeSignature .. "\r" 
+			.. "content:\r" ..  table.concat(list, "\r") )
 		return list
 	end,
 
@@ -487,7 +549,7 @@ trackTools = {
 		end
 		return newTempo
 	end,
-
+	
 	-- Get markers
 	getMarkers = function()
 		local result = ""
@@ -502,7 +564,7 @@ trackTools = {
 				-- .. SV:T("Marker: ")     .. markerTemp.marker 
 				.. "\r"
 		end
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. result)
+		mainTools.show("result: " .. result)
 	end,
 
 	-- Get notes 
@@ -521,7 +583,7 @@ trackTools = {
 				.. note.lyric
 				.. "\r"
 		end
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. result)
+		mainTools.show("result: " .. result)
 	end,
 
 	-- Get metronome
@@ -574,8 +636,9 @@ groupsTools = {
 		local groups = {}
 		local groupNotes = {}
 		local previousNote = nil
-		local timeLapsMax = SV.QUARTER * 2
-		
+		-- if DEBUG then 
+			-- result = result .. timeTools.getProjectTempoMarksList()
+		-- end
 		for iMidiNote = 1, #InternalData.notesTable do
 			local note = InternalData.notesTable[iMidiNote]
 			-- local noteSeconds = InternalData.timeAxis:getSecondsFromBlick(note.position)
@@ -586,18 +649,26 @@ groupsTools = {
 				local timeLaps = 0
 				
 				if previousNote ~= nil then
-					timeLaps = timeTools.ticksToBlicks(note.ticksBegin) - timeTools.ticksToBlicks(previousNote.ticksEnd)
-					local timeLapsSecond = InternalData.timeAxis:getSecondsFromBlick(timeLaps)
-					local timeLapsMaxSecond = InternalData.timeAxis:getSecondsFromBlick(timeLapsMax)
-					
-					-- if DEBUG then 
-						-- result = result .. "timeLaps: " .. timeLapsSecond .. " <> max: " .. timeLapsMaxSecond
-					-- end
-					
-					if timeLapsSecond > timeLapsMaxSecond then
-						-- New group with previous notes
-						table.insert(groups, groupNotes )
-						groupNotes = {}
+					-- if noteOff event missing => no ticksEnd and timeEnd updated
+					if previousNote.ticksEnd ~= nil then
+						local noteBlicks = timeTools.ticksToBlicks(note.ticksBegin)
+						local previousNoteEndBlicks = timeTools.ticksToBlicks(previousNote.ticksEnd)
+						
+						local timeLaps = noteBlicks - previousNoteEndBlicks
+						local timeLapsSecond = InternalData.timeAxis:getSecondsFromBlick(timeLaps)
+						local timeLapsMax = timeTools.getTimeLaps(noteBlicks)
+						local timeLapsMaxSecond = InternalData.timeAxis:getSecondsFromBlick(timeLapsMax)
+						
+						-- if DEBUG then 
+							-- result = result .. "timeLapsMax: " .. timeLapsMax .. " timeLapsMaxSecond: " .. timeTools.secondsToClock(timeLapsMaxSecond)
+								-- .. "\r"
+						-- end
+						
+						if timeLapsSecond > timeLapsMaxSecond then
+							-- New group with previous notes
+							table.insert(groups, groupNotes )
+							groupNotes = {}
+						end
 					end
 				end
 				-- Store new note into groups
@@ -617,8 +688,9 @@ groupsTools = {
 			groupsTools.createGroup(project, track, groups[iGroup], iGroup)
 		end
 		
+		
 		-- if DEBUG then 
-			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. string.sub(result, 1, 2000)) 
+			-- mainTools.show("result: " .. string.sub(result, 1, 2000)) 
 		-- end
 		
 		return result
@@ -670,7 +742,8 @@ groupsTools = {
 				result = result .. "note: " .. noteMidi.key 
 					.. " : " .. timeTools.ticksToBlicks(noteMidi.ticksBegin) 
 					.. "-" .. measureBlick 
-					.. " added " .. timeTools.ticksToBlicks(noteMidi.ticksEnd)
+					.. " Pos end note: " .. timeTools.ticksToBlicks(noteMidi.ticksEnd)
+					.. " note duration: " .. timeTools.ticksToBlicks(noteMidi.timeEnd)
 					.. "\r"
 			end
 			noteGroup:addNote(note)
@@ -686,7 +759,7 @@ groupsTools = {
 		track:addGroupReference(newGrouptRef)
 		
 		-- if DEBUG then 
-			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "result: " .. result)
+			-- mainTools.show("result: " .. result)
 		-- end
 		return true
 	end,
@@ -790,6 +863,7 @@ handlers  = {
 
 	-- Get noteOff from midi file
 	noteOff = function(channel, key, velocity)
+		-- Note duration (same note than noteOn event)
 		InternalData.notesTable[InternalData.INDEX_NOTE].timeEnd = InternalData.DELTA_TIME
 		
 		local timeSecond = 0
@@ -859,7 +933,7 @@ handlers  = {
 			secNotePos = InternalData.timeAxis:getSecondsFromBlick(timeTools.ticksToBlicks(ticks))
 			timeSecond = timeTools.secondsToClock(secNotePos)
 		end
-		recordMarkerDeltaTimes(secNotePos, ticks, timeSecond, marker)
+		recordTools.recordMarkerDeltaTimes(secNotePos, ticks, timeSecond, marker)
 	end,
 
 	-- Get lyrics from midi file
@@ -894,6 +968,7 @@ handlers  = {
 		})
 	end
 }
+
 --[[
   Avoiding to manage dependencies,
   getMidiReader is imported from https://github.com/Possseidon/lua-midi/blob/main/lib/midi.lua
