@@ -8,7 +8,7 @@ lua file name: GroupcreatefromDAW.lua
 
 Drag and drop notes from DAW: Automate group creation
 1/ Waiting any newly created track
-2/ Put imported DAW notes into a new group of notes
+2/ Move imported DAW notes into a new group of notes
 
 2024 - JF AVILES
 --]]
