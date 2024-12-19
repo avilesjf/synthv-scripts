@@ -2,7 +2,7 @@ local SCRIPT_TITLE = 'Group create from starting bar V1.0'
 
 --[[
 
-lua file name: GroupCreateFromStartingBar.lua
+lua file name: GroupCreateFromDAW.lua
 
 Create group of selected notes and start it from the nearest measure bar.
 This to make it easier to copy/paste chorus 
@@ -114,24 +114,10 @@ function SecondsToClock(timestamp)
 	  timestamp%60):gsub("%.",",")
 end
 
--- Create group from selected note and starting group from first nearest bar
-function CreateGroup()
-	local maxLengthResult = 30
-	local timeAxis = SV:getProject():getTimeAxis()
-	local editor = SV:getMainEditor()
-	local track = editor:getCurrentTrack()
-	local selection = editor:getSelection()
-	local selectedNotes = selection:getSelectedNotes()
-	
-	if #selectedNotes == 0 then
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes selected!"))
-		return false
-	end
-	
+-- Get first mesure before fist note
+function getFirstMesure(noteFirst, timeAxis)
 	local measurePos = 0
 	local measureBlick = 0
-	local noteFirst = selectedNotes[1]	
-	
 	local measureFirst = timeAxis:getMeasureAt(noteFirst:getOnset())
 	local checkExistingMeasureMark = timeAxis:getMeasureMarkAt(measureFirst)
 	
@@ -156,12 +142,30 @@ function CreateGroup()
 		measureBlick = measureMark.positionBlick
 		timeAxis:removeMeasureMark(measureFirst)
 	end
+	return measureBlick
+end
+
+-- Create group from selected note and starting group from first nearest bar
+function CreateGroup()
+	local maxLengthResult = 30
+	local timeAxis = SV:getProject():getTimeAxis()
+	local editor = SV:getMainEditor()
+	local track = editor:getCurrentTrack()
+	local selection = editor:getSelection()
+	local selectedNotes = selection:getSelectedNotes()
 	
+	if #selectedNotes == 0 then
+		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes selected!"))
+		return false
+	end
+	
+	local noteFirst = selectedNotes[1]	
+	local measureBlick = getFirstMesure(noteFirst, timeAxis)
+		
 	if DEBUG then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Notes start: ") .. noteFirst:getLyrics()
 		.. ", sec: " .. tostring(timeAxis:getSecondsFromBlick(noteFirst:getOnset()))
 		.. ", secClock: " .. SecondsToClock(timeAxis:getSecondsFromBlick(noteFirst:getOnset()))
-		.. ", measure: " .. tostring(measurePos)
 		.. ", secClock: " .. SecondsToClock(timeAxis:getSecondsFromBlick(noteFirst:getOnset()))
 		.. ", pos: " .. tostring(noteFirst:getOnset())
 		.. ", measureBlick: " .. tostring(measureBlick)
