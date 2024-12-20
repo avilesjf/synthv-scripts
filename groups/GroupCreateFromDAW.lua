@@ -28,11 +28,17 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
-	trackInfo = nil,
-	trackInfoName = SV:T("Track"),
-	trackInfoColor = "FFF09C9C",
-	trackInfoColorRef = "FFFF0000",
+	thresholdActive = true,
+	threshold = 1,
+	trackTarget = nil,
+	trackTargetName = SV:T("Track"),
+	initialTrackName = "",
+	initialColorTrack = "",
+	trackTargetColor = "FFF09C9C",
+	trackTargetColorRef = "FFFF0000",
 	newDAWTrack = nil,
+	currentTrack = nil,
+	isNewTrack = false,
 	numTracks = 0,
 	selection = nil,
 	selectedNotes = nil,
@@ -77,36 +83,46 @@ function NotesObject:getTrackNumNotes(track)
 	return numNotes
 end
 
---- Get track list
-function NotesObject:getTracksList()
-	local list = {}
-	local formatCount = "%3d"
-	local iTracks = self.project:getNumTracks()
-	
-	for iTrack = 1, iTracks do
-		local track = self.project:getTrack(iTrack)
-		local numGroups = track:getNumGroups() - 1
-		local numNotes = self:getTrackNumNotes(track)
-		local infos = "" 
-		local groupsName = SV:T("groups")
-		local notesName = SV:T("notes")
-		if numGroups < 2 then
-			groupsName = SV:T("group")
-			infos =  infos .. string.format(formatCount, numGroups) " " .. groupsName
-		end
-		if numNotes < 2 then
-			notesName = SV:T("note")
-			infos =  infos .. "/" .. string.format(formatCount, numNotes) " " .. notesName
-		end
-		table.insert(list, track:getName() .. " (" .. infos .. ")" )
-	end
-	return list
-end
-
 --- Get last created track
 function NotesObject:getLastTrack()
 	return self.project:getTrack(self.project:getNumTracks())
 end
+
+-- Display message box
+function NotesObject:show(message)
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
+end
+
+-- get timelaps reference
+function NotesObject:getTimeLaps(seconds)
+	-- 1s = 1411200000 blicks at 120 and 705600000 at 60
+	local bpmTempoMark = self:getProjectTempo(seconds)
+	
+	local timeLapsMax = 1
+	if bpmTempoMark ~= nil then
+		local timeLapsSeconds = 1+ ((120-bpmTempoMark)/bpmTempoMark) -- Tempo 60 = 2s and tempo 120 = 1s
+		-- A flick (frame-tick) is a very small unit of time.
+		-- It is 1/705600000 (SV.QUARTER) of a second, exactly.		
+		-- timeLapsMax = self.timeAxis:getBlickFromSeconds(timeLapsSeconds)
+		timeLapsMax = timeLapsSeconds
+	end
+	return timeLapsMax
+end
+
+-- Get current project tempo
+function NotesObject:getProjectTempo(seconds)
+	local blicks = self.timeAxis:getBlickFromSeconds(seconds)
+	local tempoActive = 120
+	local tempoMarks = self.timeAxis:getAllTempoMarks()
+	for iTempo = 1, #tempoMarks do
+		local tempoMark = tempoMarks[iTempo]
+		if tempoMark ~= nil and blicks > tempoMark.position then
+			tempoActive = tempoMark.bpm
+		end
+	end
+	return tempoActive
+end
+
 
 -- Get string format from seconds
 function NotesObject:secondsToClock(timestamp)
@@ -147,14 +163,13 @@ function NotesObject:getFirstMesure(noteFirst)
 	return measureBlick
 end
 
--- Create track info
-function NotesObject:createTrackInfo(name)
-	local newTrackInfo = SV:create("Track")
-	local newTrackIndex = self.project:addTrack(newTrackInfo)
-	newTrackInfo = self.project:getTrack(newTrackIndex)
-	newTrackInfo:setName(self.trackInfoName)
-	-- SV:showMessageBox("", "Color: " .. newTrackInfo:getDisplayColor())
-	return newTrackInfo
+-- Create track target
+function NotesObject:createTrackTarget(name)
+	local newTrackTarget = SV:create("Track")
+	local newTrackIndex = self.project:addTrack(newTrackTarget)
+	newTrackTarget = self.project:getTrack(newTrackIndex)
+	newTrackTarget:setName(self.trackTargetName)
+	return newTrackTarget
 end
 
 -- Remove DAW track 
@@ -167,22 +182,26 @@ function NotesObject:removeDAWTrack()
 end
 
 -- Remove track info
-function NotesObject:removeTrackInfo()
-	if self.trackInfo ~= nil then
-		self.project:removeTrack(self.trackInfo:getIndexInParent())
-		self.trackInfo = nil
+function NotesObject:removetrackTarget()
+	if self.isNewTrack then
+		if self.trackTarget ~= nil then
+			self.project:removeTrack(self.trackTarget:getIndexInParent())
+			self.trackTarget = nil
+		end
 	end
 	return true
 end
 
 -- Create group for new track with new notes
-function NotesObject:createGroup(startPosition)
+function NotesObject:createGroup(startPosition, track)
 	local maxLengthResult = 30
 	local numGroups = self.newDAWTrack:getNumGroups()
 	local groupRefMain = self.newDAWTrack:getGroupReference(1)
 	local groupNotesMain = groupRefMain:getTarget()
 	local noteFirst = groupNotesMain:getNote(1)
 	local measureBlick = self:getFirstMesure(noteFirst)
+	local thresholdBlicks = self.timeAxis:getBlickFromSeconds(self.threshold)
+	-- self:show("thresholdBlicks: " .. thresholdBlicks)
 	
 	local mainGroupNotes = {}
 	-- Save notes to groups
@@ -192,16 +211,39 @@ function NotesObject:createGroup(startPosition)
 
 	-- Create new group 
 	local noteGroup = SV:create("NoteGroup")
+	local previousNote = nil
 	for iNote = 1, #mainGroupNotes do
-		local noteToGroup = mainGroupNotes[iNote]:clone()
-		-- reset position within the new group
-		noteToGroup:setOnset(mainGroupNotes[iNote]:getOnset() - measureBlick)
+		local note = mainGroupNotes[iNote]:clone()
+		-- Update position within the new group
+		note:setOnset(mainGroupNotes[iNote]:getOnset() - measureBlick)
 		
-		noteGroup:addNote(noteToGroup)
-		-- Remove previous selected notes
-		-- groupNotesMain:removeNote(mainGroupNotes[iNote]:getIndexInParent())
+		if previousNote ~= nil then
+			local gapNotes = previousNote:getEnd() - note:getOnset()
+			-- SIL = 29400000 => 0.02s
+			-- if iNote == 2 then 
+				-- self:show("gapNotes: " .. gapNotes .. ", " 
+				-- .. self.timeAxis:getSecondsFromBlick(gapNotes))
+			-- end
+			
+			if self.thresholdActive then
+				-- Notes overlay
+				if gapNotes > 0 then
+				-- if previousNote:getEnd() > note:getOnset() then
+					-- Reduce previous note duration
+					noteGroup:getNote(iNote - 1):setDuration(previousNote:getDuration() - gapNotes)
+				end
+							
+				-- SIL = short time between notes
+				if gapNotes < 0 and math.abs(gapNotes) < thresholdBlicks then
+					-- Spread previous note duration
+					noteGroup:getNote(iNote - 1):setDuration(previousNote:getDuration() + math.abs(gapNotes))
+				end
+			end
+		end
+		noteGroup:addNote(note)
+		previousNote = note
 	end
-	
+		
 	noteGroup:setName("")
 	self.project:addNoteGroup(noteGroup)
 	local resultLyrics = self:renameOneGroup(self.timeAxis, maxLengthResult, noteGroup)
@@ -209,7 +251,7 @@ function NotesObject:createGroup(startPosition)
 	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
 	newGrouptRef:setTimeOffset(measureBlick + startPosition)
 	
-	self.trackInfo:addGroupReference(newGrouptRef)
+	track:addGroupReference(newGrouptRef)
 	return true
 end
 
@@ -296,16 +338,15 @@ function NotesObject:isTextAccepted(timeAxis, note)
 	return result
 end
 
--- Set color for track "trackInfo"
-function NotesObject:setTrackInfoColor()
-	if self.trackInfo ~= nil then
-		if string.upper(self.trackInfo:getDisplayColor()) == self.trackInfoColorRef then
-			self.trackInfoColor = "FFF09C9C"
+-- Set color for track "trackTarget"
+function NotesObject:setTrackTargetColor()
+	if self.trackTarget ~= nil then
+		if string.upper(self.trackTarget:getDisplayColor()) == self.trackTargetColorRef then
+			self.trackTargetColor = "FFF09C9C"
 		else
-			self.trackInfoColor = self.trackInfoColorRef
+			self.trackTargetColor = self.trackTargetColorRef
 		end
-		self.trackInfo:setDisplayColor("#" .. self.trackInfoColor)		
-		-- self.trackInfo:setName(self.trackInfo:getDisplayColor() .. "/"  .. self.trackInfoColor)
+		self.trackTarget:setDisplayColor("#" .. self.trackTargetColor)		
 	end
 end
 
@@ -314,38 +355,40 @@ function NotesObject:loop()
 	local newSelectedNotes = #self.selection:getSelectedNotes()
 	local titleTrack = SV:T("Waiting: ")
 	local stop = false
-	local cause = ""
+	local cause = ""	
 	
-	if self:getTrackNumNotes(self.trackInfo) > self.numNotes then
-		cause = "Num notes: " .. self:getTrackNumNotes(self.trackInfo) .. "/" .. self.numNotes
-		stop = true
-	end
 	if self.numSelectedNotes ~= newSelectedNotes then
 		cause = "Selected notes: " .. self.numSelectedNotes .. "/" .. newSelectedNotes
 		stop = true
 	end
 	
 	if stop then
-		self:removeTrackInfo()
+		-- self:show("cause: " .. cause)
+		self:removetrackTarget()
 		self:endOfScript()
 	else
-		self:setTrackInfoColor()
+		self:setTrackTargetColor()
 		self.currentSeconds = self.playBack:getPlayhead()
 		local secondsInfo = self:secondsToClock(self.currentSeconds)
-		self.trackInfo:setName(titleTrack .. secondsInfo)
+		self.trackTarget:setName(titleTrack .. secondsInfo)
 		
 		-- Check if a new track is created
 		if self.numTracks < self.project:getNumTracks() then
 			self.newDAWTrack = self:getLastTrack()
 			local numNotesNewDAWTrack = self:getTrackNumNotes(self.newDAWTrack)
 			-- Display the new track name
-			self.trackInfo:setName(secondsInfo .. " " .. self.newDAWTrack:getName())
+			self.trackTarget:setName(secondsInfo .. " " .. self.newDAWTrack:getName())
 			
 			if numNotesNewDAWTrack > 0 then
 				local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
 				
+				local track = self.currentTrack
+				if self.isNewTrack then
+					track = self.trackTarget
+				end
+				
 				-- New notes => Create a new group
-				self:createGroup(newStartPosition)
+				self:createGroup(newStartPosition, track)
 				-- End of process
 				SV:setTimeout(500, function() self:endOfScript() end)
 			else
@@ -366,10 +409,19 @@ function NotesObject:endOfScript()
 	-- Remove DAW track if exists
 	self:removeDAWTrack()
 	
-	if self.trackInfo ~= nil then
-		self.trackInfo:setName(self.trackInfoName .. " " .. self.project:getNumTracks())
-		self.trackInfo:setDisplayColor("#" .. self.trackInfoColorRef)
+	if self.trackTarget ~= nil then
+		-- set last track name & color
+		self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
+		self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
 	end
+	
+	if not self.isNewTrack then
+		if self.currentTrack ~= nil then
+			self.currentTrack:setName(self.initialTrackName)
+			self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
+		end
+	end
+	
 	-- End of script
 	SV:finish()
 end
@@ -378,8 +430,19 @@ end
 function NotesObject:dialogResponse(response)
 	
 	if response.status then
-		self.trackInfo = self:createTrackInfo()
+		self.isNewTrack = response.answers.isNewTrack
+		self.thresholdActive = response.answers.thresholdActive
+		
+		if self.isNewTrack then
+			self.trackTarget = self:createTrackTarget()
+		else
+			self.currentTrack = SV:getMainEditor():getCurrentTrack()
+			self.initialTrackName = self.currentTrack:getName()
+			self.initialColorTrack = self.currentTrack:getDisplayColor()
+			self.trackTarget = self.currentTrack
+		end
 		self.numTracks = self.project:getNumTracks()
+		
 		SV:setTimeout(500, function() self:loop() end)
 	else
 		self:endOfScript()
@@ -390,6 +453,8 @@ end
 function NotesObject:showDialogAsync(title)
 	self.currentSeconds = self.playBack:getPlayhead()
 	local seconds = self:secondsToClock(self.currentSeconds)
+	self.threshold = self:getTimeLaps(self.currentSeconds) / 30 -- (120 BPM=0.03s, 60 BPM=0.06s)
+	-- self:show("self.threshold: " .. self.threshold .. ",s: " .. self.timeAxis:getBlickFromSeconds(self.threshold)) -- 1411200
 	
 	local form = {
 		title = SV:T(SCRIPT_TITLE),
@@ -405,6 +470,18 @@ function NotesObject:showDialogAsync(title)
 				height = 0, default = ""
 			},
 			{
+				name = "isNewTrack",
+				text = SV:T("Create a new track"),
+				type = "CheckBox",
+				default = false
+			},
+			{
+				name = "thresholdActive",
+				text = SV:T("Update 'SIL' or overlay notes"),
+				type = "CheckBox",
+				default = true
+			},
+			{
 				name = "separator", type = "TextArea", label = "", height = 0
 			}
 		}
@@ -415,8 +492,7 @@ function NotesObject:showDialogAsync(title)
 end
 
 -- Main processing task	
-function main()
-	
+function main()	
 	local notesObject = NotesObject:new()
 	local title = SV:T("Click Ok to start waiting a drag & drop from DAW.")
 				 .. "\r" .. SV:T("Select any notes to stop this script.")
