@@ -115,10 +115,10 @@ function SecondsToClock(timestamp)
 end
 
 -- Get first mesure before fist note
-function getFirstMesure(noteFirst, timeAxis)
+function getFirstMesure(notePos, timeAxis)
 	local measurePos = 0
 	local measureBlick = 0
-	local measureFirst = timeAxis:getMeasureAt(noteFirst:getOnset())
+	local measureFirst = timeAxis:getMeasureAt(notePos)
 	local checkExistingMeasureMark = timeAxis:getMeasureMarkAt(measureFirst)
 	
 	if checkExistingMeasureMark ~= nil then
@@ -159,8 +159,8 @@ function CreateGroup()
 		return false
 	end
 	
-	local noteFirst = selectedNotes[1]	
-	local measureBlick = getFirstMesure(noteFirst, timeAxis)
+	local noteFirst = selectedNotes[1]
+	local measureBlick = getFirstMesure(noteFirst:getOnset(), timeAxis)
 		
 	if DEBUG then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Notes start: ") .. noteFirst:getLyrics()

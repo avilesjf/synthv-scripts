@@ -133,10 +133,10 @@ function NotesObject:secondsToClock(timestamp)
 end
 
 -- Get first mesure before fist note
-function NotesObject:getFirstMesure(noteFirst)
+function NotesObject:getFirstMesure(notePos)
 	local measurePos = 0
 	local measureBlick = 0
-	local measureFirst = self.timeAxis:getMeasureAt(noteFirst:getOnset())
+	local measureFirst = self.timeAxis:getMeasureAt(notePos)
 	local checkExistingMeasureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
 	
 	if checkExistingMeasureMark ~= nil then
@@ -199,7 +199,7 @@ function NotesObject:createGroup(startPosition, track)
 	local groupRefMain = self.newDAWTrack:getGroupReference(1)
 	local groupNotesMain = groupRefMain:getTarget()
 	local noteFirst = groupNotesMain:getNote(1)
-	local measureBlick = self:getFirstMesure(noteFirst)
+	local measureBlick = self:getFirstMesure(noteFirst:getOnset())
 	local thresholdBlicks = self.timeAxis:getBlickFromSeconds(self.threshold)
 	-- self:show("thresholdBlicks: " .. thresholdBlicks)
 	
@@ -381,6 +381,7 @@ function NotesObject:loop()
 			
 			if numNotesNewDAWTrack > 0 then
 				local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
+				local measureBlick = self:getFirstMesure(newStartPosition)
 				
 				local track = self.currentTrack
 				if self.isNewTrack then
@@ -388,7 +389,7 @@ function NotesObject:loop()
 				end
 				
 				-- New notes => Create a new group
-				self:createGroup(newStartPosition, track)
+				self:createGroup(measureBlick, track)
 				-- End of process
 				SV:setTimeout(500, function() self:endOfScript() end)
 			else
