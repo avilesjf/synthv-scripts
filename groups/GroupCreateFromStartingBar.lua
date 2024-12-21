@@ -161,7 +161,7 @@ function CreateGroup()
 	
 	local noteFirst = selectedNotes[1]
 	local measureBlick = getFirstMesure(noteFirst:getOnset(), timeAxis)
-		
+
 	if DEBUG then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Notes start: ") .. noteFirst:getLyrics()
 		.. ", sec: " .. tostring(timeAxis:getSecondsFromBlick(noteFirst:getOnset()))

@@ -54,13 +54,16 @@ function main()
 	local selectedNotes = getSelectedNotes()
 	local playBack = SV:getPlayback()	
 	local seconds = playBack:getPlayhead()
+	
 	local newStartPosition = timeAxis:getBlickFromSeconds(seconds)
+	-- Round a time position based on snapping settings
+	local newTimePos = SV:getMainEditor():getNavigation():snap(newStartPosition)
 	
 	if #selectedNotes == 0 then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes selected!"))
 	else		
 		-- Start process
-		duplicateNotes(selectedNotes, newStartPosition)
+		duplicateNotes(selectedNotes, newTimePos)
 	end
 	
 	SV:finish()

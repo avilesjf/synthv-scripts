@@ -1,20 +1,25 @@
-local SCRIPT_TITLE = 'Group create from DAW V1.0'
+local SCRIPT_TITLE = 'Group create from DAW direct V1.0'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: GroupcreatefromDAW.lua
+lua file name: GroupCreateFromDAWDirect.lua
 
 Drag and drop notes from DAW: Automate group creation
 1/ Waiting any newly created track
 2/ Move imported DAW notes into a new group of notes
+Version with NO dialog box
 
 Note: Stopping this script (without making a drag&drop DAW): 
 Update numbers of selected notes by
 selecting a new existing note
 or creating a new note on the piano roll.
 
+Remark: 
+Do not stop script by "Abort All Running Scripts", 
+this will loose your original track name.
+
 2024 - JF AVILES
 --]]
 
@@ -48,7 +53,6 @@ NotesObject = {
 	selection = nil,
 	selectedNotes = nil,
 	numSelectedNotes = 0,
-	dialogTitle = "",
 	playBack = nil,
 	currentSeconds = 0,
 	noteInfo = nil,
@@ -205,9 +209,9 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 	local groupNotesMain = groupRefMain:getTarget()
 	local noteFirst = groupNotesMain:getNote(1)
 	local measureBlick = self:getFirstMesure(noteFirst:getOnset())
-	self.threshold = self:getMaxTimeGapFromBPM(targetPosition)  -- 41505882 = 0.0588 seconds
-	
 	local mainGroupNotes = {}
+	self.threshold = self:getMaxTimeGapFromBPM(targetPosition) -- 41505882 = 0.0588 seconds
+	
 	-- Save notes to groups
 	for iNote = 1, groupNotesMain:getNumNotes() do
 		table.insert(mainGroupNotes, groupNotesMain:getNote(iNote))
@@ -431,74 +435,27 @@ function NotesObject:endOfScript()
 	SV:finish()
 end
 
--- Dialog response callback
-function NotesObject:dialogResponse(response)
+-- Start process
+function NotesObject:startProcess()
 	
-	if response.status then
-		self.isNewTrack = response.answers.isNewTrack
-		self.thresholdActive = response.answers.thresholdActive
-		
-		if self.isNewTrack then
-			self.trackTarget = self:createTrackTarget()
-		else
-			self.currentTrack = SV:getMainEditor():getCurrentTrack()
-			self.initialTrackName = self.currentTrack:getName()
-			self.initialColorTrack = self.currentTrack:getDisplayColor()
-			self.trackTarget = self.currentTrack
-		end
-		self.numTracks = self.project:getNumTracks()
-		
-		SV:setTimeout(500, function() self:loop() end)
-	else
-		self:endOfScript()
-	end
-end
-
--- Show asynchrone custom dialog box
-function NotesObject:showDialogAsync(title)
 	self.currentSeconds = self.playBack:getPlayhead()
-	local seconds = self:secondsToClock(self.currentSeconds)
 	
-	local form = {
-		title = SV:T(SCRIPT_TITLE),
-		message = title,
-		buttons = "OkCancel",
-		widgets = {
-			{
-				name = "timePosition", type = "TextArea", label = SV:T("Song position: ") .. seconds,
-				height = 0, default = ""
-			},
-			{
-				name = "info", type = "TextArea", label = SV:T("OK to start waiting DAW drag & drop!"), 
-				height = 0, default = ""
-			},
-			{
-				name = "isNewTrack",
-				text = SV:T("Create a new track"),
-				type = "CheckBox",
-				default = false
-			},
-			{
-				name = "thresholdActive",
-				text = SV:T("Update 'SIL' or overlay notes"),
-				type = "CheckBox",
-				default = true
-			},
-			{
-				name = "separator", type = "TextArea", label = "", height = 0
-			}
-		}
-	}
-	self.dialogTitle = title
-	self.onResponse = function(response) self:dialogResponse(response) end
-	SV:showCustomDialogAsync(form, self.onResponse)	
+	if self.isNewTrack then
+		self.trackTarget = self:createTrackTarget()
+	else
+		self.currentTrack = SV:getMainEditor():getCurrentTrack()
+		self.initialTrackName = self.currentTrack:getName()
+		self.initialColorTrack = self.currentTrack:getDisplayColor()
+		self.trackTarget = self.currentTrack
+	end
+	self.numTracks = self.project:getNumTracks()
+	
+	SV:setTimeout(500, function() self:loop() end)
 end
 
 -- Main processing task	
 function main()	
 	local notesObject = NotesObject:new()
-	local title = SV:T("Click Ok to start waiting a drag & drop from DAW.")
-				 .. "\r" .. SV:T("Select any notes to stop this script.")
-	notesObject:showDialogAsync(title)
+	notesObject:startProcess()
 end
 
