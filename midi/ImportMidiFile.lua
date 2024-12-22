@@ -72,6 +72,8 @@ InternalData = {
 	CURRENT_TRACK = 0,
 	PREVIOUS_TRACK = 0,
 	DELTA_TIME = 0,
+	linkNotesActive = true, -- link notes overlay or SIL between notes
+	threshold = 41505882,  -- 0.03 seconds (120)
 	tempoMarkers = {},
 	markers = {},
 	midiTrackNames = {},
@@ -728,7 +730,7 @@ groupsTools = {
 		
 		-- Create new group 
 		local noteGroup = SV:create("NoteGroup")
-		
+		local previousNote = nil
 		for iNote = 1, #groupNotes do
 			local noteMidi = groupNotes[iNote]
 			
@@ -746,7 +748,15 @@ groupsTools = {
 					.. " note duration: " .. timeTools.ticksToBlicks(noteMidi.timeEnd)
 					.. "\r"
 			end
+			
+			if InternalData.linkNotesActive then
+				if previousNote ~= nil then
+					groupsTools.linkedTheNotes(previousNote, note, noteGroup:getNote(iNote - 1))
+				end
+			end
+			
 			noteGroup:addNote(note)
+			previousNote = note
 		end
 
 		noteGroup:setName("Group: " .. iGroup)
@@ -762,6 +772,29 @@ groupsTools = {
 			-- mainTools.show("result: " .. result)
 		-- end
 		return true
+	end,
+	
+	-- Linked the notes
+	linkedTheNotes = function(previousNote, note, storedNote)
+		local gapNotes = previousNote:getEnd() - note:getOnset()
+		-- SIL = 29400000 => 0.02s
+		-- if iNote == 2 then 
+			-- self:show("gapNotes: " .. gapNotes .. ", " 
+			-- .. self.timeAxis:getSecondsFromBlick(gapNotes))
+		-- end
+		
+		-- Notes overlay
+		if gapNotes > 0 then
+		-- if previousNote:getEnd() > note:getOnset() then
+			-- Reduce previous note duration
+			storedNote:setDuration(previousNote:getDuration() - gapNotes)
+		end
+					
+		-- SIL = short time between notes
+		if gapNotes < 0 and math.abs(gapNotes) < InternalData.threshold then
+			-- Spread previous note duration
+			storedNote:setDuration(previousNote:getDuration() + math.abs(gapNotes))
+		end
 	end,
 
 	-- Rename one group

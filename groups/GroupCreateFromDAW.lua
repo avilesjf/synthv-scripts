@@ -33,8 +33,8 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
-	thresholdActive = true,
-	threshold = 41505882,  -- 0.06 seconds
+	linkNotesActive = true,
+	threshold = 41505882,  -- 0.03 seconds (120)
 	trackTarget = nil,
 	trackTargetName = SV:T("Track"),
 	initialTrackName = "",
@@ -101,12 +101,12 @@ end
 -- Get time max gap between notes
 function NotesObject:getMaxTimeGapFromBPM(positionSeconds)
 	local thresholdBlicks = self.threshold
-	local coef = 17 -- Convert 1/quarterBlicks to 0.0294 seconds
+	local coef = 17 -- Convert 1/quarterBlicks to 0.03 seconds (120)
 	local bpm = self:getProjectTempo(positionSeconds)
 	
 	if bpm ~= nil then
-		-- "120:" time: 0.0294 blicks 1411200000 quarter 2
-		-- "60: " time: 0.0588 blicks 705600000 quarter 1
+		-- "120:" time: 0.03s, 1s: blicks 1411200000 quarter 2
+		-- "60: " time: 0.06s, 1s: blicks 705600000 quarter 1
 		local blicks = SV:seconds2Blick(1, bpm) -- get blicks 1 second with bpm
 		local quarterBlicks = SV:blick2Quarter(blicks)
 		local gapMax = (1/quarterBlicks) / coef  -- result gap in seconds
@@ -205,7 +205,7 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 	local groupNotesMain = groupRefMain:getTarget()
 	local noteFirst = groupNotesMain:getNote(1)
 	local measureBlick = self:getFirstMesure(noteFirst:getOnset())
-	self.threshold = self:getMaxTimeGapFromBPM(targetPosition)  -- 41505882 = 0.0588 seconds
+	self.threshold = self:getMaxTimeGapFromBPM(targetPosition)  -- 41505882 = 0.06 seconds
 	
 	local mainGroupNotes = {}
 	-- Save notes to groups
@@ -221,29 +221,12 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 		-- Update position within the new group
 		note:setOnset(mainGroupNotes[iNote]:getOnset() - measureBlick)
 		
-		if previousNote ~= nil then
-			local gapNotes = previousNote:getEnd() - note:getOnset()
-			-- SIL = 29400000 => 0.02s
-			-- if iNote == 2 then 
-				-- self:show("gapNotes: " .. gapNotes .. ", " 
-				-- .. self.timeAxis:getSecondsFromBlick(gapNotes))
-			-- end
-			
-			if self.thresholdActive then
-				-- Notes overlay
-				if gapNotes > 0 then
-				-- if previousNote:getEnd() > note:getOnset() then
-					-- Reduce previous note duration
-					noteGroup:getNote(iNote - 1):setDuration(previousNote:getDuration() - gapNotes)
-				end
-							
-				-- SIL = short time between notes
-				if gapNotes < 0 and math.abs(gapNotes) < self.threshold then
-					-- Spread previous note duration
-					noteGroup:getNote(iNote - 1):setDuration(previousNote:getDuration() + math.abs(gapNotes))
-				end
+		if self.linkNotesActive then
+			if previousNote ~= nil then
+				self:linkedTheNotes(previousNote, note, noteGroup:getNote(iNote - 1))
 			end
 		end
+
 		noteGroup:addNote(note)
 		previousNote = note
 	end
@@ -257,6 +240,29 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 	
 	track:addGroupReference(newGrouptRef)
 	return true
+end
+
+-- Linked the notes
+function NotesObject:linkedTheNotes(previousNote, note, storedNote)
+	local gapNotes = previousNote:getEnd() - note:getOnset()
+	-- SIL = 29400000 => 0.02s
+	-- if iNote == 2 then 
+		-- self:show("gapNotes: " .. gapNotes .. ", " 
+		-- .. self.timeAxis:getSecondsFromBlick(gapNotes))
+	-- end
+	
+	-- Notes overlay
+	if gapNotes > 0 then
+	-- if previousNote:getEnd() > note:getOnset() then
+		-- Reduce previous note duration
+		storedNote:setDuration(previousNote:getDuration() - gapNotes)
+	end
+				
+	-- SIL = short time between notes
+	if gapNotes < 0 and math.abs(gapNotes) < self.threshold then
+		-- Spread previous note duration
+		storedNote:setDuration(previousNote:getDuration() + math.abs(gapNotes))
+	end
 end
 
 -- Rename one group
@@ -436,7 +442,7 @@ function NotesObject:dialogResponse(response)
 	
 	if response.status then
 		self.isNewTrack = response.answers.isNewTrack
-		self.thresholdActive = response.answers.thresholdActive
+		self.linkNotesActive = response.answers.linkNotesActive
 		
 		if self.isNewTrack then
 			self.trackTarget = self:createTrackTarget()
@@ -479,7 +485,7 @@ function NotesObject:showDialogAsync(title)
 				default = false
 			},
 			{
-				name = "thresholdActive",
+				name = "linkNotesActive",
 				text = SV:T("Update 'SIL' or overlay notes"),
 				type = "CheckBox",
 				default = true
