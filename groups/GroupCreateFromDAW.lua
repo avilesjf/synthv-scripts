@@ -48,6 +48,7 @@ NotesObject = {
 	initialColorTrack = "",
 	trackTargetColor = "FFF09C9C",
 	trackTargetColorRef = "FFFF0000",
+	trackTargetColorOn = false,
 	newDAWTrack = nil,
 	currentTrack = nil,
 	isNewTrack = false,
@@ -60,7 +61,8 @@ NotesObject = {
 	currentSeconds = 0,
 	noteInfo = nil,
 	numNotes = 0,
-	numGroups = 0
+	numGroups = 0,
+	stopProcess = false
 }
 
 -- Constructor method for the NotesObject class
@@ -184,15 +186,22 @@ function NotesObject:createTrackTarget(name)
 	return newTrackTarget
 end
 
+-- Remove track DAW
+function NotesObject:removeTrackDAW()
+	if self.newDAWTrack ~= nil then
+		self.project:removeTrack(self.newDAWTrack:getIndexInParent())
+		self.newDAWTrack = nil
+	end
+end
+
 -- Remove track info
-function NotesObject:removetrackTarget()
+function NotesObject:removeTrackTarget()
 	if self.isNewTrack then
 		if self.trackTarget ~= nil then
 			self.project:removeTrack(self.trackTarget:getIndexInParent())
 			self.trackTarget = nil
 		end
 	end
-	return true
 end
 
 -- Create group for new track with new notes
@@ -345,64 +354,75 @@ end
 -- Set color for track "trackTarget"
 function NotesObject:setTrackTargetColor()
 	if self.trackTarget ~= nil then
-		if string.upper(self.trackTarget:getDisplayColor()) == self.trackTargetColorRef then
+		self.trackTargetColorOn = not self.trackTargetColorOn
+
+		if self.trackTargetColorOn then
 			self.trackTargetColor = "FFF09C9C"
 		else
 			self.trackTargetColor = self.trackTargetColorRef
 		end
-		self.trackTarget:setDisplayColor("#" .. self.trackTargetColor)		
+		self.trackTarget:setDisplayColor("#" .. self.trackTargetColor)
 	end
 end
 
 -- Main loop
 function NotesObject:loop()
 	local newSelectedNotes = #self.selection:getSelectedNotes()
-	local stop = false
 	local cause = ""	
+	self.stopProcess = false
 	
 	if self.numSelectedNotes ~= newSelectedNotes then
 		cause = "Selected notes: " .. self.numSelectedNotes .. "/" .. newSelectedNotes
-		stop = true
+		self.stopProcess = true
 	end
 	
-	if stop then
+	if self.stopProcess then
 		-- self:show("cause: " .. cause)
-		self:removetrackTarget()
 		self:endOfScript()
 	else
-		self:setTrackTargetColor()
-		self.currentSeconds = self.playBack:getPlayhead()
-		local secondsInfo = self:secondsToClock(self.currentSeconds)
-		self.trackTarget:setName(self.trackNameModified .. " " .. secondsInfo)
-		
-		-- Check if a new track is created
-		if self.numTracks < self.project:getNumTracks() then
-			self.newDAWTrack = self:getLastTrack()
-			local numNotesNewDAWTrack = self:getTrackNumNotes(self.newDAWTrack)
-			-- Display the new track name
-			self.trackTarget:setName(secondsInfo .. " " .. self.newDAWTrack:getName())
+		-- if a track is deleted by another script
+		if self.numTracks > self.project:getNumTracks() then
+			self.stopProcess = true
+			SV:finish()
+		else
+			self:setTrackTargetColor()
+			self.currentSeconds = self.playBack:getPlayhead()
+			local secondsInfo = self:secondsToClock(self.currentSeconds)
+			self.trackTarget:setName(self.trackNameModified .. " " .. secondsInfo)
 			
-			if numNotesNewDAWTrack > 0 then
-				local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
-				local measureBlick = self:getFirstMesure(newStartPosition)
+			-- Check if a new track is created
+			if self.numTracks < self.project:getNumTracks() then
+				self.newDAWTrack = self:getLastTrack()
+				local numNotesNewDAWTrack = self:getTrackNumNotes(self.newDAWTrack)
+				-- Display the new track name
+				self.trackTarget:setName(secondsInfo .. " " .. self.newDAWTrack:getName())
 				
-				local track = self.currentTrack
-				if self.isNewTrack then
-					track = self.trackTarget
+				if numNotesNewDAWTrack > 0 then
+					local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
+					local measureBlick = self:getFirstMesure(newStartPosition)
+					
+					local track = self.currentTrack
+					if self.isNewTrack then
+						track = self.trackTarget
+					end
+					
+					-- New notes => Create a new group
+					self:createGroup(measureBlick, self.currentSeconds, track)
+					self.stopProcess = true -- End of process
+				else
+					-- a new track is created with no notes
 				end
 				
-				-- New notes => Create a new group
-				self:createGroup(measureBlick, self.currentSeconds, track)
-				-- End of process
-				SV:setTimeout(500, function() self:endOfScript() end)
+				if not self.stopProcess then
+					self.numTracks = self.project:getNumTracks() -- update new number of tracks
+					SV:setTimeout(500, function() self:loop() end)
+				else
+					-- End of process
+					self:endOfScript(true)
+				end
 			else
-				-- a new track is created with no notes
+				SV:setTimeout(500, function() self:loop() end)
 			end
-			
-			self.numTracks = self.project:getNumTracks() -- update new number of tracks
-			SV:setTimeout(500, function() self:loop() end)
-		else
-			SV:setTimeout(500, function() self:loop() end)
 		end
 		
 	end	
@@ -424,7 +444,12 @@ function NotesObject:isTrackWaiting(wait)
 end
 
 -- End of script 
-function NotesObject:endOfScript()
+function NotesObject:endOfScript(status)
+	self:removeTrackDAW()
+	if not status then
+		self:removeTrackTarget()
+	end
+	SV:setHostClipboard("")
 
 	-- Remove DAW track if exists
 	if self.trackTarget ~= nil then
@@ -461,10 +486,8 @@ function NotesObject:previousProcess()
 			local paramArray = self:split(param, "=")
 			self:setParametersFromClipBoard(paramArray[1], paramArray[2])
 		end
-		SV:setHostClipboard("")
-		result = true
-		self:removetrackTarget()
 		self:endOfScript()
+		result = true
 	end
 	
 	return result
@@ -510,7 +533,8 @@ function NotesObject:setParametersFromClipBoard(paramName, value)
 		self.numTracks = tonumber(value)
 	end
 	if string.find(paramName, "trackTarget") then
-		self.trackTarget = self.project:getTrack(tonumber(value))
+		local iTrack = tonumber(value)
+		self.trackTarget = self.project:getTrack(iTrack)
 	end
 end
 
