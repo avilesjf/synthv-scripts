@@ -9,12 +9,18 @@ lua file name: GroupcreatefromDAW.lua
 Drag and drop notes from DAW: Automate group creation
 1/ Waiting any newly created track
 2/ Move imported DAW notes into a new group of notes
+Version with NO dialog box
 
-Note: Stopping this script (without making a drag&drop DAW): 
-Update numbers of selected notes by
-selecting a new existing note
-or creating a new note on the piano roll.
+Note: Stopping this script:
+A/ Without finish it with a drag&drop DAW): 
+	1- Update numbers of selected notes by selecting a new existing note
+	2- Creating a new note on the piano roll
+	3- Run this script again! (host clipboard is used for this feature)
 
+Remark: 
+Do not stop script by "Abort All Running Scripts", 
+this will loose your original track name!
+
 2024 - JF AVILES
 --]]
 
@@ -36,7 +42,8 @@ NotesObject = {
 	linkNotesActive = true,
 	threshold = 41505882,  -- 0.03 seconds (120)
 	trackTarget = nil,
-	trackTargetName = SV:T("Track"),
+	trackTargetName = SV:T("Track new"),
+	trackNameModified = SV:T("Waiting:"),
 	initialTrackName = "",
 	initialColorTrack = "",
 	trackTargetColor = "FFF09C9C",
@@ -363,7 +370,6 @@ end
 -- Main loop
 function NotesObject:loop()
 	local newSelectedNotes = #self.selection:getSelectedNotes()
-	local titleTrack = SV:T("Waiting: ")
 	local stop = false
 	local cause = ""	
 	
@@ -380,7 +386,7 @@ function NotesObject:loop()
 		self:setTrackTargetColor()
 		self.currentSeconds = self.playBack:getPlayhead()
 		local secondsInfo = self:secondsToClock(self.currentSeconds)
-		self.trackTarget:setName(titleTrack .. secondsInfo)
+		self.trackTarget:setName(self.trackNameModified .. " " .. secondsInfo)
 		
 		-- Check if a new track is created
 		if self.numTracks < self.project:getNumTracks() then
@@ -415,15 +421,32 @@ function NotesObject:loop()
 	end	
 end
 
+--- Get track list
+function NotesObject:isTrackWaiting(wait)
+	local iTracks = self.project:getNumTracks()
+	local isWaiting = false
+	
+	for iTrack = 1, iTracks do
+		local track = self.project:getTrack(iTrack)
+		if string.find(track:getName(), wait) ~= nil then
+			isWaiting = true
+			break
+		end
+	end
+	return isWaiting
+end
+
 -- End of script 
 function NotesObject:endOfScript()
 	-- Remove DAW track if exists
 	self:removeDAWTrack()
 	
 	if self.trackTarget ~= nil then
-		-- set last track name & color
-		self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
-		self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
+		if not self.isNewTrack then
+			-- set last track name & color
+			self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
+			self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
+		end
 	end
 	
 	if not self.isNewTrack then
@@ -437,13 +460,104 @@ function NotesObject:endOfScript()
 	SV:finish()
 end
 
+-- Check previous process
+function NotesObject:previousProcess()
+	local result = false
+	
+	-- Script="GroupCreateFromDAW", initialTrackName=Unnamed Track, 
+	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1	
+	local hostClipboard = SV:getHostClipboard()
+	
+	if self:isParametersOk(hostClipboard) then
+		local paramSlitted = self:split(hostClipboard, ", ")
+		for iLine = 1, #paramSlitted do
+			local param = paramSlitted[iLine]
+			local paramArray = self:split(param, "=")
+			self:setParametersFromClipBoard(paramArray[1], paramArray[2])
+		end
+		SV:setHostClipboard("")
+		self:endOfScript()
+		result = true
+	end
+	
+	return result
+end
+
+
+-- Check if parameters OK
+function NotesObject:isParametersOk(hostClipboard)
+	local result = false
+	if hostClipboard ~= nil then
+		if type(hostClipboard) == "string" then
+			if string.find(hostClipboard, "Script=") ~= nil then
+				if string.find(hostClipboard, "GroupCreateFromDAW") ~= nil then
+					result = true
+				end
+			end
+		end
+	end
+	return result
+end
+
+-- Set clipboard parameters 
+function NotesObject:setParametersFromClipBoard(paramName, value)
+	if string.find(paramName, "initialTrackName") then
+		self.initialTrackName = value
+	end
+	if string.find(paramName, "initialColorTrack") then
+		self.initialColorTrack = value
+	end
+	if string.find(paramName, "isNewTrack") then
+		self.isNewTrack = false
+		if value == "true" then 
+			self.isNewTrack = true
+		end
+	end
+	if string.find(paramName, "linkNotesActive") then
+		self.linkNotesActive = false
+		if value == "true" then 
+			self.linkNotesActive = true
+		end
+	end
+	if string.find(paramName, "numTracks") then
+		self.numTracks = tonumber(value)
+	end
+	if string.find(paramName, "trackTarget") then
+		self.trackTarget = self.project:getTrack(tonumber(value))
+	end
+end
+
+-- Split string by sep char
+function NotesObject:split(str, sep)
+   local result = {}
+   local regex = ("([^%s]+)"):format(sep)
+   for each in str:gmatch(regex) do
+	  table.insert(result, each)
+   end
+   return result
+end
+
+-- Store data to clipboard
+function NotesObject:storeToClipboard()
+
+	local projectStatus = "Script=\"GroupCreateFromDAW\", "
+		.."initialTrackName=" .. self.initialTrackName .. ", "
+		.. "initialColorTrack=" .. self.initialColorTrack .. ", " 
+		.. "isNewTrack=" .. tostring(self.isNewTrack) .. ", "
+		.. "linkNotesActive=" .. tostring(self.linkNotesActive) .. ", "
+		.. "numTracks=" .. self.numTracks .. ", "
+		.. "trackTarget=" .. self.trackTarget:getIndexInParent()
+	-- Script="GroupCreateFromDAW", initialTrackName=Unnamed Track, 
+	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1	
+	SV:setHostClipboard(projectStatus)
+end
+
 -- Dialog response callback
 function NotesObject:dialogResponse(response)
 	
 	if response.status then
 		self.isNewTrack = response.answers.isNewTrack
 		self.linkNotesActive = response.answers.linkNotesActive
-		
 		if self.isNewTrack then
 			self.trackTarget = self:createTrackTarget()
 		else
@@ -454,6 +568,8 @@ function NotesObject:dialogResponse(response)
 		end
 		self.numTracks = self.project:getNumTracks()
 		
+		self:storeToClipboard()
+		
 		SV:setTimeout(500, function() self:loop() end)
 	else
 		self:endOfScript()
@@ -462,42 +578,46 @@ end
 
 -- Show asynchrone custom dialog box
 function NotesObject:showDialogAsync(title)
-	self.currentSeconds = self.playBack:getPlayhead()
-	local seconds = self:secondsToClock(self.currentSeconds)
+
+	if not self:previousProcess() then
 	
-	local form = {
-		title = SV:T(SCRIPT_TITLE),
-		message = title,
-		buttons = "OkCancel",
-		widgets = {
-			{
-				name = "timePosition", type = "TextArea", label = SV:T("Song position: ") .. seconds,
-				height = 0, default = ""
-			},
-			{
-				name = "info", type = "TextArea", label = SV:T("OK to start waiting DAW drag & drop!"), 
-				height = 0, default = ""
-			},
-			{
-				name = "isNewTrack",
-				text = SV:T("Create a new track"),
-				type = "CheckBox",
-				default = false
-			},
-			{
-				name = "linkNotesActive",
-				text = SV:T("Update 'SIL' or overlay notes"),
-				type = "CheckBox",
-				default = true
-			},
-			{
-				name = "separator", type = "TextArea", label = "", height = 0
+		self.currentSeconds = self.playBack:getPlayhead()
+		local seconds = self:secondsToClock(self.currentSeconds)
+		
+		local form = {
+			title = SV:T(SCRIPT_TITLE),
+			message = title,
+			buttons = "OkCancel",
+			widgets = {
+				{
+					name = "timePosition", type = "TextArea", label = SV:T("Song position: ") .. seconds,
+					height = 0, default = ""
+				},
+				{
+					name = "info", type = "TextArea", label = SV:T("OK to start waiting DAW drag & drop!"), 
+					height = 0, default = ""
+				},
+				{
+					name = "isNewTrack",
+					text = SV:T("Create a new track"),
+					type = "CheckBox",
+					default = false
+				},
+				{
+					name = "linkNotesActive",
+					text = SV:T("Update 'SIL' or overlay notes"),
+					type = "CheckBox",
+					default = true
+				},
+				{
+					name = "separator", type = "TextArea", label = "", height = 0
+				}
 			}
 		}
-	}
-	self.dialogTitle = title
-	self.onResponse = function(response) self:dialogResponse(response) end
-	SV:showCustomDialogAsync(form, self.onResponse)	
+		self.dialogTitle = title
+		self.onResponse = function(response) self:dialogResponse(response) end
+		SV:showCustomDialogAsync(form, self.onResponse)	
+	end
 end
 
 -- Main processing task	
@@ -505,6 +625,6 @@ function main()
 	local notesObject = NotesObject:new()
 	local title = SV:T("Click Ok to start waiting a drag & drop from DAW.")
 				 .. "\r" .. SV:T("Select any notes to stop this script.")
+	
 	notesObject:showDialogAsync(title)
 end
-

@@ -11,14 +11,15 @@ Drag and drop notes from DAW: Automate group creation
 2/ Move imported DAW notes into a new group of notes
 Version with NO dialog box
 
-Note: Stopping this script (without making a drag&drop DAW): 
-Update numbers of selected notes by
-selecting a new existing note
-or creating a new note on the piano roll.
+Note: Stopping this script:
+A/ Without finish it with a drag&drop DAW): 
+	1- Update numbers of selected notes by selecting a new existing note
+	2- Creating a new note on the piano roll
+	3- Run this script again! (host clipboard is used for this feature)
 
 Remark: 
 Do not stop script by "Abort All Running Scripts", 
-this will loose your original track name.
+this will loose your original track name!
 
 2024 - JF AVILES
 --]]
@@ -425,9 +426,11 @@ function NotesObject:endOfScript()
 	self:removeDAWTrack()
 	
 	if self.trackTarget ~= nil then
-		-- set last track name & color
-		self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
-		self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
+		if not self.isNewTrack then
+			-- set last track name & color
+			self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
+			self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
+		end
 	end
 	
 	if not self.isNewTrack then
@@ -441,23 +444,120 @@ function NotesObject:endOfScript()
 	SV:finish()
 end
 
+-- Check previous process
+function NotesObject:previousProcess()
+	local result = false
+	
+	-- Script="GroupCreateFromDAW", initialTrackName=Unnamed Track, 
+	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1	
+	local hostClipboard = SV:getHostClipboard()
+	
+	if self:isParametersOk(hostClipboard) then
+		local paramSlitted = self:split(hostClipboard, ", ")
+		for iLine = 1, #paramSlitted do
+			local param = paramSlitted[iLine]
+			local paramArray = self:split(param, "=")
+			self:setParametersFromClipBoard(paramArray[1], paramArray[2])
+		end
+		SV:setHostClipboard("")
+		self:endOfScript()
+		result = true
+	end
+	
+	return result
+end
+
+
+-- Check if parameters OK
+function NotesObject:isParametersOk(hostClipboard)
+	local result = false
+	if hostClipboard ~= nil then
+		if type(hostClipboard) == "string" then
+			if string.find(hostClipboard, "Script=") ~= nil then
+				if string.find(hostClipboard, "GroupCreateFromDAW") ~= nil then
+					result = true
+				end
+			end
+		end
+	end
+	return result
+end
+
+-- Set clipboard parameters 
+function NotesObject:setParametersFromClipBoard(paramName, value)
+	if string.find(paramName, "initialTrackName") then
+		self.initialTrackName = value
+	end
+	if string.find(paramName, "initialColorTrack") then
+		self.initialColorTrack = value
+	end
+	if string.find(paramName, "isNewTrack") then
+		self.isNewTrack = false
+		if value == "true" then 
+			self.isNewTrack = true
+		end
+	end
+	if string.find(paramName, "linkNotesActive") then
+		self.linkNotesActive = false
+		if value == "true" then 
+			self.linkNotesActive = true
+		end
+	end
+	if string.find(paramName, "numTracks") then
+		self.numTracks = tonumber(value)
+	end
+	if string.find(paramName, "trackTarget") then
+		self.trackTarget = self.project:getTrack(tonumber(value))
+	end
+end
+
+-- Split string by sep char
+function NotesObject:split(str, sep)
+   local result = {}
+   local regex = ("([^%s]+)"):format(sep)
+   for each in str:gmatch(regex) do
+	  table.insert(result, each)
+   end
+   return result
+end
+
+-- Store data to clipboard
+function NotesObject:storeToClipboard()
+
+	local projectStatus = "Script=\"GroupCreateFromDAW\", "
+		.."initialTrackName=" .. self.initialTrackName .. ", "
+		.. "initialColorTrack=" .. self.initialColorTrack .. ", " 
+		.. "isNewTrack=" .. tostring(self.isNewTrack) .. ", "
+		.. "linkNotesActive=" .. tostring(self.linkNotesActive) .. ", "
+		.. "numTracks=" .. self.numTracks .. ", "
+		.. "trackTarget=" .. self.trackTarget:getIndexInParent()
+	-- Script="GroupCreateFromDAW", initialTrackName=Unnamed Track, 
+	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1	
+	SV:setHostClipboard(projectStatus)
+end
+
 -- Start process
 function NotesObject:startProcess()
 	
-	self.currentSeconds = self.playBack:getPlayhead()
-	
-	if self.isNewTrack then
-		self.trackTarget = self:createTrackTarget()
-	else
-		self.currentTrack = SV:getMainEditor():getCurrentTrack()
-		self.initialTrackName = self.currentTrack:getName()
-		self.initialColorTrack = self.currentTrack:getDisplayColor()
-		self.trackTarget = self.currentTrack
+	if not self:previousProcess() then
+		self.currentSeconds = self.playBack:getPlayhead()
+		
+		if self.isNewTrack then
+			self.trackTarget = self:createTrackTarget()
+		else
+			self.currentTrack = SV:getMainEditor():getCurrentTrack()
+			self.initialTrackName = self.currentTrack:getName()
+			self.initialColorTrack = self.currentTrack:getDisplayColor()
+			self.trackTarget = self.currentTrack
+		end
+		self.numTracks = self.project:getNumTracks()
+		
+		self:storeToClipboard()
+		
+		SV:setTimeout(500, function() self:loop() end)
 	end
-	self.numTracks = self.project:getNumTracks()
-	
-	SV:setTimeout(500, function() self:loop() end)
 end
+
 
 -- Main processing task	
 function main()	
