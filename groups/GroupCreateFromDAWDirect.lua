@@ -422,11 +422,9 @@ end
 
 -- End of script 
 function NotesObject:endOfScript()
-	-- Remove DAW track if exists
-	self:removeDAWTrack()
 	
 	if self.trackTarget ~= nil then
-		if not self.isNewTrack then
+		if self.isNewTrack then
 			-- set last track name & color
 			self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
 			self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
@@ -434,8 +432,8 @@ function NotesObject:endOfScript()
 	end
 	
 	if not self.isNewTrack then
-		if self.currentTrack ~= nil then
-			self.currentTrack:setName(self.initialTrackName)
+		if self.trackTarget ~= nil then
+			self.trackTarget:setName(self.initialTrackName)
 			self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
 		end
 	end
@@ -460,6 +458,7 @@ function NotesObject:previousProcess()
 			self:setParametersFromClipBoard(paramArray[1], paramArray[2])
 		end
 		SV:setHostClipboard("")
+		self:removetrackTarget()
 		self:endOfScript()
 		result = true
 	end

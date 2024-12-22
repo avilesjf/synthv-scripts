@@ -9,7 +9,7 @@ lua file name: GroupcreatefromDAW.lua
 Drag and drop notes from DAW: Automate group creation
 1/ Waiting any newly created track
 2/ Move imported DAW notes into a new group of notes
-Version with NO dialog box
+Version with dialog box
 
 Note: Stopping this script:
 A/ Without finish it with a drag&drop DAW): 
@@ -184,15 +184,6 @@ function NotesObject:createTrackTarget(name)
 	return newTrackTarget
 end
 
--- Remove DAW track 
-function NotesObject:removeDAWTrack()	
-	if self.newDAWTrack ~= nil then
-		self.project:removeTrack(self.newDAWTrack:getIndexInParent())
-		self.newDAWTrack = nil
-	end
-	return true
-end
-
 -- Remove track info
 function NotesObject:removetrackTarget()
 	if self.isNewTrack then
@@ -253,10 +244,6 @@ end
 function NotesObject:linkedTheNotes(previousNote, note, storedNote)
 	local gapNotes = previousNote:getEnd() - note:getOnset()
 	-- SIL = 29400000 => 0.02s
-	-- if iNote == 2 then 
-		-- self:show("gapNotes: " .. gapNotes .. ", " 
-		-- .. self.timeAxis:getSecondsFromBlick(gapNotes))
-	-- end
 	
 	-- Notes overlay
 	if gapNotes > 0 then
@@ -438,11 +425,10 @@ end
 
 -- End of script 
 function NotesObject:endOfScript()
+
 	-- Remove DAW track if exists
-	self:removeDAWTrack()
-	
 	if self.trackTarget ~= nil then
-		if not self.isNewTrack then
+		if self.isNewTrack then
 			-- set last track name & color
 			self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
 			self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
@@ -450,12 +436,12 @@ function NotesObject:endOfScript()
 	end
 	
 	if not self.isNewTrack then
-		if self.currentTrack ~= nil then
-			self.currentTrack:setName(self.initialTrackName)
+		if self.trackTarget ~= nil then
+			self.trackTarget:setName(self.initialTrackName)
 			self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
 		end
 	end
-	
+
 	-- End of script
 	SV:finish()
 end
@@ -476,8 +462,9 @@ function NotesObject:previousProcess()
 			self:setParametersFromClipBoard(paramArray[1], paramArray[2])
 		end
 		SV:setHostClipboard("")
-		self:endOfScript()
 		result = true
+		self:removetrackTarget()
+		self:endOfScript()
 	end
 	
 	return result
@@ -548,7 +535,7 @@ function NotesObject:storeToClipboard()
 		.. "numTracks=" .. self.numTracks .. ", "
 		.. "trackTarget=" .. self.trackTarget:getIndexInParent()
 	-- Script="GroupCreateFromDAW", initialTrackName=Unnamed Track, 
-	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1	
+	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1
 	SV:setHostClipboard(projectStatus)
 end
 
@@ -623,8 +610,8 @@ end
 -- Main processing task	
 function main()	
 	local notesObject = NotesObject:new()
-	local title = SV:T("Click Ok to start waiting a drag & drop from DAW.")
-				 .. "\r" .. SV:T("Select any notes to stop this script.")
+	local title = SV:T("Click OK to start waiting a drag & drop from DAW.")
+				 .. "\r" .. SV:T("To abort this script waiting drag&drop: Run it again!")
 	
 	notesObject:showDialogAsync(title)
 end
