@@ -182,15 +182,6 @@ function NotesObject:createTrackTarget(name)
 	return newTrackTarget
 end
 
--- Remove DAW track 
-function NotesObject:removeDAWTrack()	
-	if self.newDAWTrack ~= nil then
-		self.project:removeTrack(self.newDAWTrack:getIndexInParent())
-		self.newDAWTrack = nil
-	end
-	return true
-end
-
 -- Remove track info
 function NotesObject:removetrackTarget()
 	if self.isNewTrack then
