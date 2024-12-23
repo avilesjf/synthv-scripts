@@ -45,6 +45,7 @@ NotesObject = {
 	trackTargetName = SV:T("Track new"),
 	trackNameModified = SV:T("Waiting:"),
 	initialTrackName = "",
+	scriptInstance = "",
 	initialColorTrack = "",
 	trackTargetColor = "FFF09C9C",
 	trackTargetColorRef = "FFFF0000",
@@ -62,7 +63,8 @@ NotesObject = {
 	noteInfo = nil,
 	numNotes = 0,
 	numGroups = 0,
-	stopProcess = false
+	stopProcess = false,
+	sepParam = "|"
 }
 
 -- Constructor method for the NotesObject class
@@ -194,8 +196,8 @@ function NotesObject:removeTrackDAW()
 	end
 end
 
--- Remove track info
-function NotesObject:removeTrackTarget()
+-- Remove track info if new track
+function NotesObject:removeTrackTargetForNewTrack()
 	if self.isNewTrack then
 		if self.trackTarget ~= nil then
 			self.project:removeTrack(self.trackTarget:getIndexInParent())
@@ -369,7 +371,6 @@ end
 function NotesObject:loop()
 	local newSelectedNotes = #self.selection:getSelectedNotes()
 	local cause = ""	
-	self.stopProcess = false
 	
 	if self.numSelectedNotes ~= newSelectedNotes then
 		cause = "Selected notes: " .. self.numSelectedNotes .. "/" .. newSelectedNotes
@@ -377,13 +378,15 @@ function NotesObject:loop()
 	end
 	
 	if self.stopProcess then
-		-- self:show("cause: " .. cause)
 		self:endOfScript()
 	else
-		-- if a track is deleted by another script
-		if self.numTracks > self.project:getNumTracks() then
-			self.stopProcess = true
-			SV:finish()
+		-- if a new same script instance is running or track is deleted by another script
+		if self:isAnotherInstance() or self.numTracks > self.project:getNumTracks() then
+			if self.scriptInstance ~= SV:T(SCRIPT_TITLE) then
+				self:endOfScript()
+			else
+				self:stopScript()
+			end
 		else
 			self:setTrackTargetColor()
 			self.currentSeconds = self.playBack:getPlayhead()
@@ -408,6 +411,7 @@ function NotesObject:loop()
 					
 					-- New notes => Create a new group
 					self:createGroup(measureBlick, self.currentSeconds, track)
+					self:removeTrackDAW()
 					self.stopProcess = true -- End of process
 				else
 					-- a new track is created with no notes
@@ -443,74 +447,157 @@ function NotesObject:isTrackWaiting(wait)
 	return isWaiting
 end
 
+-- Stop script 
+function NotesObject:stopScript()
+		self.stopProcess = true
+		SV:finish()
+end
+
 -- End of script 
 function NotesObject:endOfScript(status)
-	self:removeTrackDAW()
-	if not status then
-		self:removeTrackTarget()
-	end
-	SV:setHostClipboard("")
-
+	self.stopProcess = true
+	
 	-- Remove DAW track if exists
 	if self.trackTarget ~= nil then
 		if self.isNewTrack then
 			-- set last track name & color
 			self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
 			self.trackTarget:setDisplayColor("#" .. self.trackTargetColorRef)
-		end
-	end
-	
-	if not self.isNewTrack then
-		if self.trackTarget ~= nil then
+		else
 			self.trackTarget:setName(self.initialTrackName)
 			self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
 		end
 	end
+	
+
+	if not status then
+		self:removeTrackTargetForNewTrack()
+	end
+	
+	SV:setHostClipboard("")
 
 	-- End of script
 	SV:finish()
+end
+
+-- trim string
+function NotesObject:trim(s)
+	  return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
 end
 
 -- Check previous process
 function NotesObject:previousProcess()
 	local result = false
 	
-	-- Script="GroupCreateFromDAW", initialTrackName=Unnamed Track, 
-	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1	
-	local hostClipboard = SV:getHostClipboard()
-	
-	if self:isParametersOk(hostClipboard) then
-		local paramSlitted = self:split(hostClipboard, ", ")
+	-- Script="GroupCreateFromDAW"|initialTrackName=Track 1|initialColorTrack=fff09c9c|
+	-- isNewTrack=false|linkNotesActive=true|numTracks=2|trackTarget=1
+	local hostCB = SV:getHostClipboard()
+	if self:isParametersOk(hostCB) then
+		
+		local paramSlitted = self:split(hostCB, self.sepParam)
 		for iLine = 1, #paramSlitted do
 			local param = paramSlitted[iLine]
 			local paramArray = self:split(param, "=")
-			self:setParametersFromClipBoard(paramArray[1], paramArray[2])
+			local paramKey = ""
+			local paramValue = ""
+			
+			if paramArray[1] ~= nil then
+				paramKey = self:trim(paramArray[1])
+			-- else
+				-- self:show(SV:T("Error nil value with param: ") .. param)
+			end
+			
+			if paramArray[2] ~= nil then
+				paramValue = self:trim(paramArray[2])
+			-- else
+				-- self:show(SV:T("Error nil value with param: ") .. param)
+			end
+			
+			self:setParametersFromClipBoard(paramKey, paramValue)
 		end
-		self:endOfScript()
+		
+		self:addNewInstance(hostCB)
 		result = true
 	end
-	
+
 	return result
 end
 
 
 -- Check if parameters OK
-function NotesObject:isParametersOk(hostClipboard)
+function NotesObject:isParametersOk(hostCB)
 	local result = false
-	if hostClipboard ~= nil then
-		if type(hostClipboard) == "string" then
-			if string.find(hostClipboard, "Script=") ~= nil then
-				if string.find(hostClipboard, "GroupCreateFromDAW") ~= nil then
-					result = true
-				end
+	if hostCB ~= nil then
+		if type(hostCB) == "string" then
+			if string.find(hostCB, "Script=") ~= nil then
+				result = true
 			end
 		end
 	end
 	return result
 end
 
+-- Is another script instance exists
+function NotesObject:isAnotherInstance()
+	local result = false
+	local instanceKey = "instance"
+	local hostCB = SV:getHostClipboard()
+	if self:isParametersOk(hostCB) then
+		
+		if string.find(hostCB, instanceKey .. "=") ~= nil then
+			local scriptName = self:scriptNameInstance(hostCB, instanceKey)
+			-- if string.len(scriptName) > 0 then
+				-- self:show("Another script is running: " .. scriptName)
+			-- end
+			result = true
+		end
+	end
+	
+	return result
+end
+
+-- Get the script name of the other instance
+function NotesObject:scriptNameInstance(hostCB, instanceKey)
+	local scriptName = ""
+	local paramSlitted = self:split(hostCB, self.sepParam)
+	
+	for iLine = 1, #paramSlitted do
+		local param = paramSlitted[iLine]
+		local paramArray = self:split(param, "=")
+		local paramKey = ""
+		local paramValue = ""
+	
+		if paramArray[1] ~= nil then
+			paramKey = self:trim(paramArray[1])
+		-- else
+			-- self:show(SV:T("Error nil value with param: ") .. param)
+		end
+		
+		if paramArray[2] ~= nil then
+			paramValue = self:trim(paramArray[2])
+		-- else
+			-- self:show(SV:T("Error nil value with param: ") .. param)
+		end
+		
+		if paramKey == instanceKey then
+			scriptName = paramValue
+		end
+	end
+	return scriptName
+end
+
+-- Add a new instance parameters to clipboard
+function NotesObject:addNewInstance(hostCB)
+	local hostCBNew = hostCB	.. self.sepParam
+								.. "instance=" .. SV:T(SCRIPT_TITLE)
+	SV:setHostClipboard(hostCBNew)
+end
+
 -- Set clipboard parameters 
 function NotesObject:setParametersFromClipBoard(paramName, value)
+	if string.find(paramName, "Script") then
+		self.scriptInstance = value
+	end
 	if string.find(paramName, "initialTrackName") then
 		self.initialTrackName = value
 	end
@@ -534,7 +621,12 @@ function NotesObject:setParametersFromClipBoard(paramName, value)
 	end
 	if string.find(paramName, "trackTarget") then
 		local iTrack = tonumber(value)
-		self.trackTarget = self.project:getTrack(iTrack)
+		if iTrack <= self.numTracks then
+			self.trackTarget = self.project:getTrack(iTrack)			
+		else
+			self:show("Error in clipboard parameters, try again!")
+			self:stopScript()
+		end
 	end
 end
 
@@ -551,15 +643,16 @@ end
 -- Store data to clipboard
 function NotesObject:storeToClipboard()
 
-	local projectStatus = "Script=\"GroupCreateFromDAW\", "
-		.."initialTrackName=" .. self.initialTrackName .. ", "
-		.. "initialColorTrack=" .. self.initialColorTrack .. ", " 
-		.. "isNewTrack=" .. tostring(self.isNewTrack) .. ", "
-		.. "linkNotesActive=" .. tostring(self.linkNotesActive) .. ", "
-		.. "numTracks=" .. self.numTracks .. ", "
-		.. "trackTarget=" .. self.trackTarget:getIndexInParent()
-	-- Script="GroupCreateFromDAW", initialTrackName=Unnamed Track, 
-	-- initialColorTrack=ff7db235, isNewTrack=false, linkNotesActive=true, numTracks=1, trackTarget=1
+	local projectStatus = 
+		"Script=" .. SV:T(SCRIPT_TITLE) .. self.sepParam
+		.."initialTrackName="	.. self.initialTrackName 			.. self.sepParam
+		.. "initialColorTrack=" .. self.initialColorTrack 			.. self.sepParam
+		.. "isNewTrack=" 		.. tostring(self.isNewTrack) 		.. self.sepParam
+		.. "linkNotesActive="	.. tostring(self.linkNotesActive)	.. self.sepParam
+		.. "numTracks=" 		.. self.numTracks					.. self.sepParam
+		.. "trackTarget="		.. self.trackTarget:getIndexInParent()
+	-- Script="GroupCreateFromDAW"|initialTrackName=Unnamed Track|
+	-- initialColorTrack=ff7db235|isNewTrack=false|linkNotesActive=true|numTracks=1|trackTarget=1
 	SV:setHostClipboard(projectStatus)
 end
 
@@ -628,6 +721,13 @@ function NotesObject:showDialogAsync(title)
 		self.dialogTitle = title
 		self.onResponse = function(response) self:dialogResponse(response) end
 		SV:showCustomDialogAsync(form, self.onResponse)	
+	else
+		-- if instance is another script		
+		if self.scriptInstance ~= SV:T(SCRIPT_TITLE) then
+			self:stopScript()
+		else
+			self:endOfScript()
+		end
 	end
 end
 
@@ -636,6 +736,6 @@ function main()
 	local notesObject = NotesObject:new()
 	local title = SV:T("Click OK to start waiting a drag & drop from DAW.")
 				 .. "\r" .. SV:T("To abort this script waiting drag&drop: Run it again!")
-	
+
 	notesObject:showDialogAsync(title)
 end
