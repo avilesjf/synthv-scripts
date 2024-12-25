@@ -24,18 +24,23 @@ end
 
 -- Duplicate selected notes
 function duplicateNotes(selectedNotes, newStartPosition)
-	local currentTrack = SV:getMainEditor():getCurrentTrack()
-	local groupRefMain = currentTrack:getGroupReference(1)
+	-- local currentTrack = SV:getMainEditor():getCurrentTrack()
 	local currentGroupRef = SV:getMainEditor():getCurrentGroup()
 	local groupNotesMain = currentGroupRef:getTarget()
-	local firstNotePosition = selectedNotes[1]:getOnset()
+	local firstNote = selectedNotes[1]
+	local firstNotePosition = firstNote:getOnset()
+	local firstGroupPos = 0
+	
+	if currentGroupRef ~= nil then
+		firstGroupPos = currentGroupRef:getTimeOffset()
+	end
 	
 	-- for each selected notes
 	for iNote = 1, #selectedNotes do
 		local note = selectedNotes[iNote]:clone()
 
 		-- Set new position
-		note:setOnset(note:getOnset() - firstNotePosition + newStartPosition)
+		note:setOnset(note:getOnset() - firstNotePosition + newStartPosition - firstGroupPos)
 		groupNotesMain:addNote(note)
 	end
 	
@@ -61,7 +66,7 @@ function main()
 	
 	if #selectedNotes == 0 then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes selected!"))
-	else		
+	else
 		-- Start process
 		duplicateNotes(selectedNotes, newTimePos)
 	end
