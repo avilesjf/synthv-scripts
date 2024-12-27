@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group Harmony V1.4'
+local SCRIPT_TITLE = 'Group Harmony V1.5'
 
 --[[
 
@@ -8,11 +8,15 @@ Copy selected groups to a new track and transpose all included notes
 Add only one track or multiple tracks depending on user selection.
 
 1/ Transpose all notes in current key scale 0..+1 ..+7 (C, D to B)
-2/ Display current key scale found in selected group(s) (and current track if different).
-3/ A comboBox to choose the desire key scale (if multiple key scale is found for group notes).
-4/ A comboBox to choose harmony model.
+2/ Display current key scale found in selected group(s) (and current track if different)
+3/ A comboBox to choose the desire key scale (if multiple key scale is found for group notes)
+4/ A comboBox to choose harmony model
 5/ A special case to input and build user model (input text: +3,+6,-4 etc.)
 6/ Add scale key type (Major, Natural Minor, Melodic Minor etc..
+7/ Adding a lower output level slider for new generated track loudness
+8/ Adding a max random pitch offset to add a time gap
+9/ Use current track to duplicate new track (template to keep voice set)
+10/ Random pitch deviation to impact (in %) automation pitch
 
 Degrees I     II     III  IV      V       VI       VII   +I
 Major C 1      2      3    4      5        6         7    8
@@ -29,7 +33,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 4,
+		versionNumber = 5,
 		minEditorVersion = 65540
 	}
 end
@@ -51,6 +55,8 @@ InternalData = {
 	transpositionRefLabel = 1,
 	transpositionRefPosition = 2,
 	transpositionRefData = 3,
+	isOnlyOneKeyFound = false,
+	posKeyInScaleForm = 0,
     allScales = {
 			-- KeyScale type, Intervals, Gaps between degrees (for info only, not used)
 			{SV:T("Major"),			{0,2,4,5,7,9,11,12}, {2, 2, 1, 2, 2, 2, 1}},
@@ -72,6 +78,13 @@ InternalData = {
 	keyScaleTypeTitleFound  = SV:T("Major"),
 	keyScaleTypeValuesFound = {0,2,4,5,7,9,11,12},
 	harmonyChoice = 0,
+	trackNameHarmony = SV:T("Track H"),
+	isTrackClone = false,
+	currentTrack = nil,
+	newTrackRef = nil,
+	randomSeedActive = false,
+	randomSeedValue = 42,
+	pitchDeviation = 0,
 	tracks = {},
 	trackListChoice = {},
 	DEBUG = false,
@@ -85,7 +98,7 @@ InternalData = {
 				end,
 		showLogs = function(self) 
 					if InternalData.DEBUG then 
-						SV:showMessageBox(SV:T(SCRIPT_TITLE), self.logs)
+						commonTools.show(self.logs)
 					end
 				end
 	}
@@ -93,11 +106,24 @@ InternalData = {
 
 -- Common tools
 commonTools = {
+	-- Display message box: commonTools.show()
+	show = function(message)
+		SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
+	end,
+	
 	-- Create a new track
 	createTrack = function(project)
 		local newTrack = SV:create("Track")
-		local newTrackIndex = project:addTrack(newTrack)
-		newTrack = project:getTrack(newTrackIndex)
+		project:addTrack(newTrack)
+		-- local newTrackIndex = project:addTrack(newTrack)
+		-- newTrack = project:getTrack(newTrackIndex)
+		return newTrack
+	end,
+
+	-- Clone track from track reference
+	cloneTrack = function(project)		
+		local newTrack = InternalData.newTrackRef:clone()
+		project:addTrack(newTrack)
 		return newTrack
 	end,
 	
@@ -166,19 +192,36 @@ commonTools = {
 		local scaleInfo3 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
 		local newTimeGap = 0
 		local sliderTimeGap = ""
-		local timeGapDefaultValue = 0
-		local timeGapMinValue =  -15
-		local timeGapMaxValue =  15
-		local timeGapInterval =  5
+		local sliderLoudness = ""
+		local timeGapDefaultValue = 20
+		local timeGapMinValue =  0
+		local timeGapMaxValue =  50
+		local timeGapInterval =  1
+		local outputLevelDefaultValue = 0
+		local outputLevelMinValue = -10
+		local outputLevelMaxValue = 2
+		local outputLevelInterval = 1
+		local pitchDeviationDefaultValue = 20
+		local pitchDeviationMinValue = 0
+		local pitchDeviationMaxValue = 100
+		local pitchDeviationInterval = 5
 		local trackListCombo = ""
+		local defaultKeyPos = 0
+		local trackClone = ""
+		local pitchInfos = ""
+		local pitchDeviation = ""
 		
 		if isFirst then
 			
 			local harmonyList = commonTools.getHarmonyList()
+			
+			if InternalData.isOnlyOneKeyFound then
+				defaultKeyPos = InternalData.posKeyInScaleForm
+			end
 
 			scaleChoice = {
 				name = "scaleKeyChoice", type = "ComboBox", label = SV:T("Select a key scale"),
-				choices = InternalData.keyScaleChoice, default = 0
+				choices = InternalData.keyScaleChoice, default = defaultKeyPos
 			}
 			
 			scaleKeyType = {
@@ -216,14 +259,48 @@ commonTools = {
 				height = 0
 			}
 			
+			trackClone = {
+				name = "isTrackClone",
+				text = SV:T("Use current track as a source voice for new tracks"),
+				type = "CheckBox",
+				default = false
+			}
+			
+			pitchInfos = {
+				name = "infos", type = "TextArea", 
+				label = SV:T("Please note that new random pitch shift only works") .. "\r" 
+					.. SV:T("if the selected notes are in manual mode!"), 
+				height = 0
+			}
+
+			sliderLoudness = {
+				name = "loudnessHarmony", type = "Slider",
+				label = SV:T("Lower output level for new harmony groups"),
+				format = "%3.0f",
+				minValue = outputLevelMinValue, 
+				maxValue = outputLevelMaxValue, 
+				interval = outputLevelInterval, 
+				default = outputLevelDefaultValue
+			}
+
 			sliderTimeGap = {
 				name = "newTimeGap", type = "Slider",
-				label = SV:T("Time gap % (time shift from original) "),
+				label = SV:T("Max random pitch offset (default time shift +-20 ms)"),
 				format = "%3.0f",
 				minValue = timeGapMinValue, 
 				maxValue = timeGapMaxValue, 
 				interval = timeGapInterval, 
 				default = timeGapDefaultValue
+			}
+
+			pitchDeviation = {
+				name = "newPitchDeviation", type = "Slider",
+				label = SV:T("Random pitch deviation tuning (default +-10%)"),
+				format = "%3.0f",
+				minValue = pitchDeviationMinValue, 
+				maxValue = pitchDeviationMaxValue, 
+				interval = pitchDeviationInterval, 
+				default = pitchDeviationDefaultValue
 			}
 			
 			-- is not multiple tracks
@@ -255,8 +332,12 @@ commonTools = {
 				scaleChoice,
 				scaleKeyType,
 				trackListCombo,
+				sliderLoudness,
 				sliderTimeGap,
 				comboChoice,
+				trackClone,
+				pitchInfos,
+				pitchDeviation,
 				{
 					name = "separator", type = "TextArea", label = "", height = 0
 				}
@@ -290,17 +371,27 @@ commonTools = {
 	start = function()
 		local maxLengthResult = 30
 		local groupsSelected = SV:getArrangement():getSelection():getSelectedGroups()
+		
 		InternalData.logs:clear()
 
 		-- Check groups selected
 		if #groupsSelected == 0 then
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Please select groups first on Arrangement view!"))
+			commonTools.show(SV:T("Please select groups first on Arrangement view!"))
 		else		
+			InternalData.currentTrack = SV:getMainEditor():getCurrentTrack()
 			-- Group selected
 			local keyScaleFound = scaleTools.getScale(groupsSelected)
 			-- Track notes to check
 			local keyScaleFoundTrack = scaleTools.getScaleTrack(groupsSelected)
 			local keyFoundDisplay = SV:T("Keys found major (minor): ") .. keyScaleFound
+			
+			InternalData.isOnlyOneKeyFound = false
+			InternalData.posKeyInScaleForm = 0
+			if string.find(keyScaleFound, InternalData.SEP_KEYS)== nil then
+				InternalData.isOnlyOneKeyFound = true
+				keyScaleFoundMajor = keyTools.split(keyScaleFound, "(")[1]
+				InternalData.posKeyInScaleForm = scaleTools.getKeyPosInKeynames(InternalData.keyNames, keyScaleFoundMajor) -1
+			end
 			InternalData.keyScaleChoice = {}
 
 			InternalData.keyScaleChoice = InternalData.keyNames
@@ -358,6 +449,8 @@ commonTools = {
 							groupsSelected, transposition, transpositionLabel, defaultPosTransposition)
 			
 			if userInput.status then			
+				InternalData.isTrackClone = userInput.answers.isTrackClone
+				InternalData.pitchDeviation = userInput.answers.newPitchDeviation
 				-- Duplicate note groups & create tracks
 				local numGroups = commonTools.duplicateNotes(groupsSelected, userInput.answers)
 			end		
@@ -373,19 +466,20 @@ commonTools = {
 		local pitchPosInput = userInputAnswer.pitch
 		local pitchInputText = userInputAnswer.pitchText
 		local newTimeGap = math.floor(userInputAnswer.newTimeGap)
+		local newLoudness = userInputAnswer.loudnessHarmony
 		local pitchTarget = ""
 		local pitchTargets = {}
 		local trackChoice = 0
 		
 		if pitchInputText ~= nil then			
 			if string.len(pitchInputText) > 0 then
-				pitchTarget = pitchInputText
+				pitchTarget = commonTools.trim(pitchInputText)
 			else
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Nothing to do!"))
+				commonTools.show(SV:T("Nothing to do!"))
 				return -1
 			end
 		else 
-			pitchTarget = keyTools.getPitchActionFromPos(pitchPosInput, InternalData.harmonyChoice)
+			pitchTarget = commonTools.trim(keyTools.getPitchActionFromPos(pitchPosInput, InternalData.harmonyChoice))
 		end
 		
 		local isFixed = (pitchTarget == "Fixed")
@@ -410,56 +504,111 @@ commonTools = {
 		InternalData.keysInScale = scaleTools.getKeysInScale(InternalData.currentKeyNames, InternalData.keyScaleFound)
 		
 		if string.len(InternalData.keyScaleFound) == 0 then
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Error: No scale key found!"))
+			commonTools.show(SV:T("Error: No scale key found!"))
 			return -1
 		end
 		if posKeyInScale < 0 then
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Error: Position into scale error!"))
+			commonTools.show(SV:T("Error: Position into scale error!"))
 			return posKeyInScale
 		end
+		local formatCount = "%3d"
+		local iTracks = project:getNumTracks()
 		
+		if InternalData.isTrackClone then
+			InternalData.newTrackRef = commonTools.cloneTrackReference(project)
+		end
+
 		-- Only one track to add
 		if not isMultipleTracks then
 			local track = nil
-			local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isFixed, pitchTarget, 
-															posKeyInScale, newTimeGap)
+			local newGroupRefs = commonTools.groupLoop(project, groupsSelected, isFixed, pitchTarget, 
+															posKeyInScale, newTimeGap, newLoudness)
 			-- New track
 			if #InternalData.trackListChoice == trackChoice or trackChoice == 0 then
-				track = commonTools.createTrack(project)
-				track:setName(SV:T("Track ") .. pitchTarget)
+				if InternalData.isTrackClone then
+					track = commonTools.cloneTrack(project)
+				else
+					track = commonTools.createTrack(project)
+				end
+				local trackNumber = iTracks + 1
+				track:setName(InternalData.trackNameHarmony .. trackNumber .. " (" .. pitchTarget .. ")")
 			else
 				track = project:getTrack(trackChoice)
 			end
 			
-			for iGroupRef = 1, #newGrouptRefs do
-				track:addGroupReference(newGrouptRefs[iGroupRef])
+			for iGroupRef = 1, #newGroupRefs do
+				track:addGroupReference(newGroupRefs[iGroupRef])
 				numGroups = numGroups + 1
 			end
 		else
 			-- add multiple tracks
 			for iTrack = 1, #pitchTargets do
-			
-				pitchTarget = pitchTargets[iTrack]
-				local newGrouptRefs = commonTools.groupLoop(project, groupsSelected, isFixed, pitchTarget, 
-																posKeyInScale, newTimeGap)
+				local track = nil
 				
-				local newTrack = commonTools.createTrack(project)
-				newTrack:setName(SV:T("Track ") .. pitchTarget)
+				pitchTarget = commonTools.trim(pitchTargets[iTrack])
+				isFixed = (pitchTarget == "Fixed")
+				local newGroupRefs = commonTools.groupLoop(project, groupsSelected, isFixed, pitchTarget, 
+																posKeyInScale, newTimeGap, newLoudness)
+				if InternalData.isTrackClone then
+					track = commonTools.cloneTrack(project)
+				else
+					track = commonTools.createTrack(project)
+				end
+				local trackNumber = iTrack + 1
+				track:setName(InternalData.trackNameHarmony .. trackNumber .. " (" .. pitchTarget .. ")")
 				
-				for iGroupRef = 1, #newGrouptRefs do
-					newTrack:addGroupReference(newGrouptRefs[iGroupRef])
+				for iGroupRef = 1, #newGroupRefs do
+					track:addGroupReference(newGroupRefs[iGroupRef])
 					numGroups = numGroups + 1
 				end
 			end
+		end
+		
+		if InternalData.isTrackClone then
+			commonTools.deleteClonedTrack(project)
 		end
 
 		InternalData.logs:showLogs()
 		return numGroups
 	end,
 	
+	-- Clone track to keep current track voice
+	cloneTrackReference = function(project)
+		local newTrack = InternalData.currentTrack:clone()		
+		local iGroups = newTrack:getNumGroups()
+		
+		if iGroups > 1 then
+			-- Delete groups
+			while iGroups > 1 do
+				local groupRef = newTrack:getGroupReference(iGroups)
+				local index = groupRef:getIndexInParent()
+				if groupRef ~= nil and not groupRef:isMain() then
+					newTrack:removeGroupReference(index)
+					iGroups = newTrack:getNumGroups()
+				end
+			end
+		end
+		
+		newTrack:setName("Track voice ref")
+		project:addTrack(newTrack)
+
+		return newTrack
+	end,
+
+	-- Delete track reference
+	deleteClonedTrack = function(project)
+		local result = false
+		if InternalData.newTrackRef ~= nil then
+			local index = InternalData.newTrackRef:getIndexInParent()
+			project:removeTrack(index)
+			result = true
+		end
+		return result
+	end,
+	
 	-- Loop into groups to duplicate & transpose notes
-	groupLoop = function(project, groupsSelected, isFixed, pitchTarget, posKeyInScale, newTimeGap)
-		local newGrouptRefs = {}
+	groupLoop = function(project, groupsSelected, isFixed, pitchTarget, posKeyInScale, newTimeGap, newLoudness)
+		local newGroupRefs = {}
 		for _, refGroup in pairs(groupsSelected) do
 			local groupName = refGroup:getTarget():getName()
 			
@@ -476,7 +625,9 @@ commonTools = {
 				
 					-- Duplicate transposed notes into a new track to create
 					-- Tranpose notes
-					local firstNotePitch = newNoteGroup:getNote(1):getPitch()
+					local firstNote = newNoteGroup:getNote(1)
+					local lastNote = newNoteGroup:getNote(selectedNotes)
+					local firstNotePitch = firstNote:getPitch()
 					for iNote = 1, selectedNotes do
 						local note = newNoteGroup:getNote(iNote)			
 						local notePitch = scaleTools.getNewPitch(isFixed, firstNotePitch, 
@@ -484,8 +635,12 @@ commonTools = {
 						note:setPitch(notePitch)
 						
 						-- Add time gap
-						local noteTimeGap = note:getOnset() + (SV.QUARTER * newTimeGap / 100)
-						note:setOnset(noteTimeGap)
+						-- local noteTimeGap = note:getOnset() + (SV.QUARTER * newTimeGap / 100)
+						-- note:setOnset(noteTimeGap)
+						local attributes = note:getAttributes()
+						local newRandomGap = commonTools.getNewTimeGap(newTimeGap)
+						attributes.tNoteOffset = newRandomGap / 1000
+						note:setAttributes(attributes)
 					end			
 					project:addNoteGroup(newNoteGroup)
 					
@@ -493,12 +648,116 @@ commonTools = {
 					local newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
 					-- Adjust time offset
 					newGrouptRef:setTimeOffset(groupRefTimeoffset)
-					table.insert(newGrouptRefs, newGrouptRef)
+					
+					-- Loudness lower
+					local voiceAttributes = newGrouptRef:getVoice()
+					if newLoudness ~= 0 then
+						voiceAttributes.paramLoudness = newLoudness
+						newGrouptRef:setVoice(voiceAttributes)
+					end
+					
+					-- Update pitch deviation
+					commonTools.updatePitchParameters(newNoteGroup, firstNote, lastNote)
+					
+					table.insert(newGroupRefs, newGrouptRef)
 				end
 			end
 		end
 		
-		return newGrouptRefs
+		return newGroupRefs
+	end,
+	
+	-- Update pitch time deviation
+	getNewTimeGap = function(timeGap)
+		if InternalData.randomSeedActive then
+			math.randomseed(InternalData.randomSeedValue)
+		end
+		local newTimeGap = math.random(-timeGap, timeGap)
+		return newTimeGap
+	end,
+	
+	-- Update pitch deviation
+	getNewPitchDeviation = function(pitch)
+		if InternalData.randomSeedActive then
+			math.randomseed(InternalData.randomSeedValue)
+		end
+		
+		if math.floor(pitch) == 0 then
+			newPitch = commonTools.randomGaussian(-1, 1)
+		else
+			-- -10%
+			local newPitchStart = math.floor(math.abs(pitch) * (1 - (1 * InternalData.pitchDeviation / 100)))
+			-- +10%
+			local newPitchEnd = math.floor(math.abs(pitch) * (1 + (1 * InternalData.pitchDeviation / 100)))
+			
+			if pitch < 0 then
+				newPitch = math.random(-1 * newPitchEnd, -1 * newPitchStart)
+				--newPitch = commonTools.randomGaussian(-1 * newPitchEnd, -1 * newPitchStart)
+			else
+				newPitch = math.random(newPitchStart, newPitchEnd)
+				--newPitch = commonTools.randomGaussian(newPitchStart, newPitchEnd)
+			end
+		end
+		
+		return newPitch
+	end,
+	
+	-- Random gaussian
+	randomGaussian = function(mean, stddev)
+		local u, v, s;
+		
+		repeat
+			u = math.random() * 2 - 1
+			v = math.random() * 2 - 1
+			s = u * u + v * v
+		until (s <= 1 and s ~= 0)
+		
+		s = math.sqrt(-2 * math.log(s) / s)
+		return mean + stddev * u * s
+	end,
+	
+	-- Update pitch deviation
+	updatePitchParameters = function(notesGroup, firstNote, lastNote)
+		local paramsGroup = notesGroup:getParameter("pitchDelta")
+		-- local paramPointsFound = {}
+		local parametersFoundCount = 0
+		-- local pointCount = 0
+		local timeBegin = firstNote:getOnset()
+		local timeEnd = lastNote:getOnset() + lastNote:getDuration()
+
+		if paramsGroup ~= nil then
+			local allPoint = paramsGroup:getAllPoints()
+			-- pitchDelta=1:[1426381361, 6.7873301506042]|2:[1605705119, 161.53845214844]|3:[1624581303, 0.0]
+			-- Loop all parameters points
+			for iPoint = 1, #allPoint do
+				local pts = allPoint[iPoint]
+				local array = {}
+				local dataStr = ""
+				
+				-- Loop each pair point
+				for iPosPoint = 1, #pts do
+					local currentPoint = allPoint[iPoint][1]
+					
+					-- Only time inside selected notes
+					if currentPoint >= timeBegin  and currentPoint <= timeEnd  then
+						dataStr = tostring(allPoint[iPoint][iPosPoint])
+						array[iPosPoint] = allPoint[iPoint][iPosPoint]
+						
+						local pitchVariation = commonTools.getNewPitchDeviation(allPoint[iPoint][iPosPoint])
+						-- Update value point
+						local newValue = pitchVariation
+						paramsGroup:remove(currentPoint)
+						paramsGroup:add(currentPoint, newValue)						
+					end
+				end
+			end
+			paramsGroup:simplify(timeBegin, timeEnd, 0.01)
+		end
+	end,
+	
+	-- trim string
+	trim = function(s)
+	  return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
 	end
 }
 
@@ -546,13 +805,12 @@ scaleTools = {
 		if paramTrack == "track" then
 			-- Use current track
 			groupOrTrackNotes = "Track"
-			local currentTrack = SV:getMainEditor():getCurrentTrack()
 			-- Loop through groups in track
-			local numGroups = currentTrack:getNumGroups()
-			local refGroupTrack
+			local numGroups = InternalData.currentTrack:getNumGroups()
+			local refGroupTrack = nil
 			trackinfos = SV:T("Groups (") .. numGroups .. ")"
 			for grp = 1, numGroups do
-				refGroupTrack = currentTrack:getGroupReference(grp)
+				refGroupTrack = InternalData.currentTrack:getGroupReference(grp)
 				scaleTools.addNotes(notes, refGroupTrack)
 				-- InternalData.logs:add(SV:T("Group: ") .. refGroupTrack:getTarget():getName() .. ": " .. refGroupTrack:getTarget():getNumNotes() .. "\r")
 			end
@@ -564,7 +822,7 @@ scaleTools = {
 					scaleTools.addNotes(notes, group)
 				end
 			else
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No group selected!"))
+				commonTools.show(SV:T("No group selected!"))
 			end
 		end
 		InternalData.logs:add(SV:T("Group or track: ") .. groupOrTrackNotes .. SV:T(", notes count:") .. #notes .. " " .. trackinfos)
