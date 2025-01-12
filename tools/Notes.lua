@@ -12,6 +12,16 @@ Remark:
 Store notes inside the project (into an non visible group):
 Set variable isInternalGroup = true
 
+Store notes in external file:
+To disable it:
+Set variable isFileStored = false 
+
+Warning!
+Nothing is done (stored) if both variables:
+isFileStored & isInternalGroup => false
+But set to true for both variable is possible:
+=> saved to external file & inside the project (hidden group).
+
 2024 - JF AVILES
 --]]
 
@@ -35,7 +45,8 @@ NotesObject = {
 	notesGroupRef = nil,
 	notesGroup = nil,
 	noteInfo = "",
-	isInternalGroup = false
+	isInternalGroup = false, -- Save to hidden group inside .svp project
+	isFileStored = true -- Save to external .txt file same folder than the .svp project
 }
 
 -- Constructor method for the NotesObject class
@@ -190,7 +201,10 @@ end
 -- Start project notes processing
 function NotesObject:start()
 	local title = SV:T("Project notes! Click OK button to save notes!")
-	self.noteInfo = self:readNotesFromTextFile()
+	
+	if self.isFileStored then
+		self.noteInfo = self:readNotesFromTextFile()
+	end
 	
 	if self.isInternalGroup then
 		local groupRefFound, groupFound = self:getNotesFromGroup()
@@ -211,7 +225,10 @@ function NotesObject:start()
 		if self.isInternalGroup then
 			self:setNewGroupName(self.notesGroup, self.noteInfo)
 		end
-		self:saveNotesToTextFile(self.noteInfo)
+		
+		if self.isFileStored then
+			self:saveNotesToTextFile(self.noteInfo)
+		end
 	end
 end
 
