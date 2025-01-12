@@ -1,12 +1,12 @@
-local SCRIPT_TITLE = 'Notes for project V1.0'
+local SCRIPT_TITLE = 'Notes for project track V1.0'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: Notes.lua
+lua file name: Notes4Track.lua
 
-Store & display internal project notes
+Store & display internal project notes for a track
 
 Remark:
 Store notes inside the project (into an non visible group):
@@ -28,7 +28,10 @@ end
 -- Define a class  "NotesObject"
 NotesObject = {
 	project = nil,
-	noteTag = "ProjectNotes:",
+	currentTrack = nil,
+	currentTrackName = nil,
+	currentTrackNumber = 0,
+	noteTag = "ProjectNotesTrackxx:",
 	projectFileName = "",
 	notesFileName = "",
 	numTracks = 0,
@@ -46,17 +49,21 @@ function NotesObject:new()
 	
     notesObject.project = SV:getProject()
 	notesObject.numTracks = notesObject.project:getNumTracks()
+	notesObject.currentTrack = SV:getMainEditor():getCurrentTrack()
+	notesObject.currentTrackName = notesObject.currentTrack:getName()
+	notesObject.currentTrackNumber = notesObject.currentTrack:getIndexInParent()
 	notesObject.projectFileName = notesObject.project:getFileName()
-	notesObject.notesFileName = notesObject:getNotesFilePath(notesObject.projectFileName)
+	notesObject.notesFileName = notesObject:getNotesFilePath(notesObject.projectFileName, notesObject.currentTrackNumber)
+	notesObject.noteTag = notesObject.noteTag:gsub("xx", notesObject.currentTrackNumber)
 	
     return notesObject
 end
 
 -- Get notes file path
-function NotesObject:getNotesFilePath(projectFileName)
+function NotesObject:getNotesFilePath(projectFileName, trackNumber)
 	local notesFileName = projectFileName
-	-- Update filename extension
-	notesFileName = notesFileName:gsub("%.svp",".txt")
+	-- Update filename extension to txt and adding track number
+	notesFileName = notesFileName:gsub("%.svp","-Track-" .. trackNumber .. ".txt")
 	return notesFileName
 end
 
@@ -101,12 +108,15 @@ function NotesObject:show(message)
 end
 
 -- Create group with notes
-function NotesObject:createGroup()
+function NotesObject:createGroup(track)
 	-- Create new group 
 	local noteGroup = SV:create("NoteGroup")
 	self.project:addNoteGroup(noteGroup)
 	
 	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
+	
+	-- for hidden group: do not add to track
+	-- track:addGroupReference(newGrouptRef)
 	
 	return newGrouptRef, noteGroup
 end
@@ -173,7 +183,8 @@ function NotesObject:showForm(title, notes)
 		buttons = "OkCancel",
 		widgets = {
 			{
-				name = "notes", type = "TextArea", label = SV:T("Project notes:"),
+				name = "notes", type = "TextArea", 
+				label = SV:T("Project notes:") .. " " .. self.currentTrackName,
 				height = 400,
 				default = notes
 			},
@@ -196,7 +207,7 @@ function NotesObject:start()
 		local groupRefFound, groupFound = self:getNotesFromGroup()
 		
 		if groupFound == nil then
-			self.notesGroupRef, self.notesGroup = self:createGroup()
+			self.notesGroupRef, self.notesGroup = self:createGroup(self.currentTrack)
 			self:setNewGroupName(self.notesGroup, self.noteInfo)
 		else		
 			self.noteInfo = self:getNotesContent(groupFound:getName())
