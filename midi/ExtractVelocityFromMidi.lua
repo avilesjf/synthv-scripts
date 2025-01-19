@@ -487,30 +487,53 @@ function getFirstNotesLyrics(numNotes, groupNotesMain)
 	return lyrics
 end
 
+-- Trim string
+function trim(s)
+	return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
+end
+
 --- Get track list
 function getTracksList()
 	
 	local list = {}
+	local listTrackNumber = {}
 	local tracks = project:getNumTracks()
 	for iTrack = 1, tracks do
 		local track = project:getTrack(iTrack)
+		local trackName = track:getName()
 		local mainGroupRef = track:getGroupReference(1) -- main group
 		local groupNotesMain = mainGroupRef:getTarget()
-		
 		local numNotes = groupNotesMain:getNumNotes()
-		local lyrics = getFirstNotesLyrics(numNotes, groupNotesMain)
-		local trackName = track:getName()
+		
+		
+		if numNotes > 0 then
+			groupNotes = groupNotesMain
+		else
+			local numGroups = track:getNumGroups()
+			for iGroup = 1, numGroups do
+				local groupRef = track:getGroupReference(iGroup)
+				local groupNotesFound = groupRef:getTarget()
+				numNotes = groupNotesFound:getNumNotes()
+				if numNotes > 0 then
+					groupNotes = groupNotesFound
+					break
+				end
+			end
+		end
+		local lyrics = getFirstNotesLyrics(numNotes, groupNotes)
+		
 		if (string.find(trackName, midiFileExtension, 1, true) == nil and numNotes > 0) then
 			table.insert(list, trackName
 								.. " (" .. string.format(formatCount, numNotes) .. ")"
 								.. lyrics
 								)
+			table.insert(listTrackNumber, iTrack)
 		end
 		if string.find(trackName, midiFileExtension, 1, true) ~= nil then
 			midiFileNameFromTrack = getCleanFilename(trackName)
 		end
 	end
-	return list
+	return list, listTrackNumber
 end
 
 -- Create user input form
@@ -523,7 +546,7 @@ function getForm(midiTrackList, trackList, firstTrackWithNotes)
 	local reduceControllerGainMinValue =  0
 	local reduceControllerGainMaxValue =  95
 	local reduceControllerGainInterval =  10
-	local trackDefault =  0
+	local trackDefault = 0
 	
 	local form = {
 		title = SV:T(SCRIPT_TITLE),
@@ -573,18 +596,10 @@ function getForm(midiTrackList, trackList, firstTrackWithNotes)
 	return SV:showCustomDialog(form)
 end
 
--- Check tracks
-function checkTrack(trackFilterSynthV)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local numNotes = groupNotesMain:getNumNotes()
-	return numNotes
-end
-
 -- Set first parameter Loudness in track
 function setFirstParameterLoudnessInTrack(trackFilterSynthV)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
+	local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
 	local loudness = groupNotesMain:getParameter("loudness")
-	local numNotes = groupNotesMain:getNumNotes()
 	local firstNote = groupNotesMain:getNote(1) -- First note
 	
 	-- Decay before applying first loudness value in next steps
@@ -598,8 +613,7 @@ end
 
 -- Set last parameter Loudness in track
 function setLastParameterLoudnessInTrack(trackFilterSynthV, lastValue)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local numNotes = groupNotesMain:getNumNotes()
+	local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
 	local lastNote = groupNotesMain:getNote(numNotes) -- last note
 
 	local loudness = groupNotesMain:getParameter("loudness")
@@ -659,7 +673,7 @@ end
 
 -- Get loudness from track
 function getLoudnessFromTrack(trackFilterSynthV)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
+	local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
 	local loudness = groupNotesMain:getParameter("loudness")
 	
 	return loudness
@@ -667,11 +681,31 @@ end
 
 -- Get group main from track
 function getGroupMainFromTrack(trackFilterSynthV)
+	local groupNotes = nil
 	local track = project:getTrack(trackFilterSynthV)
 	local mainGroupRef = track:getGroupReference(1) -- main group
 	local groupNotesMain = mainGroupRef:getTarget()
+	local numNotes = groupNotesMain:getNumNotes()
 	
-	return groupNotesMain
+	if numNotes > 0 then
+		groupNotes = groupNotesMain
+	else
+		local numGroups = track:getNumGroups()
+		local lyrics = ""
+		for iGroup = 1, numGroups do
+			local groupRef = track:getGroupReference(iGroup)
+			local groupNotesFound = groupRef:getTarget()
+			numNotes = groupNotesFound:getNumNotes()
+			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "track: " .. track:getName() 
+				-- .. ", groupNotesFound: " .. groupNotesFound:getName() .. ", numNotes: " .. numNotes)
+			if numNotes > 0 then
+				groupNotes = groupNotesFound
+				break
+			end
+		end
+	end
+	
+	return groupNotes, numNotes
 end
 
 -- Set volume notes for tracks
@@ -733,8 +767,7 @@ function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV,
 				iSynthVNote = iSynthVNote + 1
 				
 				-- Get track infos for loudness
-				local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-				local numNotes = groupNotesMain:getNumNotes()
+				local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
 				
 				if iSynthVNote <= numNotes then
 					local noteSynthV = groupNotesMain:getNote(iSynthVNote)
@@ -768,28 +801,6 @@ function setLoudnessOnTracks(trackFilterMidi, trackFilterSynthV,
 	return result
 end
 
--- Get fist note position in current track
-function getFirstNoteInTrack(trackFilter)
-    local track = project:getTrack(trackFilter)
-	local mainGroupRef = track:getGroupReference(1)
-	local groupNotesMain = mainGroupRef:getTarget()
-	local numGroups = track:getNumGroups()
-	local numNotes = groupNotesMain:getNumNotes()
-	local loudness = groupNotesMain:getParameter("loudness")
-	local firstNote = nil
-	local time1 = nil
-	
-	if numNotes > 0 then
-		firstNote = groupNotesMain:getNote(1)
-		time1 = firstNote:getOnset()
-	end
-	
-	SV:showMessageBox(SV:T(SCRIPT_TITLE), "numGroups: " .. numGroups .. ", numNotes: " 
-		.. numNotes .. ", firstNote: " .. firstNote:getLyrics() .. ", time1:" .. tostring(time1))
-	
-	return note
-end
-
 -- Extract data from midi file
 function extractMidiData(MidiReader, midiFilename)
 	local file = io.open(midiFilename, 'rb')
@@ -813,7 +824,7 @@ function extractMidiData(MidiReader, midiFilename)
 end
 
 -- Get notes from midi file
-function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
+function getNotesFromMidiFile(MidiReader, midiFilename, trackList, listTrackNumber)
 	local project = SV:getProject()
 	local timeSecondEndPhrase = ""
 	local lyricsIndice = 0
@@ -853,15 +864,15 @@ function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
 		if userInput.status then
 			
 			trackFilterMidi = listTracks[userInput.answers.trackMidi + 1]
-			trackFilterSynthV = userInput.answers.trackSynthV + 1
+			trackFilterSynthV = listTrackNumber[userInput.answers.trackSynthV + 1]
 
 			velocityGain = userInput.answers.velocityGain
 			controller = userInput.answers.controller
 			reduceControllerGain = userInput.answers.reduceControllerGain
 			
 			-- check track contents
-			local numnotes = checkTrack(trackFilterSynthV)
-			if numnotes == 0 then
+			local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
+			if numNotes == 0 then
 				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes found in tracks!"))
 				return false
 			end
@@ -900,7 +911,7 @@ function main()
 		filenameInit = getCleanFilename(contentInfo)
 	end
 	
-	local trackList = getTracksList()
+	local trackList, listTrackNumber = getTracksList()
 	
 	-- Get file name with path from a track name in SynthV
 	if string.len(midiFileNameFromTrack) > 0 then
@@ -911,7 +922,7 @@ function main()
 	
 	if string.len(midiFilename) > 0 then
 		local filename = getCleanFilename(midiFilename)
-		getNotesFromMidiFile(getMidiReader(), filename, trackList)
+		getNotesFromMidiFile(getMidiReader(), filename, trackList, listTrackNumber)
 	end
 
 	SV:finish()

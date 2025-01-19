@@ -442,26 +442,44 @@ end
 function getTracksList()
 	
 	local list = {}
+	local listTrackNumber = {}
 	local tracks = project:getNumTracks()
 	for iTrack = 1, tracks do
 		local track = project:getTrack(iTrack)
+		local trackName = track:getName()
 		local mainGroupRef = track:getGroupReference(1) -- main group
 		local groupNotesMain = mainGroupRef:getTarget()
-		
 		local numNotes = groupNotesMain:getNumNotes()
-		local lyrics = getFirstNotesLyrics(numNotes, groupNotesMain)
-		local trackName = track:getName()
+		
+		
+		if numNotes > 0 then
+			groupNotes = groupNotesMain
+		else
+			local numGroups = track:getNumGroups()
+			for iGroup = 1, numGroups do
+				local groupRef = track:getGroupReference(iGroup)
+				local groupNotesFound = groupRef:getTarget()
+				numNotes = groupNotesFound:getNumNotes()
+				if numNotes > 0 then
+					groupNotes = groupNotesFound
+					break
+				end
+			end
+		end
+		local lyrics = getFirstNotesLyrics(numNotes, groupNotes)
+		
 		if (string.find(trackName, midiFileExtension, 1, true) == nil and numNotes > 0) then
 			table.insert(list, trackName
 								.. " (" .. string.format(formatCount, numNotes) .. ")"
 								.. lyrics
 								)
+			table.insert(listTrackNumber, iTrack)
 		end
 		if string.find(trackName, midiFileExtension, 1, true) ~= nil then
 			midiFileNameFromTrack = getCleanFilename(trackName)
 		end
 	end
-	return list
+	return list, listTrackNumber
 end
 
 -- Create user input form
@@ -507,17 +525,9 @@ function getForm(midiTrackList, trackList, firstTrackWithNotes)
 	return SV:showCustomDialog(form)
 end
 
--- Check tracks
-function checkTrack(trackFilterSynthV)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local numNotes = groupNotesMain:getNumNotes()
-	return numNotes
-end
-
 -- Set last parameter pitch deviation in track
 function setLastParameterPitchDeviationInTrack(trackFilterSynthV, lastValue)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
-	local numNotes = groupNotesMain:getNumNotes()
+	local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
 	local lastNote = groupNotesMain:getNote(numNotes) -- last note
 
 	local pitchDelta = groupNotesMain:getParameter("pitchDelta")
@@ -577,7 +587,7 @@ end
 
 -- Get pitch Deviation from track
 function getPitchDeviationFromTrack(trackFilterSynthV)
-	local groupNotesMain = getGroupMainFromTrack(trackFilterSynthV)
+	local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
 	local pitchDelta = groupNotesMain:getParameter("pitchDelta")
 	
 	return pitchDelta
@@ -585,11 +595,31 @@ end
 
 -- Get group main from track
 function getGroupMainFromTrack(trackFilterSynthV)
+	local groupNotes = nil
 	local track = project:getTrack(trackFilterSynthV)
 	local mainGroupRef = track:getGroupReference(1) -- main group
 	local groupNotesMain = mainGroupRef:getTarget()
+	local numNotes = groupNotesMain:getNumNotes()
 	
-	return groupNotesMain
+	if numNotes > 0 then
+		groupNotes = groupNotesMain
+	else
+		local numGroups = track:getNumGroups()
+		local lyrics = ""
+		for iGroup = 1, numGroups do
+			local groupRef = track:getGroupReference(iGroup)
+			local groupNotesFound = groupRef:getTarget()
+			numNotes = groupNotesFound:getNumNotes()
+			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), "track: " .. track:getName() 
+				-- .. ", groupNotesFound: " .. groupNotesFound:getName() .. ", numNotes: " .. numNotes)
+			if numNotes > 0 then
+				groupNotes = groupNotesFound
+				break
+			end
+		end
+	end
+	
+	return groupNotes, numNotes
 end
 
 -- Set pitch deviation for tracks
@@ -667,7 +697,7 @@ function extractMidiData(MidiReader, midiFilename)
 end
 
 -- Get notes from midi file
-function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
+function getNotesFromMidiFile(MidiReader, midiFilename, trackList, listTrackNumber)
 	local project = SV:getProject()
 	local timeSecondEndPhrase = ""
 	local lyricsIndice = 0
@@ -706,14 +736,14 @@ function getNotesFromMidiFile(MidiReader, midiFilename, trackList)
 		if userInput.status then
 			
 			trackFilterMidi = listTracks[userInput.answers.trackMidi + 1]
-			trackFilterSynthV = userInput.answers.trackSynthV + 1
+			trackFilterSynthV = listTrackNumber[userInput.answers.trackSynthV + 1]
 
 			-- useless reduceGain, pitch relates to 2 semitones only
 			-- reduceGain = userInput.answers.reduceGain
 			
 			-- check track contents
-			local numnotes = checkTrack(trackFilterSynthV)
-			if numnotes == 0 then
+			local groupNotesMain, numNotes = getGroupMainFromTrack(trackFilterSynthV)
+			if numNotes == 0 then
 				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes found in tracks!"))
 				return false
 			end
@@ -751,7 +781,7 @@ function main()
 		filenameInit = getCleanFilename(contentInfo)
 	end
 	
-	local trackList = getTracksList()
+	local trackList, listTrackNumber = getTracksList()
 	
 	-- Get file name with path from a track name in SynthV
 	if string.len(midiFileNameFromTrack) > 0 then
@@ -762,7 +792,7 @@ function main()
 	
 	if string.len(midiFilename) > 0 then
 		local filename = getCleanFilename(midiFilename)
-		getNotesFromMidiFile(getMidiReader(), filename, trackList)
+		getNotesFromMidiFile(getMidiReader(), filename, trackList, listTrackNumber)
 	end
 
 	SV:finish()
