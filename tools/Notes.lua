@@ -85,7 +85,7 @@ end
 -- Read notes from text file
 function NotesObject:readNotesFromTextFile()
 	local notes = ""
-	local fhandle = io.open(self.notesFileName, 'r')	
+	local fhandle = io.open(self.notesFileName, 'r')
 	
 	if fhandle ~= nil then
 		-- Read file

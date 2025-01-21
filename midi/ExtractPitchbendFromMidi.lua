@@ -788,7 +788,7 @@ function main()
 		filenameInit = midiFileNameFromTrack
 	end
 	
-	local midiFilename = SV:showInputBox(SV:T(SCRIPT_TITLE), 'Enter the full path to your MIDI file.', filenameInit)
+	local midiFilename = SV:showInputBox(SV:T(SCRIPT_TITLE), SV:T("Enter the full path to your MIDI file"), filenameInit)
 	
 	if string.len(midiFilename) > 0 then
 		local filename = getCleanFilename(midiFilename)

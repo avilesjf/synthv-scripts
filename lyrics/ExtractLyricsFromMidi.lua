@@ -389,7 +389,7 @@ function main()
 	-- !!! JFA debug only !!!
 	if DEBUG then DEFAULT_FILE_PATH = "D:\\Cubase Projects\\I can't hear you\\i can't hear you.mid" end
 	
-	local midiFilename = SV:showInputBox(SV:T(SCRIPT_TITLE), 'Enter the full path to your MIDI file.', DEFAULT_FILE_PATH)
+	local midiFilename = SV:showInputBox(SV:T(SCRIPT_TITLE), SV:T("Enter the full path to your MIDI file"), DEFAULT_FILE_PATH)
 
 	getLyrics(getMidiReader(), midiFilename)
 	SV:finish()
