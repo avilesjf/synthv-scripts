@@ -176,7 +176,7 @@ commonTools = {
 		local sepCharDisplay = ", "
 		local keymaps = {}
 		local keyboardMapping = ""
-		local xml = newParser()	
+		local xml = newParser()
 		
 		InternalData.logs:clear()
 		local fhandle = io.open(settingsPath, 'r')
