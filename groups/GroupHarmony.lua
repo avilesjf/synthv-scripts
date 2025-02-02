@@ -46,10 +46,12 @@ InternalData = {
 	relativeKeys = {{"C","Am"},{"Db","Bbm"},{"D","Bm"},{"Eb","Cm"},{"E","C#m"},{"F","Dm"},
 				{"Gb","Ebm"},{"G","Em"},{"Ab","Fm"},{"A", "F#m"},{"Bb","Gm"},{"B", "G#m"}},
 	transposition = { 
-		{SV:T("1 note"), 5, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "Fixed", "-3", "-5", "-7"}},
-		{SV:T("2 notes"), 2, {"+3,+6", "+3,+5", "+2,+4", "+1,+3", "-3,-5"}},
-		{SV:T("3 notes"), 1, {"+2,+3,+5", "+1,+3,+5"}},
-		{SV:T("Octaves"), 1, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
+		-- Specify your own default {SV:T("default"), 1, {"+2,+5", "-2,-5", "+2,+5,+7", "-2,-5,-7"}},
+		{SV:T("1 note"),  8, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "-3", "-5", "-7"}},
+		{SV:T("2 notes"), 2, {"+1,+3", "+2,+5", "+2,+4", "+3,+5", "+3,+6", "-2,-5", "-3,-5"}},
+		{SV:T("3 notes"), 1, {"+2,+5,+7", "+1,+3,+5", "+2,+3,+5", "-2,-5,-7"}},
+		{SV:T("Octaves"), 4, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
+		{SV:T("Fixed"),  1, {"Fixed"}},
 		{SV:T("Build your own"), 1, {"+0"}}
 	},
 	transpositionRefLabel = 1,
@@ -254,7 +256,7 @@ commonTools = {
 
 			else
 				comboChoice = {name = "pitch", type = "ComboBox", label = harmonySelected,
-								choices = transposition, default = #transposition - posTranposition}
+								choices = transposition, default = posTranposition - 1}
 			end
 			
 			scaleKeyType = {
