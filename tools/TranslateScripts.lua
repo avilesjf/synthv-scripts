@@ -32,19 +32,19 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = { -- English
-			{"Enter the full script path filename", "Enter the full script path filename"},
-			{"not found!", "not found!"},
+			{"No such file or directory", "No such file or directory"},
+			{"Cannot find automatically the script path. Please insert the full path here:", "Cannot find automatically the script path. Please insert the full path here:"},
+			{"Cannot find user profile. Please insert the full path here:", "Cannot find user profile. Please insert the full path here:"},
+			{"Cannot find automatically the script folder path. Please insert the folder path here:", "Cannot find automatically the script folder path. Please insert the folder path here:"},
 			{"Done!", "Done!"},
 			{"Nothing to read!", "Nothing to read!"},
+			{"Source code copied into the clipboard!", "Source code copied into the clipboard!"},
+			{"No file found!", "No file found!"},
+			{"not found!", "not found!"},
 		},
 		["de-de"] = {}, -- Deutsch
 		["es-la"] = {}, -- Spanish
-		["fr-fr"] = {	-- French
-			{"Enter the full script path filename", "Entrez le chemin complet du nom du fichier script"},
-			{"not found!", "non trouvé !"},
-			{"Done!", "Fait !"},
-			{"Nothing to read!", "Pas de contenu !"},
-		},
+		["fr-fr"] = {},	-- French
 		["ja-jp"] = {},	-- Japanese
 		["ko-kr"] = {}, -- Korean
 		["pt-br"] = {}, -- Portuguese
@@ -55,14 +55,26 @@ function getArrayLanguageStrings()
 	}
 end
 
-
 -- Define a class  "NotesObject"
 NotesObject = {
 	project = nil,
-	timeAxis = nil,
-	scriptFile = "C:/Users/jfavi/OneDrive/Documents/Dreamtonics/Synthesizer V Studio/scripts/jfaviles/tools/TranslateScripts.lua",
+	scriptFile = "/Utilities/RandomizeParameters.lua",
 	askForScriptFile = true,
-	isExecutableChained = true
+	isMultipleScript = false,
+	isFilterSubfolder = true,
+	filterSubfolder = "Utilities",
+	winSepCharPath = "/",
+	winScriptPathBegin = "OneDrive", -- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\Script
+	winScriptPathDocument = "Documents", -- "\\Documenti", etc.
+	winScriptPathEnd = "/Dreamtonics/Synthesizer V Studio/scripts/",
+	macosPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/Script/",
+	hostinfo = nil,
+	osType = "",
+	osName = "",
+	hostName = "",
+	languageCode = "", 
+	hostVersion = "",
+	hostVersionNumber = 0
 }
 
 -- Constructor method for the NotesObject class
@@ -72,7 +84,14 @@ function NotesObject:new()
     self.__index = self
 	
     notesObject.project = SV:getProject()
-    notesObject.timeAxis = SV:getProject():getTimeAxis()
+
+	notesObject.hostinfo = SV:getHostInfo()
+	notesObject.osType = notesObject.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
+	notesObject.osName = notesObject.hostinfo.osName
+	notesObject.hostName = notesObject.hostinfo.hostName
+	notesObject.languageCode = notesObject.hostinfo.languageCode
+	notesObject.hostVersion = notesObject.hostinfo.hostVersion
+	notesObject.hostVersionNumber = notesObject.hostinfo.hostVersionNumber
 	
     return notesObject
 end
@@ -101,15 +120,20 @@ function NotesObject:isFileExists(fileName)
 	return result
 end
 
--- Get host infos
-function NotesObject:getHostInfos()
-	local hostinfo = SV:getHostInfo()
-	local osType = hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
-	local osName = hostinfo.osName
-	local hostName = hostinfo.hostName
-	local languageCode = hostinfo.languageCode
-	local hostVersion = hostinfo.hostVersion
-	return osType, osName, hostName, languageCode, hostVersion
+-- Check if folder exists
+function NotesObject:isFolderExists(folderName)
+  local fileHandle, error = io.open(folderName .. "/*.*", "r")
+  if fileHandle ~= nil then
+    io.close(fileHandle)
+    return true
+  else
+	-- be carefull! Text returned by os system
+    if string.match(error, SV:T("No such file or directory")) then
+      return false
+    else
+      return true
+    end
+  end
 end
 
 -- Split string by sep char
@@ -133,10 +157,86 @@ function NotesObject:getCleanFilename(file)
 	return filename
 end
 
--- Get wave file path
-function NotesObject:getScriptFile()
-	local filename = SV:showInputBox(SV:T(SCRIPT_TITLE), SV:T("Enter the full script path filename"), "")
-	return filename
+-- Get file path
+function NotesObject:getFilePath()	
+	local scriptFilePath = ""
+	local scriptFolder = ""
+	local scriptErrorText = SV:T("Cannot find automatically the script path. Please insert the full path here:")
+	local scriptErrorUserProfileText = SV:T("Cannot find user profile. Please insert the full path here:")
+	
+	if self.osType ~= "Windows" then	
+		-- "macOS", "Linux", "Unknown"
+		scriptFilePath = self.macosPath .. self.scriptFile
+		if not self:isFileExists(scriptFilePath) then
+			scriptFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), scriptErrorText, scriptFilePath)
+		end
+	else
+		-- Windows
+		local userProfile = os.getenv("USERPROFILE")
+		if userProfile then
+			-- if direct
+			scriptFolder = userProfile .. self.winSepCharPath .. self.winScriptPathDocument 
+							.. self.winScriptPathEnd
+			scriptFilePath = scriptFolder .. self.scriptFile				
+			if not self:isFileExists(scriptFilePath) then
+				-- trying with adding OneDrive
+				scriptFolder = userProfile 
+								.. self.winSepCharPath 
+								.. self.winScriptPathBegin 
+								.. self.winSepCharPath 
+								.. self.winScriptPathDocument
+								.. self.winScriptPathEnd
+				scriptFilePath = scriptFolder .. self.scriptFile			
+				if not self:isFileExists(scriptFilePath) then
+					scriptFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), scriptErrorText, scriptFilePath)
+				end
+			end
+		else
+			scriptFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), scriptErrorUserProfileText, "")
+		end
+	end
+	return scriptFilePath
+end
+
+-- Get Scripts path
+function NotesObject:getScriptsPath()
+	local scriptFilePath = ""
+	local scriptFolder = ""
+	local scriptErrorText = SV:T("Cannot find automatically the script folder path. Please insert the folder path here:")
+	local scriptErrorUserProfileText = SV:T("Cannot find user profile. Please insert the full path here:")
+	
+	if self.osType ~= "Windows" then	
+		-- "macOS", "Linux", "Unknown"
+		scriptFilePath = self.macosPath
+		if not self:isFolderExists(scriptFilePath) then
+			scriptFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), scriptErrorText, scriptFilePath)
+		end
+	else
+		-- Windows
+		local userProfile = os.getenv("USERPROFILE")
+		if userProfile then
+			-- if direct
+			scriptFolder = userProfile .. self.winSepCharPath .. self.winScriptPathDocument 
+							.. self.winScriptPathEnd
+			scriptFilePath = scriptFolder
+			if not self:isFolderExists(scriptFilePath) then
+				-- trying with adding OneDrive
+				scriptFolder = userProfile 
+								.. self.winSepCharPath 
+								.. self.winScriptPathBegin 
+								.. self.winSepCharPath 
+								.. self.winScriptPathDocument
+								.. self.winScriptPathEnd
+				scriptFilePath = scriptFolder
+				if not self:isFolderExists(scriptFilePath) then
+					scriptFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), scriptErrorText, scriptFilePath)
+				end
+			end
+		else
+			scriptFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), scriptErrorUserProfileText, "")
+		end
+	end
+	return scriptFilePath
 end
 
 -- Get source code
@@ -173,62 +273,201 @@ function NotesObject:isTextExists(text, textArray)
 	return exists
 end
 
+-- get separator path char
+function NotesObject:getSepPathChar()
+	local sepPath = "\\"
+	-- check if it's a subfolder
+	if self.osType ~= "Windows" then	
+		sepPath = "/"
+	end
+	return sepPath
+end
+
+-- List files in folder
+function NotesObject:listFiles(directory)
+    local i, dir, popen = 0, {}, io.popen
+	local full_dir = {}
+    local pfile
+	
+	if self.osType ~= "Windows" then
+		local tempfilename = os.tmpname()
+		os.execute([[ls -d ]] .. directory .. [[*/ >> ]] .. tempfilename)
+		
+		if self:isFileExists(tempfilename) then
+			pfile = lines_from(tempfilename)
+			os.remove(tempfilename)
+			
+			for _,foldername in pairs(pfile) do
+				local testname = string.lower(foldername)
+				if string.find(testname,"ignore") == nil then
+					foldername = string.gsub(foldername,"//","/")
+					i = i + 1
+					full_dir[i] = foldername
+					local start = 0, searchnew, searchold
+					
+					while true do
+					  start = string.find(foldername, "/", start+1)    -- find 'next' newline
+					  if start == nil then break end
+					  searchold = searchnew
+					  searchnew = start
+					end
+					dir[i] = string.sub(foldername,searchold+1)		
+					dir[i] = string.gsub(dir[i],"/","")
+					
+					-- Check if it's a subfolder
+					if string.find(testname, ".", 1, true) == nil then
+						local subfolder = directory .. self:getSepPathChar() .. testname .. self:getSepPathChar()
+						local dir2, full_dir2 = self:listFiles(subfolder)
+						if #full_dir2 > 0 then
+							for k, filePath in pairs(full_dir2) do
+								table.insert(dir, dir2[k])
+								table.insert(full_dir, filePath)
+							end
+						end
+					end
+					
+				end	
+			end
+		end	
+	else
+		local cmd = 'dir "'..directory..'" /b'		
+		pfile = popen(cmd)
+		for filename in pfile:lines() do
+			local testname = string.lower(filename)
+			if string.find(testname,"ignore") == nil then
+				i = i + 1
+				dir[i] = filename
+				full_dir[i] = directory .. filename		
+				
+				-- Check if it's a subfolder
+				if string.find(testname, ".", 1, true) == nil then
+					local subfolder = directory .. self:getSepPathChar() .. testname .. self:getSepPathChar()
+					local dir2, full_dir2 = self:listFiles(subfolder)
+					if #full_dir2 > 0 then
+						for k, filePath in pairs(full_dir2) do
+							table.insert(dir, dir2[k])
+							table.insert(full_dir, filePath)
+						end
+					end
+				end
+			end			
+		end
+		pfile:close()
+		
+	end	
+    return dir, full_dir
+end
+
+-- file processing
+function NotesObject:fileProcess(file, languageCode)
+	-- Process one file
+	local textFound = {}
+	local scriptLines = {}
+	local scriptContent = self:readAll(file)
+	local languageSourceCode = ""
+	
+	if scriptContent ~= nil then
+		if #scriptContent > 0 then
+			scriptLines = self:split(scriptContent, "\r\n")
+			for iPos = 1, #scriptLines do
+				local line = scriptLines[iPos]
+				for capture in string.gmatch(line, 'SV%:T%("(.-)"%)') do
+					if capture ~= "SCRIPT_TITLE" then
+						if not self:isTextExists(capture, textFound) then
+							table.insert(textFound, capture)
+						end
+					end
+				end						
+			end
+		end
+		-- self:show(SV:T("Done!") 
+		-- .. " Found: " .. #textFound .. "\r"
+		-- .. " scriptLines: " .. #scriptLines .. "\r" 
+		-- .. table.concat(textFound, "\r"))
+		languageSourceCode = self:getSourceCode(languageCode, textFound)
+	end
+	return languageSourceCode
+end
+
 -- Start project notes processing
 function NotesObject:start()
 	local result = false
-	local osType, osName, hostName, languageCode, hostVersion = self:getHostInfos()
+	-- self:show(" osType: " .. self.osType .. "\r"
+	-- .. " osName: " .. self.osName .. "\r"
+	-- .. " hostName: " .. self.hostName .. "\r"
+	-- .. " languageCode: " .. self.languageCode .. "\r"
+	-- .. " hostVersion: " .. self.hostVersion .. "\r" )
 	
-	if self.askForScriptFile then
-		local filename = ""
+	if self.isMultipleScript then
+		local folderPath = self:getScriptsPath()
 		
-		filename = self:getScriptFile()
-		if #filename == 0 then
-			return result
-		end
-		
-		filename = self:getCleanFilename(filename)
-		self.scriptFile = filename
-	end
-
-	-- if process not ok
-	if not self:isFileExists(self.scriptFile) then
-		self:show(self.scriptFile .. " " .. SV:T("not found!"))
-	else
-		-- Process
-		local textFound = {}
-		local scriptLines = {}
-		local scriptContent = self:readAll(self.scriptFile)
-		if scriptContent ~= nil then
-			if #scriptContent > 0 then
-				scriptLines = self:split(scriptContent, "\r\n")
-				for iPos = 1, #scriptLines do
-					local line = scriptLines[iPos]
-					for capture in string.gmatch(line, 'SV%:T%("(.-)"%)') do
-						if capture ~= "SCRIPT_TITLE" then
-							if not self:isTextExists(capture, textFound) then
-								table.insert(textFound, capture)
-							end
-						end
-					end						
+		if folderPath ~= nil and #folderPath > 0 then
+			local luaExtension = ".lua" -- limit to lua scripting files
+			local filter = ""
+			if self.isFilterSubfolder then
+				filter = self.filterSubfolder .. self:getSepPathChar()
+			end
+			local pathFolder = folderPath .. filter
+			
+			folderlist, full_folderlist = self:listFiles(pathFolder)
+			local filesPathList = {}
+			local filesList = {}
+			local languageSourceCode = ""
+			
+			for k, filePath in pairs(full_folderlist) do
+				-- Only lua scripting files
+				if string.find(full_folderlist[k], luaExtension, 1, true) ~= nil then
+					table.insert(filesPathList, filePath)
+					table.insert(filesList, folderlist[k])
+					
+					local newFileSourceCode = self:fileProcess(filePath, self.languageCode)
+					if newFileSourceCode ~= nil and #newFileSourceCode > 0 then
+						languageSourceCode = languageSourceCode
+							.. filePath .. "\r"
+							.. newFileSourceCode
+							.. "\r"
+					else
+						languageSourceCode = languageSourceCode
+							.. filePath .. "\r"
+							.. SV:T("Nothing to read!")
+							.. "\r"
+					end					
 				end
 			end
+			SV:setHostClipboard(languageSourceCode)
+			self:show(SV:T("Done!") 
+				.. "\r" .. SV:T("Source code copied into the clipboard!"))
 			
-			-- self:show(SV:T("Done!") 
-				-- .. " osType: " .. osType .. "\r"
-				-- .. " osName: " .. osName .. "\r"
-				-- .. " hostName: " .. hostName .. "\r"
-				-- .. " languageCode: " .. languageCode .. "\r"
-				-- .. " hostVersion: " .. hostVersion .. "\r"
-				-- .. " Found: " .. #textFound .. "\r"
-				-- .. " scriptLines: " .. #scriptLines .. "\r" 
-				-- .. table.concat(textFound, "\r"))
-				
-				local languageSourceCode = self:getSourceCode(languageCode, textFound)
-				SV:setHostClipboard(languageSourceCode)
-				-- self:show(languageSourceCode)
-				self:show(SV:T("Done!") .. "\r" .. SV:T("Source code copied into the clipboard!"))
+			-- self:show("filesPathList:\r" .. table.concat(filesPathList, "\r"))
+			-- self:show("filesList:\r" .. table.concat(filesList, "\r"))
+		
 		else
-			self:show(SV:T("Nothing to read!"))
+			self:show(SV:T("No file found!"))
+		end
+	else
+		if self.askForScriptFile then
+			local filename = self:getFilePath()
+			if #filename == 0 then
+				return result
+			end
+			
+			filename = self:getCleanFilename(filename)
+			self.scriptFile = filename
+		end
+
+		-- if process not ok
+		if not self:isFileExists(self.scriptFile) then
+			self:show(self.scriptFile .. " " .. SV:T("not found!"))
+		else
+			local languageSourceCode = self:fileProcess(self.scriptFile, self.languageCode)
+			
+			if languageSourceCode ~= nil and #languageSourceCode > 0 then
+				SV:setHostClipboard(languageSourceCode)
+				self:show(SV:T("Done!") 
+					.. "\r" .. SV:T("Source code copied into the clipboard!"))
+			else
+				self:show(SV:T("Nothing to read!"))
+			end
 		end
 	end
 	return result

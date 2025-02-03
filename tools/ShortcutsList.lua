@@ -120,7 +120,7 @@ commonTools = {
 			-- "macOS", "Linux", "Unknown"
 			settingsFilePath = InternalData.macosPath .. InternalData.settingsFile
 			if not commonTools.isFileExists(settingsFilePath) then
-				settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsPathTitle)
+				settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsFilePath)
 			end
 		else
 			-- Windows
@@ -140,11 +140,11 @@ commonTools = {
 									.. InternalData.winSettingsPathEnd
 					settingsFilePath = settingsFolder .. InternalData.settingsFile
 					if not commonTools.isFileExists(settingsFilePath) then
-						settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsPathTitle)
+						settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorText, settingsFilePath)
 					end
 				end
 			else
-				settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorUserProfileText, settingsPathTitle)
+				settingsFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), settingsErrorUserProfileText, settingsFilePath)
 			end
 		end
 		return settingsFilePath
