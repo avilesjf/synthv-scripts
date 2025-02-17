@@ -19,6 +19,31 @@ https://github.com/Possseidon/lua-midi/blob/main/lib/midi.lua
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Track", "Track"},
+			{"Tempo pos: ", "Tempo pos: "},
+			{"ticks: ", "ticks: "},
+			{"tempo: ", "tempo: "},
+			{"Select source & target track to update deviation,", "Select source & target track to update deviation,"},
+			{"Seleted track must match the midi file track!", "Seleted track must match the midi file track!"},
+			{"Select midi track source", "Select midi track source"},
+			{"Select target track to update pitch deviation", "Select target track to update pitch deviation"},
+			{"Reduce gain %", "Reduce gain %"},
+			{"Nothing found during processing the MIDI file!", "Nothing found during processing the MIDI file!"},
+			{"tracks count:", "tracks count:"},
+			{"No notes found in tracks!", "No notes found in tracks!"},
+			{"Nothing found!", "Nothing found!"},
+			{"Enter the full path to your MIDI file", "Enter the full path to your MIDI file"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

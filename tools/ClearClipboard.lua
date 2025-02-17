@@ -11,6 +11,18 @@ Clear the clipboard to clean his content
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Clipboard is cleared!", "Clipboard is cleared!"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

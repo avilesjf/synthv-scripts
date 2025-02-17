@@ -6,7 +6,7 @@ Synthesizer V Studio Pro Script
  
 lua file name: LoudnessFromAudio.lua
 
-Read Json loudness data and apply loudness parameters
+Read Json loudness audio data and apply loudness parameters
 
 Json is generated from audiowaveform.exe
 command line:
@@ -25,6 +25,21 @@ https://gist.github.com/tylerneylon/59f4bcf316be525b30ab
 
 2024 - JF AVILES
 --]]
+
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Enter the full path audio filename", "Enter the full path audio filename"},
+			{"not found!", "not found!"},
+			{"Done!", "Done!"},
+			{"Nothing to read!", "Nothing to read!"},
+		},
+	}
+end
 
 function getClientInfo()
 	return {
@@ -249,6 +264,8 @@ function NotesObject:start()
 				loudness:simplify(groupNotes:getNote(1):getOnset(), lastNote:getOnset(), 0.01)
 				result = true
 				self:show(SV:T("Done!"))
+			else
+				self:show(SV:T("Nothing to read!"))
 			end
 		else
 			self:show(SV:T("Nothing to read!"))

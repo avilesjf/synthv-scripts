@@ -9,6 +9,23 @@ Update group name with lyrics for each group of notes of the project
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Tracks count:", "Tracks count:"},
+			{"Groups count:", "Groups count:"},
+			{"Groups with no lyrics count:", "Groups with no lyrics count:"},
+			{"Groups with no lyrics:", "Groups with no lyrics:"},
+			{"Groups updated count:", "Groups updated count:"},
+			{"No group updated!", "No group updated!"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

@@ -11,6 +11,37 @@ Remove all parameters from selected notes to target notes
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Def params - DisplayName: ", "Def params - DisplayName: "},
+			{"Type: ", "Type: "},
+			{"Range: ", "Range: "},
+			{"default: ", "default: "},
+			{"parametersGroup is nil!", "parametersGroup is nil!"},
+			{"parameters removed!", "parameters removed!"},
+			{"Note:", "Note:"},
+			{"Remove parameters", "Remove parameters"},
+			{"Script will erase existing parameters", "Script will erase existing parameters"},
+			{"under a range of selected notes.", "under a range of selected notes."},
+			{"(Without any impact on notes properties)", "(Without any impact on notes properties)"},
+			{"Click Cancel to abort.", "Click Cancel to abort."},
+			{"No notes selected!", "No notes selected!"},
+			{"Parameters removing DONE!", "Parameters removing DONE!"},
+			{"Next step :", "Next step :"},
+			{"See result inside the parameter view.", "See result inside the parameter view."},
+			{"No parameters found for selected notes!", "No parameters found for selected notes!"},
+			{"type(data) is NOT table or string! type: ", "type(data) is NOT table or string! type: "},
+			{"level: ", "level: "},
+			{"tableInput: ", "tableInput: "},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
@@ -148,9 +179,9 @@ function NotesObject:getDefaultParamDefinition(parameterName, parametersGroup)
 			range = range .. getStringDataForLoop(range, iRange, #paramsDef.range)
 		end
 		
-		result = result ..  SV:T("Def params - DisplayName: ") .. paramsDef.displayName ..  SV:T(", Type: ")
-			.. paramsDef.typeName ..  SV:T(", Range: ") .. range 
-			..  SV:T(", default: ") .. tostring(paramsDef.defaultValue) .. "\r"
+		result = result ..  SV:T("Def params - DisplayName: ") .. paramsDef.displayName .. ", " .. SV:T("Type: ")
+			.. paramsDef.typeName .. ", " .. SV:T("Range: ") .. range 
+			.. ", " .. SV:T("default: ") .. tostring(paramsDef.defaultValue) .. "\r"
 	else
 		result = result .. tostring(parameterName) .. " => " ..  SV:T("parametersGroup is nil!") .. "\r"
 	end
@@ -449,7 +480,7 @@ jfaTools = {
 			result = tableInput
 		else
 			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("type(data) is NOT table or string! type: ") .. type(tableInput) 
-			.. SV:T(", level: ") .. tostring(level) .. SV:T(", tableInput: ").. tostring(tableInput))
+			.. ", " .. SV:T("level: ") .. tostring(level) .. ", " .. SV:T("tableInput: ").. tostring(tableInput))
 			result = tostring(tableInput)
 		end
 		return result

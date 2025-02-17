@@ -24,6 +24,20 @@ this will loose your original track name!
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Track", "Track"},
+			{"Waiting: ", "Waiting: "},
+			{"Error nil value with param: ", "Error nil value with param: "},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

@@ -12,6 +12,22 @@ and display current timing on track name
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"stopped", "stopped"},
+			{"Playing", "Playing"},
+			{"PlayBack status: ", "PlayBack status: "},
+			{"OK to start, Cancel to stop!", "OK to start, Cancel to stop!"},
+			{"Group", "Group"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

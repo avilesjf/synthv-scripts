@@ -2,7 +2,7 @@ local SCRIPT_TITLE = 'Group create from starting bar V1.0'
 
 --[[
 
-lua file name: GroupCreateFromDAW.lua
+lua file name: GroupCreateFromStartingBar.lua
 
 Create group of selected notes and start it from the nearest measure bar.
 This to make it easier to copy/paste chorus 
@@ -10,6 +10,20 @@ on a another bar further into the song.
 
 2024 - JF AVILES
 --]]
+
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"No notes selected!", "No notes selected!"},
+			{"Notes start: ", "Notes start: "},
+			{"result: ", "result: "},
+		},
+	}
+end
 
 function getClientInfo()
 	return {

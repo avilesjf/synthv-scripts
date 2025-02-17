@@ -24,6 +24,26 @@ this will loose your original track name!
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Track new", "Track new"},
+			{"Waiting:", "Waiting:"},
+			{"Error nil value with param: ", "Error nil value with param: "},
+			{"Song position: ", "Song position: "},
+			{"OK to start waiting DAW drag & drop!", "OK to start waiting DAW drag & drop!"},
+			{"Create a new track", "Create a new track"},
+			{"Update 'SIL' or overlay notes", "Update 'SIL' or overlay notes"},
+			{"Click OK to start waiting a drag & drop from DAW.", "Click OK to start waiting a drag & drop from DAW."},
+			{"To abort this script waiting drag&drop: Run it again!", "To abort this script waiting drag&drop: Run it again!"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

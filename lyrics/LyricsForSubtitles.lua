@@ -20,6 +20,23 @@ Lyrics of the song
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Lyrics placed on clipboard!", "Lyrics placed on clipboard!"},
+			{"First note started at:", "First note started at:"},
+			{"Nothing found!", "Nothing found!"},
+			{"Add an offset (in seconds)", "Add an offset (in seconds)"},
+			{"corresponding to the start of your project in your DAW", "corresponding to the start of your project in your DAW"},
+			{"(Only if your project doesn't start from the first bar!)", "(Only if your project doesn't start from the first bar!)"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

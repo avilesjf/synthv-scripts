@@ -24,6 +24,27 @@ https://github.com/Possseidon/lua-midi/blob/main/lib/midi.lua
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Nothing found during processing the MIDI file!", "Nothing found during processing the MIDI file!"},
+			{"Lyrics placed on clipboard!", "Lyrics placed on clipboard!"},
+			{"tracks:", "tracks:"},
+			{"Tempo pos:", "Tempo pos:"},
+			{"tempo:", "tempo:"},
+			{"Track:", "Track:"},
+			{"Lyric length:", "Lyric length:"},
+			{"Track selected (with max length lyrics):", "Track selected (with max length lyrics):"},
+			{"Nothing found!", "Nothing found!"},
+			{"Enter the full path to your MIDI file", "Enter the full path to your MIDI file"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

@@ -18,6 +18,54 @@ timeEnd=1852200000
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"self.timeBeginFromClipboard: ", "self.timeBeginFromClipboard: "},
+			{"checkValidParamsFromClipboard: ", "checkValidParamsFromClipboard: "},
+			{"Def params - DisplayName: ", "Def params - DisplayName: "},
+			{"Type: ", "Type: "},
+			{"Range: ", "Range: "},
+			{"default: ", "default: "},
+			{"parametersGroup is nil!", "parametersGroup is nil!"},
+			{"setParameters:", "setParameters:"},
+			{"NO new points!", "NO new points!"},
+			{"New points found:", "New points found:"},
+			{"Note:", "Note:"},
+			{"Copy parameters", "Copy parameters"},
+			{"Script will copy existing parameters under a range of selected notes.", "Script will copy existing parameters under a range of selected notes."},
+			{"Then select target notes to paste.", "Then select target notes to paste."},
+			{"Click Cancel to abort.", "Click Cancel to abort."},
+			{"Note: ", "Note: "},
+			{"Paste parameters", "Paste parameters"},
+			{"Script will paste existing parameters under selected notes.", "Script will paste existing parameters under selected notes."},
+			{"Target notes will receive previous parameters.", "Target notes will receive previous parameters."},
+			{"No notes selected!", "No notes selected!"},
+			{"Parameters copy done!", "Parameters copy done!"},
+			{"getParametersFound:", "getParametersFound:"},
+			{"Parameters copy DONE!", "Parameters copy DONE!"},
+			{"Next step :", "Next step :"},
+			{"Select a new note target to duplicate all parameters", "Select a new note target to duplicate all parameters"},
+			{"and start this script again!", "and start this script again!"},
+			{"Parameters not found for selected notes!", "Parameters not found for selected notes!"},
+			{"!! STOP !!", "!! STOP !!"},
+			{"You cannot paste on the same selected notes!", "You cannot paste on the same selected notes!"},
+			{"(Current note time begin is ", "(Current note time begin is "},
+			{"Parameters type count: ", "Parameters type count: "},
+			{"Result params:", "Result params:"},
+			{"Parameters paste DONE!", "Parameters paste DONE!"},
+			{"See the paste action result inside the parameters window.", "See the paste action result inside the parameters window."},
+			{"type(data) is NOT table or string! type: ", "type(data) is NOT table or string! type: "},
+			{"level: ", "level: "},
+			{"tableInput: ", "tableInput: "},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
@@ -221,9 +269,9 @@ function NotesObject:getDefaultParamDefinition(parameterName, parametersGroup)
 			range = range .. getStringDataForLoop(range, iRange, #paramsDef.range)
 		end
 		
-		result = result ..  SV:T("Def params - DisplayName: ") .. paramsDef.displayName ..  SV:T(", Type: ")
-			.. paramsDef.typeName ..  SV:T(", Range: ") .. range 
-			..  SV:T(", default: ") .. tostring(paramsDef.defaultValue) .. "\r"
+		result = result ..  SV:T("Def params - DisplayName: ") .. paramsDef.displayName .. ", ".. SV:T("Type: ")
+			.. paramsDef.typeName .. ", " .. SV:T("Range: ") .. range 
+			.. ", " .. SV:T("default: ") .. tostring(paramsDef.defaultValue) .. "\r"
 	else
 		result = result .. tostring(parameterName) .. " => " ..  SV:T("parametersGroup is nil!") .. "\r"
 	end
@@ -700,7 +748,7 @@ jfaTools = {
 			result = tableInput
 		else
 			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("type(data) is NOT table or string! type: ") .. type(tableInput) 
-			.. SV:T(", level: ") .. tostring(level) .. SV:T(", tableInput: ").. tostring(tableInput))
+			.. ", " .. SV:T("level: ") .. tostring(level) .. ", " .. SV:T("tableInput: ").. tostring(tableInput))
 			result = tostring(tableInput)
 		end
 		return result

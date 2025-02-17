@@ -13,6 +13,20 @@ Initial (js) source code is from Dannyu NDos
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Tuner", "Tuner"},
+			{"Slide for new values.", "Slide for new values."},
+			{"Select notes before execution of this script.", "Select notes before execution of this script."},
+		},
+	}
+end
+
 function getClientInfo()
     return {
         name = "TunerSL",

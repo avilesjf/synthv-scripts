@@ -10,6 +10,21 @@ to use during GroupHarmony script attempts
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Track H", "Track H"},
+			{"Delete tracks with name begin with", "Delete tracks with name begin with"},
+			{"found:", "found:"},
+			{"Use 'CTRL-Z' to recover your deleted tracks", "Use 'CTRL-Z' to recover your deleted tracks"},
+			{"No harmony tracks to delete!", "No harmony tracks to delete!"},
+		},
+	}
+end
 
 function getClientInfo()
 	return {

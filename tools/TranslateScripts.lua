@@ -10,18 +10,17 @@ Retrieving all SV:T(text) found inside a script
 and generate a getTranslations function 
 with all text found into the clipboard
 
+Set askForScriptFile = true to display an input box
+	if false variable "scriptFile" is used, set your .lua file below (class "NotesObject")
+Set isMultipleScript = true to loop all files into subfolders
+	note: if true askForScriptFile is not used
+Set	isFilterSubfolder = true to filter a specific subfolder
+	mode used only if isMultipleScript = true
+	to specify the filtered subfolder update the variable: filterSubfolder
+Note: Not tested in the MACOS env.
+
 2025 - JF AVILES
 --]]
-
-function getClientInfo()
-	return {
-		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Tools",
-		author = "JFAVILES",
-		versionNumber = 1,
-		minEditorVersion = 65540
-	}
-end
 
 -- Translate SV:T text to display
 function getTranslations(langCode)
@@ -55,13 +54,23 @@ function getArrayLanguageStrings()
 	}
 end
 
--- Define a class  "NotesObject"
+function getClientInfo()
+	return {
+		name = SV:T(SCRIPT_TITLE),
+		category = "_JFA_Tools",
+		author = "JFAVILES",
+		versionNumber = 1,
+		minEditorVersion = 65540
+	}
+end
+
+-- Define a class "NotesObject"
 NotesObject = {
 	project = nil,
-	scriptFile = "/Utilities/RandomizeParameters.lua",
+	scriptFile = "Utilities/RandomizeParameters.lua",
 	askForScriptFile = true,
-	isMultipleScript = false,
-	isFilterSubfolder = true,
+	isMultipleScript = true, -- if true askForScriptFile is not used
+	isFilterSubfolder = false,
 	filterSubfolder = "Utilities",
 	winSepCharPath = "/",
 	winScriptPathBegin = "OneDrive", -- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\Script
@@ -120,6 +129,14 @@ function NotesObject:isFileExists(fileName)
 	return result
 end
 
+-- Get windows user profile
+function NotesObject:getWindowsUserProfile()
+	local userProfile = os.getenv("USERPROFILE")
+	userProfile = string.gsub(userProfile,"\\","/")
+	userProfile = string.gsub(userProfile,"//","/")	
+	return userProfile
+end
+
 -- Check if folder exists
 function NotesObject:isFolderExists(folderName)
   local fileHandle, error = io.open(folderName .. "/*.*", "r")
@@ -172,7 +189,7 @@ function NotesObject:getFilePath()
 		end
 	else
 		-- Windows
-		local userProfile = os.getenv("USERPROFILE")
+		local userProfile = self:getWindowsUserProfile()
 		if userProfile then
 			-- if direct
 			scriptFolder = userProfile .. self.winSepCharPath .. self.winScriptPathDocument 
@@ -213,7 +230,7 @@ function NotesObject:getScriptsPath()
 		end
 	else
 		-- Windows
-		local userProfile = os.getenv("USERPROFILE")
+		local userProfile = self:getWindowsUserProfile()
 		if userProfile then
 			-- if direct
 			scriptFolder = userProfile .. self.winSepCharPath .. self.winScriptPathDocument 
@@ -273,9 +290,9 @@ function NotesObject:isTextExists(text, textArray)
 	return exists
 end
 
--- get separator path char
+-- Get separator path char
 function NotesObject:getSepPathChar()
-	local sepPath = "\\"
+	local sepPath = "/"
 	-- check if it's a subfolder
 	if self.osType ~= "Windows" then	
 		sepPath = "/"
@@ -300,23 +317,25 @@ function NotesObject:listFiles(directory)
 			for _,foldername in pairs(pfile) do
 				local testname = string.lower(foldername)
 				if string.find(testname,"ignore") == nil then
-					foldername = string.gsub(foldername,"//","/")
-					i = i + 1
-					full_dir[i] = foldername
-					local start = 0, searchnew, searchold
-					
-					while true do
-					  start = string.find(foldername, "/", start+1)    -- find 'next' newline
-					  if start == nil then break end
-					  searchold = searchnew
-					  searchnew = start
+					if string.find(testname, ".lua", 1, true) ~= nil then
+						foldername = string.gsub(foldername,"//","/")
+						i = i + 1
+						full_dir[i] = foldername
+						local start = 0, searchnew, searchold
+						
+						while true do
+						  start = string.find(foldername, "/", start+1)    -- find 'next' newline
+						  if start == nil then break end
+						  searchold = searchnew
+						  searchnew = start
+						end
+						dir[i] = string.sub(foldername,searchold+1)		
+						dir[i] = string.gsub(dir[i],"/","")
 					end
-					dir[i] = string.sub(foldername,searchold+1)		
-					dir[i] = string.gsub(dir[i],"/","")
-					
 					-- Check if it's a subfolder
-					if string.find(testname, ".", 1, true) == nil then
-						local subfolder = directory .. self:getSepPathChar() .. testname .. self:getSepPathChar()
+					if string.find(testname, ".lua", 1, true) == nil and 
+						string.find(testname, ".js", 1, true) == nil then
+						local subfolder = directory .. testname .. self:getSepPathChar()
 						local dir2, full_dir2 = self:listFiles(subfolder)
 						if #full_dir2 > 0 then
 							for k, filePath in pairs(full_dir2) do
@@ -335,13 +354,14 @@ function NotesObject:listFiles(directory)
 		for filename in pfile:lines() do
 			local testname = string.lower(filename)
 			if string.find(testname,"ignore") == nil then
-				i = i + 1
-				dir[i] = filename
-				full_dir[i] = directory .. filename		
-				
+				if string.find(testname, ".lua", 1, true) ~= nil then
+					i = i + 1
+					dir[i] = filename
+					full_dir[i] = directory .. filename		
+				end
 				-- Check if it's a subfolder
 				if string.find(testname, ".", 1, true) == nil then
-					local subfolder = directory .. self:getSepPathChar() .. testname .. self:getSepPathChar()
+					local subfolder = directory .. testname .. self:getSepPathChar()
 					local dir2, full_dir2 = self:listFiles(subfolder)
 					if #full_dir2 > 0 then
 						for k, filePath in pairs(full_dir2) do

@@ -14,6 +14,20 @@ Lyrics on previous left note will be lost!
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"newLyrics: ", "newLyrics: "},
+			{"No notes found to shift!", "No notes found to shift!"},
+			{"No note selected!", "No note selected!"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

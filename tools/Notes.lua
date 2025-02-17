@@ -25,6 +25,21 @@ But set to true for both variable is possible:
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Unable to save notes:", "Unable to save notes:"},
+			{"Project notes:", "Project notes:"},
+			{"Project notes! Click OK button to save notes!", "Project notes! Click OK button to save notes!"},
+			{"Unable to store notes in an unnamed .svp project!", "Unable to store notes in an unnamed .svp project!"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),

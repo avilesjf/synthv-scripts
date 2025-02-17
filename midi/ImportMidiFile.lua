@@ -20,6 +20,54 @@ https://github.com/Possseidon/lua-midi/blob/main/lib/midi.lua
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"Enter the full path to your MIDI file", "Enter the full path to your MIDI file"},
+			{"Select a midi source track,", "Select a midi source track,"},
+			{"A new track will be created with notes inside groups!", "A new track will be created with notes inside groups!"},
+			{"Select a midi track", "Select a midi track"},
+			{"count = ", "count = "},
+			{"Failed to process MIDI file:", "Failed to process MIDI file:"},
+			{"Failed to open MIDI from ", "Failed to open MIDI from "},
+			{"Nothing found during processing the MIDI file!", "Nothing found during processing the MIDI file!"},
+			{"result: ", "result: "},
+			{"Nothing found!", "Nothing found!"},
+			{"Track", "Track"},
+			{"Tempo pos: ", "Tempo pos: "},
+			{"ticks: ", "ticks: "},
+			{"tempo: ", "tempo: "},
+			{"list tempo: ", "list tempo: "},
+			{"numerator:", "numerator:"},
+			{"denominator:", "denominator:"},
+			{"metronome:", "metronome:"},
+			{"dotted:", "dotted:"},
+			{"iMarker: ", "iMarker: "},
+			{"Marker pos: ", "Marker pos: "},
+			{"Ticks: ", "Ticks: "},
+			{"Time: ", "Time: "},
+			{"Seconds: ", "Seconds: "},
+			{"Marker: ", "Marker: "},
+			{"Note pos: ", "Note pos: "},
+			{"Tk: ", "Tk: "},
+			{"Sec: ", "Sec: "},
+			{"note: ", "note: "},
+			{"missing value", "missing value"},
+			{"incomplete or missing variable length quantity", "incomplete or missing variable length quantity"},
+			{"only a single header chunk is allowed", "only a single header chunk is allowed"},
+			{"midi format 0 can only contain a single track", "midi format 0 can only contain a single track"},
+			{"track out of range", "track out of range"},
+			{"no header chunk before the first track chunk", "no header chunk before the first track chunk"},
+			{"found more tracks than specified in the header", "found more tracks than specified in the header"},
+			{"found less tracks than specified in the header", "found less tracks than specified in the header"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
@@ -120,7 +168,7 @@ mainTools = {
 			widgets = {
 				{
 					name = "trackMidi", type = "ComboBox",
-					label = SV:T("Select a midi track (count = " .. #InternalData.listAllTracks .. ")"),
+					label = SV:T("Select a midi track") .. "(" .. SV:T("count = ") .. #InternalData.listAllTracks .. ")",
 					choices = midiTrackList, 
 					default = firstTrackWithNotes
 				},

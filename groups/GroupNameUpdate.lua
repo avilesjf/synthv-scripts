@@ -9,6 +9,24 @@ Update one selected group name with the updated lyrics inside.
 2024 - JF AVILES
 --]]
 
+function getTranslations(langCode)
+	return getArrayLanguageStrings()[langCode]
+end
+
+function getArrayLanguageStrings()
+	return {
+		["en-us"] = {
+			{"No group selected found!", "No group selected found!"},
+			{"Goup active is:", "Goup active is:"},
+			{"Nothing to do!", "Nothing to do!"},
+			{"Please select one group!", "Please select one group!"},
+			{"Group name already updated (nothing to do!):", "Group name already updated (nothing to do!):"},
+			{"Group renamed from:", "Group renamed from:"},
+			{"Group renamed to:", "Group renamed to:"},
+		},
+	}
+end
+
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
