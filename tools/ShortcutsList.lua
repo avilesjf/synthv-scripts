@@ -126,7 +126,7 @@ NotesObject = {
 	limitStringDisplay = 2000,
 	htmlChars = {{"&lt;", "<"}, {"&quot;", "\""}, {"&gt;", ">"}, {"&#13;", "\r"}, {"&#10;", "\n"}},
 	duplicatesShortcuts = {},
-	DEBUG = true,
+	DEBUG = false,
 	isScriptPathActive = false, -- To get the script path of each files with shortcuts enabled
 	jsScriptTitle = "SCRIPT_TITLE =",
 	luaScriptTitle = "SCRIPT_TITLE =",
@@ -574,7 +574,7 @@ function NotesObject:listFiles(directory)
 			end
 		end	
 	else
-		local cmd = 'dir "'..directory..'" /b'		
+		local cmd = 'dir "'..directory..'" /b'
 		pfile = popen(cmd)
 		for filename in pfile:lines() do
 			local testname = string.lower(filename)

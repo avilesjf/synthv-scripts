@@ -56,62 +56,62 @@ function splitSpace(argstr)
   return args
 end
 
--- Display note attributes
-function displayNoteAttributes(note)
+-- Get note attributes
+function getNoteAttributes(note)
 	local noteAttr = note:getAttributes()
 	local result = ""
 	if noteAttr ~= nil then
 		if noteAttr.tF0Offset ~= nil then
 			result = result .. 
-			"tF0Offset: " .. string.format("%02d", noteAttr.tF0Offset)
+			"tF0Offset: " .. string.format("%02f", noteAttr.tF0Offset) .. "\r"
 		end
 		if noteAttr.tF0Left ~= nil then
 			result = result .. 
-			"tF0Left: " .. string.format("%02d", noteAttr.tF0Left)
+			"tF0Left: " .. string.format("%02f", noteAttr.tF0Left) .. "\r"
 		end
 		if noteAttr.tF0Right ~= nil then
 			result = result .. 
-			"tF0Right: " .. string.format("%02d", noteAttr.tF0Right)
+			"tF0Right: " .. string.format("%02f", noteAttr.tF0Right) .. "\r"
 		end
 		if noteAttr.dF0Left ~= nil then
 			result = result .. 
-			"dF0Left: " .. string.format("%02d", noteAttr.dF0Left)
+			"dF0Left: " .. string.format("%02f", noteAttr.dF0Left) .. "\r"
 		end
 		if noteAttr.dF0Right ~= nil then
 			result = result .. 
-			"dF0Right: " .. string.format("%02d", noteAttr.dF0Right)
+			"dF0Right: " .. string.format("%02f", noteAttr.dF0Right) .. "\r"
 		end
 		if noteAttr.tF0VbrStart ~= nil then
 			result = result .. 
-			"tF0VbrStart: " .. string.format("%02d", noteAttr.tF0VbrStart)
+			"tF0VbrStart: " .. string.format("%02f", noteAttr.tF0VbrStart) .. "\r"
 		end
 		if noteAttr.tF0VbrLeft ~= nil then
 			result = result .. 
-			"tF0VbrLeft: " .. string.format("%02d", noteAttr.tF0VbrLeft)
+			"tF0VbrLeft: " .. string.format("%02f", noteAttr.tF0VbrLeft) .. "\r"
 		end
 		if noteAttr.tF0VbrRight ~= nil then
 			result = result .. 
-			"tF0VbrRight: " .. string.format("%02d", noteAttr.tF0VbrRight)
+			"tF0VbrRight: " .. string.format("%02f", noteAttr.tF0VbrRight) .. "\r"
 		end
 		if noteAttr.dF0Vbr ~= nil then
 			result = result .. 
-			"dF0Vbr: " .. string.format("%02d", noteAttr.dF0Vbr)
+			"dF0Vbr: " .. string.format("%02f", noteAttr.dF0Vbr) .. "\r"
 		end
 		if noteAttr.pF0Vbr ~= nil then
 			result = result .. 
-			"pF0Vbr: " .. string.format("%02d", noteAttr.pF0Vbr)
+			"pF0Vbr: " .. string.format("%02f", noteAttr.pF0Vbr) .. "\r"
 		end
 		if noteAttr.fF0Vbr ~= nil then
 			result = result .. 
-			"fF0Vbr: " .. string.format("%02d", noteAttr.fF0Vbr)
+			"fF0Vbr: " .. string.format("%02f", noteAttr.fF0Vbr) .. "\r"
 		end
 		if noteAttr.tNoteOffset ~= nil then
 			result = result .. 
-			"tNoteOffset: " .. string.format("%02d", noteAttr.tNoteOffset)
+			"tNoteOffset: " .. string.format("%02f", noteAttr.tNoteOffset) .. "\r"
 		end
 		if noteAttr.exprGroup ~= nil then
 			result = result .. 
-			"exprGroup: " .. noteAttr.exprGroup
+			"exprGroup: " .. noteAttr.exprGroup .. "\r"
 		end
 		if noteAttr.dur ~= nil and #noteAttr.dur > 0 then
 			result = result .. " - dur (" .. tostring(#noteAttr.dur).. "):"
@@ -121,7 +121,7 @@ function displayNoteAttributes(note)
 				sep .. string.format("%3.2f", noteAttr.dur[iArray])
 				sep = ", "
 			end
-			result = result .. "]"
+			result = result .. "]" .. "\r"
 		end
 		if noteAttr.alt ~= nil and #noteAttr.alt > 0 then
 			result = result .. " - alt (" .. tostring(#noteAttr.alt).. "):"
@@ -141,15 +141,31 @@ function displayNoteAttributes(note)
 				sep .. string.format("%3.2f", noteAttr.strength[iArray])
 				sep = ", "
 			end
-			result = result .. "]"
+			result = result .. "]" .. "\r"
 		end
 		result = result ..  "\r"
-		
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("note attributes:\r") .. note:getLyrics() .. "\r".. result)
 	end
-		
+	return result
 end
 
+-- Get attributes in string
+function getSimpleAttributes(attrib)
+	local attribStr = ""
+	for k,v in pairs(attrib) do
+		if type(v) == "table" then
+			attribStr = attribStr .. k .. ":"
+			for j,w in pairs(v) do
+				attribStr = attribStr .. j .. ": " .. tostring(w) .. ","
+			end
+			attribStr = attribStr  .. "\r"
+		else
+			attribStr = attribStr .. k .. ": " .. tostring(v) .. "\r"
+		end
+	end
+	return attribStr
+end
+
+-- Split lyrics into phonemes
 function splitPhonemes()
 	local timeAxis = SV:getProject():getTimeAxis()
 	local editor = SV:getMainEditor()
@@ -164,15 +180,6 @@ function splitPhonemes()
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes selected!"))
 		return false
 	end
-	
-	--for iNote = 1, #selectedNotes do
-	--	local note = selectedNotes[iNote]:clone()
-		
-		--note:setOnset(note:getOnset())
-		--noteGroup:addNote(note)
-		-- Remove previous selected notes
-	--	groupNotesMain:removeNote(selectedNotes[iNote]:getIndexInParent())
-	--end
 	local currentGroupRef = editor:getCurrentGroup()
 	local groupNotesMain = currentGroupRef:getTarget()
 	local groupPhonemes = SV:getPhonemesForGroup(currentGroupRef)
@@ -185,14 +192,13 @@ function splitPhonemes()
 		if originalNote ~= nil then
 			local previousNote = nil
 			local previousNotesDuration = nil
-			-- displayNoteAttributes(originalNote) 			
+			local attribStr = getNoteAttributes(originalNote) 
+			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("attributes:") .. "\r" .. attribStr)
+			-- local attribStr = getSimpleAttributes(attrib)
+			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("attributes:") .. "\r" .. attribStr)
 			
 			local noteIndex = originalNote:getIndexInParent()
 			phonemes[iNote] = groupPhonemes[noteIndex]
-			--for i = 1, #groupPhonemes do
-			--	SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("notes:\r") .. "(" .. tostring(noteIndex) .. ")" .. groupPhonemes[noteIndex])
-			--end
-			
 			if phonemes[iNote] ~= nil then
 				local notePhonemes = phonemes[iNote]
 				local notePhonemesArray = splitSpace(notePhonemes)
@@ -221,25 +227,22 @@ function splitPhonemes()
 						
 						-- last note complete the original note duration
 						if iNewNote == #notePhonemesArray then
-							note:setDuration(originalNote:getDuration() - previousNotesDuration)
+							if (originalNote:getDuration() - previousNotesDuration) > 0 then
+								note:setDuration(originalNote:getDuration() - previousNotesDuration)
+							end
 						end
-						
 						-- note:setDuration((originalNote:getDuration() / #notePhonemesArray) * noteAttr.dur[iNewNote])
 						--note:setLyrics(notePhonemesArray[iNewNote])
 					end
-					
 					
 					note:setPitch(originalNote:getPitch())
 					note:setPhonemes(notePhonemesArray[iNewNote])
 					
 					local newNoteAttribute = {}
-					--newNoteAttribute["dur"] = noteAttr.du r[iNewNote]
-					--newNoteAttribute["strength"] = {0.2}
+					--newNoteAttribute.dur = noteAttr.dur[iNewNote]
+					--newNoteAttribute.strength = {0.2}
 					
-					--newNoteAttribute["dur"] = noteAttr.dur[iNewNote]
-					--for k,v in pairs(newNoteAttribute) do
-					--	SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("k:\r") .. k .. " " .. tostring(v[1]))
-					--end
+					--newNoteAttribute.dur = noteAttr.dur[iNewNote]
 					--note:setAttributes(newNoteAttribute)
 					table.insert(notesToAdd, note)
 					--groupNotesMain:addNote(note)
@@ -266,8 +269,6 @@ function splitPhonemes()
 		end
 	end
 
-
-	
 	if selectedNotesCount > 0 then
 		-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Notes count: ") .. tostring(selectedNotesCount))
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("note added!"))
