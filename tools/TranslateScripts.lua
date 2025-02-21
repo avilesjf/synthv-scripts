@@ -68,10 +68,10 @@ end
 NotesObject = {
 	project = nil,
 	scriptFile = "Utilities/RandomizeParameters.lua",
-	askForScriptFile = true,
-	isMultipleScript = false, -- if true askForScriptFile is not used
+	askForScriptFile = true, -- if true a dialog box is displayed
+	isMultipleScript = false, -- if true askForScriptFile is not more used
 	isFilterSubfolder = false,
-	filterSubfolder = "Utilities",
+	filterSubfolder = "Utilities", -- filter for multiple subfolders scan
 	winSepCharPath = "/",
 	winScriptPathBegin = "OneDrive", -- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\Script
 	winScriptPathDocument = "Documents", -- "\\Documenti", etc.
@@ -171,6 +171,12 @@ function NotesObject:getCleanFilename(file)
 			filename = filename:gsub('"', '')
 		end
 	end
+	return filename
+end
+
+-- Get wave file path
+function NotesObject:getScriptFile()
+	local filename = SV:showInputBox(SV:T(SCRIPT_TITLE), SV:T("Enter the full path audio filename"), "")
 	return filename
 end
 
@@ -466,6 +472,15 @@ function NotesObject:start()
 		end
 	else
 		if self.askForScriptFile then
+			local filename = self:getScriptFile()
+			if #filename == 0 then
+				return result
+			end
+			
+			filename = self:getCleanFilename(filename)
+			self.scriptFile = filename
+		else
+			local filename = self:getScriptFile()
 			local filename = self:getFilePath()
 			if #filename == 0 then
 				return result
