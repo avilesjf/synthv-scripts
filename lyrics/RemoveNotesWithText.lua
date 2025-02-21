@@ -338,10 +338,8 @@ function NotesObject:isTextExists()
 	
 	result = self.notesFoundCount > 0
 	
-	if result then 
-		-- continue processing
-		self:processNotes(result)
-	end
+	-- continue processing
+	self:processNotes(result)
 	
 	return result
 end
@@ -402,7 +400,7 @@ function NotesObject:endingProcess()
 	-- If text found
 	if self.notesFoundCount > 0 then
 		-- self:show("self.notesFoundCount: " .. self.notesFoundCount)		
-		if self.notesDeleted then
+		if self.notesDeleted > 0 then
 			self:show(SV:T("Removing notes with text in a new track: DONE!") .. "\r"
 				.. SV:T("Notes deleted: ") .. self.notesDeleted)
 		else
