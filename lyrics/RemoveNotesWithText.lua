@@ -7,6 +7,7 @@ Synthesizer V Studio Pro Script
 lua file name: RemoveNotesWithText.lua
 
 Remove all notes containing matched lyric or phoneme
+Inside the main group and all group of notes
 Note: A duplicate track is created to keep source track safe
 
 2024 - JF AVILES
