@@ -20,17 +20,19 @@ either restart the software or select Scripts -> Rescan from the top menu.
 ## Issues / bugs
 If you find any issues with these scripts, 
 make a new GitHub issue (https://github.com/avilesjf/synthv-scripts/issues/new) 
-or message me on the SynthV Forums (https://forum.synthesizerv.com/u/jeanf/summary).
+or message me on the SynthV Forums (https://forum.synthesizerv.com/u/jfa/summary).
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
 Copy/paste all automation parameters corresponding to the selected notes.
 Duplicate groups notes and shift them in current scale for vocal harmonies.
 Automate creating group of notes while dragging notes from DAW.
+Harmony: Copy selected groups to new tracks (or select one) and transpose all notes in desired scale.
 
 ## lyrics-scripts
 Extracting lyrics easier to save all lyrics of a song. 
 Also extracting lyrics into the specific .SRT text format to use within a video.
+Remove all notes containing matched lyric or phoneme.
 
 ## midi-scripts
 Extracting pitchbend or velocity from midi file.
@@ -40,8 +42,11 @@ Also import a midi file and create group notes (not done by SynthV).
 Extracting (and copy into the clipboard) all existing shortcuts into the file: settings.xml.
 Duplicate selected notes to a new target position.
 Microtonality: Update pitchDelta for each individual key for notes.
-Shift notes: Backward or forward in very short gap.
+Shift notes: Backward or forward in very short gap or in previous/next first measure bar.
 Playing SynthV: Displaying time in the track name and key notes inside groups during play.
+Store and display internal project notes for a track.
+Retrieving all SV:T(text) inside a script and generate a function for translation language.
+Read loudness audio data and apply loudness parameters.
 
 ## Modifying these scripts or making your own
 If you copy, modify, fork, etc. these scripts, crediting me for the original source could be a good choice and be free to notify me.
