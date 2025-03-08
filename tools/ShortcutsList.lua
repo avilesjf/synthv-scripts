@@ -127,7 +127,7 @@ NotesObject = {
 	htmlChars = {{"&lt;", "<"}, {"&quot;", "\""}, {"&gt;", ">"}, {"&#13;", "\r"}, {"&#10;", "\n"}},
 	duplicatesShortcuts = {},
 	DEBUG = false,
-	isScriptPathActive = true, -- To get the script path of each files with shortcuts enabled
+	isScriptPathActive = false, -- To get the script path of each files with shortcuts enabled
 	jsScriptTitle = "SCRIPT_TITLE =",
 	luaScriptTitle = "SCRIPT_TITLE =",
 	functionScript = "getClientInfo",
