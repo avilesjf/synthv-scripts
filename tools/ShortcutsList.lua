@@ -127,7 +127,7 @@ NotesObject = {
 	htmlChars = {{"&lt;", "<"}, {"&quot;", "\""}, {"&gt;", ">"}, {"&#13;", "\r"}, {"&#10;", "\n"}},
 	duplicatesShortcuts = {},
 	DEBUG = false,
-	isScriptPathActive = false, -- To get the script path of each files with shortcuts enabled
+	isScriptPathActive = true, -- To get the script path of each files with shortcuts enabled
 	jsScriptTitle = "SCRIPT_TITLE =",
 	luaScriptTitle = "SCRIPT_TITLE =",
 	functionScript = "getClientInfo",
@@ -256,6 +256,8 @@ function NotesObject:start()
 	local keyMapping = "@keyMapping"
 	local keyName = "@name"
 	local sepCharDisplay = ", "
+	local sepTab = "\t"
+	local sepReturn = "\r"
 	local keymaps = {}
 	local keyboardMapping = ""
 	local scriptsFilePath = {}
@@ -285,8 +287,8 @@ function NotesObject:start()
 		
 		local errorXML = true
 		local parsedXml = xml:ParseXmlText(data)
-		local sepline = "\r" .. "-------------------------" .. "\r"
-		local seplineTitle = "-------------------------" .. "\r"
+		local sepline = sepReturn .. "-------------------------" .. sepReturn
+		local seplineTitle = "-------------------------" .. sepReturn
 		
 		if parsedXml.ApplicationSettings ~= nil then 				
 			if parsedXml.ApplicationSettings.Keyboard ~= nil then 
@@ -301,7 +303,7 @@ function NotesObject:start()
 			if parsedXml.ApplicationSettings.Scripts ~= nil then 
 				if parsedXml.ApplicationSettings.Scripts.ScriptItem ~= nil then 
 					local result = ""
-					local resultForDisplayOnly = definedTitle .. "\r"
+					local resultForDisplayOnly = definedTitle .. sepReturn
 					local resultForDisplayOnlyLine = ""
 					local displayLimitNotDefined = 100
 					local tabCharCount = 4
@@ -310,12 +312,12 @@ function NotesObject:start()
 					
 					if string.len(keyboardMapping) > 0 then
 						result = result .. seplineTitle
-						result = result .. keyboardDefinedTitle .. "\r"
+						result = result .. keyboardDefinedTitle .. sepReturn
 						result = result .. keyboardMapping
 						result = result .. sepline
 					end
 					
-					result = result .. definedTitle .. "\r"
+					result = result .. definedTitle .. sepReturn
 					-- Defined
 					for iItem = 1, #scriptItem do
 						local keyMap = scriptItem[iItem][keyMapping]
@@ -323,7 +325,7 @@ function NotesObject:start()
 							local scriptName = scriptItem[iItem][keyName]
 							result = result .. self:getFormatScriptItem(scriptName, keyMap)
 							local tabCount = self:getScriptNameTabs(tabCharCount, displayLimitDefined, scriptName)
-							local tabs = string.rep("\t", tabCount)
+							local tabs = string.rep(sepTab, tabCount)
 							local scriptFilePath = ""
 							
 							if self.isScriptPathActive then
@@ -331,12 +333,14 @@ function NotesObject:start()
 							end
 							
 							keyMap = self:getSpecialKeymap(keyMap) -- if #b2 => adding (²) for info only
-							resultForDisplayOnly = resultForDisplayOnly .. scriptName .. tabs .. " => ".. keyMap .. "\r"
+							resultForDisplayOnly = resultForDisplayOnly .. scriptName .. tabs .. " => ".. keyMap .. sepReturn
 							
 							table.insert(keymaps, {scriptName, keyMap, iItem})
 							
 							if self.isScriptPathActive and #scriptFilePath > 0 then
-								table.insert(scriptsFilePath, {scriptName, scriptFilePath})
+								local lastSubfolder = self:getLastSubfolderName(scriptFilePath)
+								local previousLastSubfolder = self:getPreviousLastSubfolderName(scriptFilePath)
+								table.insert(scriptsFilePath, {scriptName, scriptFilePath, keyMap, lastSubfolder, previousLastSubfolder})
 							end
 						end
 					end
@@ -348,18 +352,18 @@ function NotesObject:start()
 						local resultSC = self:getDisplayDuplicateShortcuts(self.duplicatesShortcuts)
 						
 						result = result .. sepline
-						result = result .. SV:T("Duplicates: ") .. "\r"
+						result = result .. SV:T("Duplicates: ") .. sepReturn
 						result = result .. resultSC
 						resultForDisplayOnly = resultForDisplayOnly .. sepline
-						resultForDisplayOnly = resultForDisplayOnly .. SV:T("Duplicates: ") .. "\r"
+						resultForDisplayOnly = resultForDisplayOnly .. SV:T("Duplicates: ") .. sepReturn
 						resultForDisplayOnly = resultForDisplayOnly .. resultSC
 					end
 					
 					-- Not Defined
 					result = result .. sepline
-					result = result .. notDefinedTitle .. "\r"
+					result = result .. notDefinedTitle .. sepReturn
 					resultForDisplayOnly = resultForDisplayOnly .. sepline
-					resultForDisplayOnly = resultForDisplayOnly .. notDefinedTitle .. "\r"
+					resultForDisplayOnly = resultForDisplayOnly .. notDefinedTitle .. sepReturn
 
 					-- Not defined
 					for iItem = 1, #scriptItem do
@@ -373,7 +377,7 @@ function NotesObject:start()
 							
 							-- Adding return on string limit to displayLimit
 							if string.len(resultForDisplayOnlyLine) > displayLimitNotDefined then
-								resultForDisplayOnly = resultForDisplayOnly .. "\r"
+								resultForDisplayOnly = resultForDisplayOnly .. sepReturn
 								resultForDisplayOnlyLine = ""
 							end
 							
@@ -381,26 +385,32 @@ function NotesObject:start()
 					end						
 					resultForDisplayOnly = resultForDisplayOnly .. sepline
 					
+					-- if self.isScriptPathActive then
 					if #scriptsFilePath > 0 then
 						result = result .. sepline
-						result = result .. scriptPathTitle .. "\r"
+						result = result .. scriptPathTitle .. sepReturn
 						-- Scripts path files
 						for iItem = 1, #scriptsFilePath do
 							local scriptFilename = scriptsFilePath[iItem][1]
 							local scriptPathFilename = scriptsFilePath[iItem][2]
-							result = result .. scriptFilename .. "\t".. scriptPathFilename .. "\r"
+							local scriptKeyMap = scriptsFilePath[iItem][3]
+							local lastSubfolder = scriptsFilePath[iItem][4]
+							local previousLastSubfolder = scriptsFilePath[iItem][5]
+							result = result .. scriptKeyMap 
+								.. sepTab .. scriptFilename .. sepTab.. scriptPathFilename 
+								.. sepTab.. lastSubfolder .. sepTab .. previousLastSubfolder .. sepReturn
 						end
-						result = result .. SV:T("Count") .. " : ".. #scriptsFilePath .. "\r"
+						result = result .. SV:T("Count") .. " : ".. #scriptsFilePath .. sepReturn
 					end
 					
 					errorXML = false
 					returnValue = true
 					SV:setHostClipboard(result .. sepline .. resultForDisplayOnly)
-					SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Shortcuts:") .. "\r" 
+					SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Shortcuts:") .. sepReturn 
 						.. string.sub(resultForDisplayOnly,1, self.limitStringDisplay) 
-						.. "\r"
+						.. sepReturn
 						.. "..."
-						.. "\r" 
+						.. sepReturn 
 						.. SV:T("All data copied to clipboard!"))
 				end
 			end
@@ -868,6 +878,29 @@ function NotesObject:isFolderExists(folderName)
       return true
     end
   end
+end
+
+-- Get last folder name
+function NotesObject:getLastSubfolderName(file)
+	if string.find(file, '\\') ~= nil then
+		return self:trim(file:match("^.+\\(.+)\\.+$"))
+	else
+		return self:trim(file:match("^.+/(.+)/.+$"))
+	end
+end
+
+-- Get previous last folder name
+function NotesObject:getPreviousLastSubfolderName(file)
+	if string.find(file, '\\') ~= nil then
+		return self:trim(file:match("^.+\\(.+)\\.+\\.+$"))
+	else
+		return self:trim(file:match("^.+/(.+)/.+/.+$"))
+	end
+end
+
+-- Trim string
+function NotesObject:trim(s)
+	return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
 end
 
 -- Main function
