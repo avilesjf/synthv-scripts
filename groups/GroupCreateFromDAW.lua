@@ -17,7 +17,7 @@ A/ Without finish it with a drag&drop DAW):
 	2- Creating a new note on the piano roll
 	3- Run this script again! (host clipboard is used for this feature)
 
-Remark: 
+Warning: 
 Do not stop script by "Abort All Running Scripts", 
 this will loose your original track name!
 

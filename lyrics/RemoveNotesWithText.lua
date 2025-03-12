@@ -180,10 +180,10 @@ function NotesObject:cloneGroupsInNewTrack()
 	local iGroups = self.newTrack:getNumGroups()			
 	--[[
 		Track
-			group reference 1 isMain() timeAxis
-				group target 1 getname()
-			group reference 2
-				group target 1
+			group target 1 getname()
+				group reference 1 isMain() timeAxis
+			group target 1
+				group reference 2
 	-- ]]
 	
 	-- clone groups from source track
