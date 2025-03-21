@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'ShortcutsList V1.3'
+local SCRIPT_TITLE = 'ShortcutsList V1.4'
 
 --[[
 
@@ -9,6 +9,9 @@ And copy result into the Clipboard.
 Detecting duplicates & display Keyboard mapping
 
 !! Search variables settingsPath below in this script to update them for your own system (MAC, International) !!
+
+Update:
+2025-03: Compatible with Synthesizer V1 & V2
 
 Example:
 -------------------------
@@ -36,11 +39,6 @@ Not defined:
 <ScriptItem name="Merge Selected Notes" keyMapping==""/>
 <ScriptItem name="Play with Smooth Page Turning" keyMapping==""/>
 <ScriptItem name="Randomize Parameters" keyMapping==""/>
-<ScriptItem name="Remove Short Silences" keyMapping==""/>
-<ScriptItem name="Scale Selected Notes" keyMapping==""/>
-<ScriptItem name="Silence Skipping Play" keyMapping==""/>
-<ScriptItem name="Split Selected Groups" keyMapping==""/>
-<ScriptItem name="Split Selected Notes" keyMapping==""/>
 <ScriptItem name="add cl to the beginning of selected phonemes" keyMapping==""/>
 ...
 -------------------------
@@ -49,10 +47,6 @@ Add Breaths											 => ctrl + shift + B
 Move Note Down										 => ctrl + cursor down
 Move Note Up										 => ctrl + cursor up
 Move Notes Down										 => ctrl + shift + cursor down
-Move Notes Up										 => ctrl + shift + cursor up
-Clear parameters V1.0								 => ctrl + alt + #b2 (²)
-Clear the clipboard content V1.0					 => ctrl + shift + #b2 (²)
-Copy/Paste all parameters for group notes V1.0		 => ctrl + #b2 (²)
 ...
 -------------------------
 Not defined:
@@ -65,8 +59,12 @@ To get the script path files:
 update variable isScriptPathActive = true
 ..
 Scripts path files:
-Add Breaths	C:/Users/username/OneDrive/Documents/Dreamtonics/Synthesizer V Studio/scripts/impkit/addbreaths.lua
-
+Add Breaths	
+In SynthV V1
+C:/Users/username/OneDrive/Documents/Dreamtonics/Synthesizer V Studio/scripts/
+In SynthV V2
+C:\Users\username\AppData\Roaming\Dreamtonics\Synthesizer V Studio 2\scripts
+C:\Users\username\AppData\Roaming\Dreamtonics\Synthesizer V Studio 2\settings
 Note: Not tested in the MACOS env.
 -------------------------
 
@@ -97,6 +95,8 @@ function getArrayLanguageStrings()
 			{"Error in parsing XML file!", "Error in parsing XML file!"},
 			{"Cannot find automatically the script folder path. Please insert the folder path here:", "Cannot find automatically the script folder path. Please insert the folder path here:"},
 			{"No such file or directory", "No such file or directory"},
+			{"Error during reading host information!","Error during reading host information!"},
+			{"Host version: ","Host version: "},
 		},
 	}
 end
@@ -115,13 +115,15 @@ end
 NotesObject = {
 	project = nil,
 	winSepCharPath = "/",
-	winSettingsPathEnd = "/Dreamtonics/Synthesizer V Studio/settings/",
-	macosPathSettings = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/",
 	settingsFile = "settings.xml",
-	winScriptPathBegin = "OneDrive", -- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\Script
-	winScriptPathDocument = "Documents", -- "/Documenti", etc.
-	winScriptPathEnd = "/Dreamtonics/Synthesizer V Studio/scripts/",
-	macosPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/Script/",
+	isPathLoaded = false,
+	winScriptPathDocumentLanguage = "Documents", -- "/Documenti", etc. update it for your own language
+	winSettingsPathEnd = "",
+	macosPathSettings = "",
+	winScriptPathBegin = "",
+	winScriptPathDocument = "",
+	winScriptPathEnd = "",
+	macosScriptPath	 = "",
 	scriptFile = "/Utilities/RandomizeParameters.lua",
 	limitStringDisplay = 2000,
 	htmlChars = {{"&lt;", "<"}, {"&quot;", "\""}, {"&gt;", ">"}, {"&#13;", "\r"}, {"&#10;", "\n"}},
@@ -142,7 +144,9 @@ NotesObject = {
 	hostName = "",
 	languageCode = "", 
 	hostVersion = "",
-	hostVersionNumber = 0
+	hostVersionNumber = 0,
+	mainHostVersion = 0,
+	initialPathsInfos = {}
 }
 
 -- Constructor method for the NotesObject class
@@ -160,8 +164,64 @@ function NotesObject:new()
 	notesObject.languageCode = notesObject.hostinfo.languageCode
 	notesObject.hostVersion = notesObject.hostinfo.hostVersion
 	notesObject.hostVersionNumber = notesObject.hostinfo.hostVersionNumber
+	notesObject.mainHostVersion = notesObject:GetMainHostVersionNumber()
+	notesObject.initialPathsInfos = notesObject:getInitialPathsInfos()
+	-- notesObject:show("version=" .. notesObject.initialPathsInfos.version)
 	
     return notesObject
+end
+
+-- Get initial paths infos
+function NotesObject:getInitialPathsInfos()
+	local initialPathsInfos = {}
+	local pathsListVersion = self:getInitialPathArray()
+	if tonumber(self.mainHostVersion) > 0 then
+		for iItem = 1, #pathsListVersion do
+			if pathsListVersion[iItem].version ==  self.mainHostVersion then
+				initialPathsInfos = pathsListVersion[iItem]
+				
+				-- Set initial paths
+				self.winSettingsPathEnd = initialPathsInfos.winSettingsPathEnd
+				self.macosPathSettings = initialPathsInfos.macosPathSettings
+				self.winScriptPathBegin = initialPathsInfos.winScriptPathBegin
+				self.winScriptPathDocument = initialPathsInfos.winScriptPathDocument
+				self.winScriptPathEnd = initialPathsInfos.winScriptPathEnd
+				self.macosScriptPath = initialPathsInfos.macosScriptPath
+				self.isPathLoaded = true
+				break
+			end
+		end
+	end
+	return initialPathsInfos
+end
+
+-- Get initial paths array
+function NotesObject:getInitialPathArray()
+	local pathsListVersion = {}
+	
+	local data = {
+		version = "1",
+		winSettingsPathEnd = "/Dreamtonics/Synthesizer V Studio/settings/",
+		macosPathSettings = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/",
+		winScriptPathBegin = "OneDrive", -- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\Script
+		winScriptPathDocument = self.winScriptPathDocumentLanguage, -- "/Documenti", etc. update it for your own language
+		winScriptPathEnd = "/Dreamtonics/Synthesizer V Studio/scripts/",
+		macosScriptPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio/Script/"
+	}
+	table.insert(pathsListVersion, data)
+	
+	local data = {
+		version = "2",
+		winSettingsPathEnd = "/Dreamtonics/Synthesizer V Studio 2/settings/",
+		macosPathSettings = "/Library/Application Support/Dreamtonics/Synthesizer V Studio 2/settings/",
+		winScriptPathBegin = "AppData", -- C:\Users\username\AppData\Roaming\Dreamtonics\Synthesizer V Studio 2\scripts
+		winScriptPathDocument = "Roaming", -- "/Roaming", etc.
+		winScriptPathEnd = "/Dreamtonics/Synthesizer V Studio 2/scripts/",
+		macosScriptPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio 2/Script/"
+	}
+	table.insert(pathsListVersion, data)
+	
+	return pathsListVersion
 end
 
 -- Show message dialog
@@ -183,6 +243,18 @@ function NotesObject:logsShow()
 	if self.DEBUG then 
 		self:show(self.logs)
 	end
+end
+
+-- Get main host version number
+function NotesObject:GetMainHostVersionNumber()
+	local mainHostVersion = 0
+	if self.hostVersion ~= nil and #self.hostVersion > 0 then
+		local hostArray = self:split(self.hostVersion, ".")
+		if #hostArray > 0 then
+			mainHostVersion = hostArray[1]
+		end
+	end
+	return mainHostVersion
 end
 
 -- Get file path settings
@@ -208,7 +280,7 @@ function NotesObject:getFilePathSettings(documents)
 			-- if direct
 			settingsFolder = userProfile .. self.winSepCharPath .. documents 
 							.. self.winSettingsPathEnd
-			settingsFilePath = settingsFolder .. self.settingsFile				
+			settingsFilePath = settingsFolder .. self.settingsFile
 			if not self:isFileExists(settingsFilePath) then
 				-- trying with adding OneDrive
 				settingsFolder = userProfile 
@@ -245,8 +317,8 @@ function NotesObject:start()
 	local returnValue = false
 	
 	-- settings file path:
-	-- C:\Users\YOUR_USER_NAME\OneDrive\Documents\Dreamtonics\Synthesizer V Studio\settings\settings.xml
-	-- "/Library/Application Support/Dreamtonics/Synthesizer V Studio/settings/settings/settings.xml
+	-- C:\Users\username\AppData\Roaming\Dreamtonics\Synthesizer V Studio 2\settings\settings.xml
+	-- "/Library/Application Support/Dreamtonics/Synthesizer V Studio 2/settings/settings/settings.xml
 	local settingsPath = self:getFilePathSettings(self.winScriptPathDocument)
 	local fileNotFoundTitle = SV:T("File not found!")
 	local definedTitle = SV:T("Defined:")
@@ -279,7 +351,7 @@ function NotesObject:start()
 	local fhandle = io.open(settingsPath, 'r')
 	
 	if fhandle == nil then
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), fileNotFoundTitle .. " : " .. settingsPath)
+		self:show(fileNotFoundTitle .. " : " .. settingsPath)
 	else
 		-- read file
 		local data = fhandle:read("*a")
@@ -406,7 +478,8 @@ function NotesObject:start()
 					errorXML = false
 					returnValue = true
 					SV:setHostClipboard(result .. sepline .. resultForDisplayOnly)
-					SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Shortcuts:") .. sepReturn 
+					self:show(SV:T("Host version: ") .. self.mainHostVersion .. sepReturn 
+						.. SV:T("Shortcuts:") .. sepReturn 
 						.. string.sub(resultForDisplayOnly,1, self.limitStringDisplay) 
 						.. sepReturn
 						.. "..."
@@ -417,9 +490,9 @@ function NotesObject:start()
 		end
 		
 		if errorXML then
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("settingsPath: ") 
-								.. settingsPath .. "\r" 
-								.. SV:T("Error in parsing XML file!"))
+			self:show(SV:T("settingsPath: ") 
+						.. settingsPath .. "\r" 
+						.. SV:T("Error in parsing XML file!"))
 		end
 	end
 	return returnValue
@@ -822,7 +895,7 @@ function NotesObject:getScriptsPath()
 	local scriptErrorText = SV:T("Cannot find automatically the script folder path. Please insert the folder path here:")
 	local scriptErrorUserProfileText = SV:T("Cannot find user profile. Please insert the full path here:")
 	
-	if self.osType ~= "Windows" then	
+	if self.osType ~= "Windows" then
 		-- "macOS", "Linux", "Unknown"
 		scriptFilePath = self.macosPath
 		if not self:isFolderExists(scriptFilePath) then
@@ -835,7 +908,7 @@ function NotesObject:getScriptsPath()
 			-- if direct
 			scriptFolder = userProfile .. self.winSepCharPath .. self.winScriptPathDocument 
 							.. self.winScriptPathEnd
-			scriptFilePath = scriptFolder
+			scriptFilePath = scriptFolder			
 			if not self:isFolderExists(scriptFilePath) then
 				-- trying with adding OneDrive
 				scriptFolder = userProfile 
@@ -844,7 +917,7 @@ function NotesObject:getScriptsPath()
 								.. self.winSepCharPath 
 								.. self.winScriptPathDocument
 								.. self.winScriptPathEnd
-				scriptFilePath = scriptFolder
+				scriptFilePath = scriptFolder				
 				if not self:isFolderExists(scriptFilePath) then
 					scriptFilePath = SV:showInputBox(SV:T(SCRIPT_TITLE), scriptErrorText, scriptFilePath)
 				end
@@ -906,8 +979,11 @@ end
 -- Main function
 function main()
 	local notesObject = NotesObject:new()
-	notesObject:start()
-	
+	if notesObject.isPathLoaded then
+		notesObject:start()
+	else
+		notesObject:show(SV:T("Error during reading host information!"))
+	end
 	SV:finish()
 end
 
