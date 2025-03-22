@@ -247,7 +247,7 @@ end
 function NotesObject:createGroup(startPosition, targetPosition, track)
 	local maxLengthResult = 30
 	local numGroups = self.newDAWTrack:getNumGroups()
-	local groupRefMain = self.newDAWTrack:getGroupReference(1)
+	local groupRefMain = self.newDAWTrack:getGroupReference(self.newDAWTrack:getNumGroups())
 	local groupNotesMain = groupRefMain:getTarget()
 	local measureBlick = 0
 	if groupNotesMain:getNumNotes() > 0 then

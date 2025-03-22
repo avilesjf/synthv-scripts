@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group create from DAW direct V1.1'
+local SCRIPT_TITLE = 'Group create direct from DAW  V1.1'
 
 --[[
 
@@ -64,7 +64,6 @@ NotesObject = {
 	GROUP_STOP_TAG = "GroupStop:",
 	CURRENT_TRACK_COLOR_REF = "FFFF0000",
 	TRACK_TARGET_COLOR_REF = "FFFF0000",
-	IS_NEW_TRACK = "isNewTrack",
 	LINK_NOTES_ACTIVE = "linkNotesActive",
 	TRACK_TARGET_REF = "trackTarget",
 	tracksColor = {},
@@ -86,7 +85,6 @@ NotesObject = {
 	newDAWTrack = nil,
 	newGrouptRef = nil,
 	currentTrack = nil,
-	isNewTrack = false,
 	numTracks = 0,
 	selection = nil,
 	selectedNotes = nil,
@@ -215,15 +213,6 @@ function NotesObject:getFirstMesure(notePos)
 	return measureBlick
 end
 
--- Create track target
-function NotesObject:createTrackTarget(name)
-	local newTrackTarget = SV:create("Track")
-	local newTrackIndex = self.project:addTrack(newTrackTarget)
-	newTrackTarget = self.project:getTrack(newTrackIndex)
-	newTrackTarget:setName(self.trackTargetName)
-	return newTrackTarget
-end
-
 -- Remove track DAW
 function NotesObject:removeTrackDAW()
 	if self.newDAWTrack ~= nil then
@@ -233,12 +222,12 @@ function NotesObject:removeTrackDAW()
 end
 
 -- Create group for new track with new notes
-function NotesObject:createGroup(startPosition, targetPosition, track)
+function NotesObject:createGroup(startPosition, targetPosition)
 	local maxLengthResult = 30
-	local numGroups = self.newDAWTrack:getNumGroups()
-	local groupRefMain = self.newDAWTrack:getGroupReference(1)
+	local groupRefMain = self.newDAWTrack:getGroupReference(self.newDAWTrack:getNumGroups())
 	local groupNotesMain = groupRefMain:getTarget()
 	local measureBlick = 0
+
 	if groupNotesMain:getNumNotes() > 0 then
 		measureBlick = self:getFirstMesure(groupNotesMain:getNote(1):getOnset())
 	end
@@ -249,33 +238,37 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 	for iNote = 1, groupNotesMain:getNumNotes() do
 		table.insert(mainGroupNotes, groupNotesMain:getNote(iNote))
 	end
+	
+	if #mainGroupNotes > 0 then
+		-- Create new group 
+		local noteGroup = SV:create("NoteGroup")
+		self.newGrouptRef = SV:create("NoteGroupReference")
+			
+		self.project:addNoteGroup(noteGroup)
+		self.newGrouptRef:setTarget(noteGroup)
+		self.newGrouptRef:setTimeOffset(measureBlick + startPosition)
 
-	-- Create new group 
-	local noteGroup = SV:create("NoteGroup")
-	local previousNote = nil
-	for iNote = 1, #mainGroupNotes do
-		local note = mainGroupNotes[iNote]:clone()
-		-- Update position within the new group
-		note:setOnset(mainGroupNotes[iNote]:getOnset() - measureBlick)
-		
-		if self.linkNotesActive then
-			if previousNote ~= nil then
-				self:linkedTheNotes(previousNote, note, noteGroup:getNote(iNote - 1))
+		self.currentTrack:addGroupReference(self.newGrouptRef)
+
+		local previousNote = nil
+		for iNote = 1, #mainGroupNotes do
+			local note = mainGroupNotes[iNote]:clone()
+			-- Update position within the new group
+			note:setOnset(mainGroupNotes[iNote]:getOnset() - measureBlick)
+			
+			if self.linkNotesActive then
+				if previousNote ~= nil then
+					self:linkedTheNotes(previousNote, note, noteGroup:getNote(iNote - 1))
+				end
 			end
+			
+			noteGroup:addNote(note)
+			previousNote = note
 		end
 		
-		noteGroup:addNote(note)
-		previousNote = note
+		local resultLyrics = self:renameOneGroup(self.timeAxis, maxLengthResult, noteGroup)
 	end
-		
-	noteGroup:setName("")
-	self.project:addNoteGroup(noteGroup)
-	local resultLyrics = self:renameOneGroup(self.timeAxis, maxLengthResult, noteGroup)
 	
-	self.newGrouptRef = SV:create("NoteGroupReference", noteGroup)
-	self.newGrouptRef:setTimeOffset(measureBlick + startPosition)
-	
-	track:addGroupReference(self.newGrouptRef)
 	return true
 end
 
@@ -538,16 +531,12 @@ function NotesObject:scanNewTrack()
 		self.trackTarget:setName(secondsInfo .. " " .. self.newDAWTrack:getName())
 		
 		if numNotesNewDAWTrack > 0 then
+			
 			local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
 			local measureBlick = self:getFirstMesure(newStartPosition)
 			
-			local track = self.currentTrack
-			if self.isNewTrack then
-				track = self.trackTarget
-			end
-			
 			-- New notes => Create a new group
-			self:createGroup(measureBlick, self.currentSeconds, track)
+			self:createGroup(measureBlick, self.currentSeconds)
 			self:removeTrackDAW()
 			self.stopProcess = true -- End of process
 			self.stopProcessOK = true -- End of process OK
@@ -567,18 +556,8 @@ end
 function NotesObject:setTrackTarget()
 	
 	if self.trackTarget ~= nil then
-		if self.isNewTrack then
-			-- set last track name & color
-			self.trackTarget:setName(self.trackTargetName .. " " .. self.project:getNumTracks())
-			self.trackTarget:setDisplayColor("#" .. self.TRACK_TARGET_COLOR_REF)
-		end
-	end
-	
-	if not self.isNewTrack then
-		if self.trackTarget ~= nil then
-			self.trackTarget:setName(self.initialTrackName)
-			self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
-		end
+		self.trackTarget:setName(self.initialTrackName)
+		self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
 	end
 	
 end
@@ -627,7 +606,6 @@ end
 -- End of script 
 function NotesObject:endOfScript()
 	self.stopProcess = true
-	
 	self:setTrackTarget()
 
 	self:setInitialTracksColor()
@@ -748,12 +726,6 @@ function NotesObject:setParametersFromStoredGroup(paramName, value)
 			table.insert(self.tracksColorStored, {track[1], track[2]})
 		end
 	end
-	if string.find(paramName, self.IS_NEW_TRACK) then
-		self.isNewTrack = false
-		if value == "true" then 
-			self.isNewTrack = true
-		end
-	end
 	if string.find(paramName, self.LINK_NOTES_ACTIVE) then
 		self.linkNotesActive = false
 		if value == "true" then 
@@ -780,7 +752,6 @@ function NotesObject:storeToHiddenGroup()
 		self.groupStoredRefFound, self.groupStoredFound = self:createInternalGroup()
 		local data = self.INITIAL_TRACK_NAME_REF	.. "=" .. self.initialTrackName					.. self.sepParam
 			.. self.INITIAL_COLOR_TRACK_REF			.. "=" .. self.initialColorTrack 				.. self.sepParam
-			.. self.IS_NEW_TRACK					.. "=" .. tostring(self.isNewTrack)				.. self.sepParam
 			.. self.LINK_NOTES_ACTIVE				.. "=" .. tostring(self.linkNotesActive)		.. self.sepParam
 			.. self.NUM_TRACKS_REF					.. "=" .. self.numTracks						.. self.sepParam
 			.. self.TRACK_TARGET_REF				.. "=" .. self.trackTarget:getIndexInParent()	.. self.sepParam

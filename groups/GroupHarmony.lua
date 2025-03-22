@@ -269,8 +269,6 @@ function NotesObject:getTracksList()
 	
 	for iTrack = 1, iTracks do
 		local track = self.project:getTrack(iTrack)
-		local mainGroupRef = track:getGroupReference(1) -- main group
-		local groupNotesMain = mainGroupRef:getTarget()
 		local numGroups = track:getNumGroups() - 1
 		local format = formatCount .. " " .. SV:T("groups")
 		if numGroups < 2 then
