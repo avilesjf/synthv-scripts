@@ -30,6 +30,7 @@ Automate creating group of notes while dragging notes from DAW.
 Harmony: Copy selected groups to new tracks (or select one) and transpose all notes in desired scale.
 Group synchronization for duplicate groups across multiple tracks.
 Clone a track and all groups inside, unlink groups from original track.
+List all groups in the project, copy a group linked or not, delete a group or all un referenced groups.
 
 ## lyrics-scripts
 Extracting lyrics easier to save all lyrics of a song. 
