@@ -93,6 +93,7 @@ function NotesObject:new()
     self.__index = self
 	
     notesObject.project = SV:getProject()
+	notesObject:getHostInformations()
 	notesObject.timeAxis = notesObject.project:getTimeAxis()
 	notesObject.activeCurrentTrack = SV:getMainEditor():getCurrentTrack()
 	notesObject.numGroups = notesObject.project:getNumNoteGroupsInLibrary()
@@ -100,14 +101,6 @@ function NotesObject:new()
 	
 	notesObject.playBack = SV:getPlayback()
 	notesObject.playBackCurrentSeconds = notesObject.playBack:getPlayhead()
-	
-	notesObject.hostinfo = SV:getHostInfo()
-	notesObject.osType = notesObject.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
-	notesObject.osName = notesObject.hostinfo.osName
-	notesObject.hostName = notesObject.hostinfo.hostName
-	notesObject.languageCode = notesObject.hostinfo.languageCode
-	notesObject.hostVersion = notesObject.hostinfo.hostVersion
-	notesObject.hostVersionNumber = notesObject.hostinfo.hostVersionNumber
 	
 	-- Get all groups
 	notesObject.groups = notesObject:getAllGroups()	
@@ -118,6 +111,17 @@ end
 -- Show message dialog
 function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
+end
+
+-- Get host informations
+function NotesObject:getHostInformations()
+	self.hostinfo = SV:getHostInfo()
+	self.osType = self.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
+	self.osName = self.hostinfo.osName
+	self.hostName = self.hostinfo.hostName
+	self.languageCode = self.hostinfo.languageCode
+	self.hostVersion = self.hostinfo.hostVersion
+	self.hostVersionNumber = self.hostinfo.hostVersionNumber
 end
 
 -- Get all groups in library

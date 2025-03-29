@@ -123,6 +123,13 @@ end
 -- Define a class  "NotesObject"
 NotesObject = {
 	project = nil,
+	hostinfo = nil,
+	osType = "",
+	osName = "",
+	hostName = "",
+	languageCode = "", 
+	hostVersion = "",
+	hostVersionNumber = 0,	
 	keyNames = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"},
 	currentKeyNames = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"},
 	keysInScale = {},
@@ -159,16 +166,16 @@ NotesObject = {
 
 -- Constructor method for the NotesObject class
 function NotesObject:new()
-    local NotesObject = {}
-    setmetatable(NotesObject, self)
+    local notesObject = {}
+    setmetatable(notesObject, self)
     self.__index = self
 	
-    NotesObject.project = SV:getProject()
+    notesObject.project = SV:getProject()
+	notesObject:getHostInformations()
+	notesObject.keyScaleTypeTitleFound  = SV:T("Major")
+	notesObject.trackNameHarmony = SV:T("Track H")
 	
-	NotesObject.keyScaleTypeTitleFound  = SV:T("Major")
-	NotesObject.trackNameHarmony = SV:T("Track H")
-	
-	NotesObject.transposition = { 
+	notesObject.transposition = { 
 		-- Specify your own default {SV:T("default"), 1, {"+2,+5", "-2,-5", "+2,+5,+7", "-2,-5,-7"}},
 		{SV:T("1 note"),  8, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "-3", "-5", "-7"}},
 		{SV:T("2 notes"), 2, {"+1,+3", "+2,+5", "+2,+4", "+3,+5", "+3,+6", "-2,-5", "-3,-5"}},
@@ -178,7 +185,7 @@ function NotesObject:new()
 		{SV:T("Build your own"), 1, {"+0"}}
 	}
 	
-	NotesObject.allScales = {
+	notesObject.allScales = {
 			-- KeyScale type, Intervals, Gaps between degrees (for info only, not used)
 			{SV:T("Major"),			{0,2,4,5,7,9,11,12}, {2, 2, 1, 2, 2, 2, 1}},
 			{SV:T("Natural Minor"),	{0,2,3,5,7,8,10,12}, {2, 1, 2, 2, 1, 2, 2}},
@@ -200,7 +207,7 @@ function NotesObject:new()
 			{SV:T("Indian"),		{0,1,3,4,7,8,10,12}, {1, 2, 1, 3, 1, 2, 2}},
 			{SV:T("Hungarian major"),{0,3,4,6,7,9,10,12}, {3, 1, 2, 1, 2, 1, 2}}
 		}
-    return NotesObject
+    return notesObject
 end
 
 -- Display message box
@@ -208,15 +215,15 @@ function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
 end
 
--- Get host infos
-function NotesObject:getHostInfos()
-	local hostinfo = SV:getHostInfo()
-	local osType = hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
-	local osName = hostinfo.osName
-	local hostName = hostinfo.hostName
-	local languageCode = hostinfo.languageCode
-	local hostVersion = hostinfo.hostVersion
-	return osType, osName, hostName, languageCode, hostVersion
+-- Get host informations
+function NotesObject:getHostInformations()
+	self.hostinfo = SV:getHostInfo()
+	self.osType = self.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
+	self.osName = self.hostinfo.osName
+	self.hostName = self.hostinfo.hostName
+	self.languageCode = self.hostinfo.languageCode
+	self.hostVersion = self.hostinfo.hostVersion
+	self.hostVersionNumber = self.hostinfo.hostVersionNumber
 end
 
 -- Add internal logs
@@ -443,7 +450,7 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 		widgets = {
 			{
 				name = "scaleInfos1", type = "TextArea", label = SV:T("Scale degrees model"),
-				height = 60, default = scaleInfo1 .. "\r" .. scaleInfo2 
+				height = 65, default = scaleInfo1 .. "\r" .. scaleInfo2 
 				.. "\r" .. scaleInfo3
 			},
 			{
@@ -493,12 +500,11 @@ end
 function NotesObject:start()
 	local maxLengthResult = 30
 	local groupsSelected = SV:getArrangement():getSelection():getSelectedGroups()
-	local osType, osName, hostName, languageCode, hostVersion = self:getHostInfos()	
 	self:logsClear()
 	
-	self:logsAdd("osType: " .. osType .. ", hostName: " .. hostName  .. "\r")
-	self:logsAdd("osName: " .. osName .. ", hostVersion: " .. hostVersion 
-		.. ", languageCode: " .. languageCode  .. "\r")
+	self:logsAdd("osType: " .. self.osType .. ", hostName: " .. self.hostName  .. "\r")
+	self:logsAdd("osName: " .. self.osName .. ", hostVersion: " .. self.hostVersion 
+		.. ", languageCode: " .. self.languageCode  .. "\r")
 	
 	-- Check groups selected
 	if #groupsSelected == 0 then

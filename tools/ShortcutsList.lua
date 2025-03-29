@@ -156,14 +156,7 @@ function NotesObject:new()
     self.__index = self
 	
     notesObject.project = SV:getProject()
-
-	notesObject.hostinfo = SV:getHostInfo()
-	notesObject.osType = notesObject.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
-	notesObject.osName = notesObject.hostinfo.osName
-	notesObject.hostName = notesObject.hostinfo.hostName
-	notesObject.languageCode = notesObject.hostinfo.languageCode
-	notesObject.hostVersion = notesObject.hostinfo.hostVersion
-	notesObject.hostVersionNumber = notesObject.hostinfo.hostVersionNumber
+	notesObject:getHostInformations()
 	notesObject.mainHostVersion = notesObject:GetMainHostVersionNumber()
 	notesObject.initialPathsInfos = notesObject:getInitialPathsInfos()
 	-- notesObject:show("version=" .. notesObject.initialPathsInfos.version)
@@ -228,6 +221,18 @@ end
 function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
 end
+
+-- Get host informations
+function NotesObject:getHostInformations()
+	self.hostinfo = SV:getHostInfo()
+	self.osType = self.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
+	self.osName = self.hostinfo.osName
+	self.hostName = self.hostinfo.hostName
+	self.languageCode = self.hostinfo.languageCode
+	self.hostVersion = self.hostinfo.hostVersion
+	self.hostVersionNumber = self.hostinfo.hostVersionNumber
+end
+
 -- Add internal logs
 function NotesObject:logsAdd(new)
 	if self.DEBUG then self.logs = self.logs .. new end
