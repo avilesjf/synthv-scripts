@@ -40,7 +40,7 @@ function getArrayLanguageStrings()
 			{"Copy a linked group", "Copy a linked group"},
 			{"Copy a group unlinked", "Copy a group unlinked"},
 			{"Delete a group", "Delete a group"},
-			{"Delete all un referenced groups", "Delete all un referenced groups"},
+			{"Delete all unreferenced groups", "Delete all unreferenced groups"},
 			{"Group deleted: ", "Group deleted: "},
 			{"No groups in this project!", "No groups in this project!"},
 		},
@@ -81,8 +81,6 @@ NotesObject = {
 	groupsListChoice = {},
 	groupChoice = 0,
 	linkedGroup = true,
-	deleteGroup = false,
-	deleteAllUnReferencedGroups = false,
 	traceLog = ""
 }
 
@@ -260,8 +258,8 @@ end
 -- Get groups list for combo box
 function NotesObject:getGroupsListForComboBox()
 	local result = false
-	self.groupListComboBox = {}
-
+	self.groupsListChoice = {}
+	
 	for iGroup = 1, #self.groups do
 		local groupName = self.groups[iGroup].group:getName()
 		local lyrics = self.groups[iGroup].lyrics
@@ -269,11 +267,8 @@ function NotesObject:getGroupsListForComboBox()
 		local noteText = numNotes .. " " .. SV:T("note")
 		local numLinkedRef = #self.groups[iGroup].groupsRef
 		local linkedGroup = self.groups[iGroup].linked
-		local linkedText = ""
-		
-		if numLinkedRef > 0 then
-			linkedText = " : " .. numLinkedRef .. " " .. SV:T("Link")
-		end
+		local isValid = false
+
 		if numNotes > 1 then
 			noteText = numNotes .. " " .. SV:T("notes")
 		end
@@ -284,7 +279,6 @@ function NotesObject:getGroupsListForComboBox()
 			lyrics = " " .. "(" .. lyrics .. ")"
 		end
 		
-		-- groupItem = groupName .. linkedText .. noteText .. lyrics
 		groupItem = '"' .. groupName .. '"' .. ": " .. noteText .. lyrics .. " "
 
 		-- Get group reference data
@@ -301,7 +295,6 @@ function NotesObject:getGroupsListForComboBox()
 			end
 		end
 		result = true
-		
 		table.insert(self.groupsListChoice, groupItem)
 	end	
 	
@@ -310,7 +303,12 @@ end
 
 -- Create user input form
 function NotesObject:getForm()
-
+	local choices = {
+		SV:T("Copy a linked group"), 
+		SV:T("Copy a group unlinked"), 
+		SV:T("Delete a group")
+		}
+	
 	local form = {
 		title = SV:T(SCRIPT_TITLE),
 		message = SV:T("Select a group to copy!"),
@@ -326,12 +324,7 @@ function NotesObject:getForm()
 				choices = self.groupsListChoice, default = 0
 			},
 			{	name = "action", type = "ComboBox", label = SV:T("Action (copy/delete):"),
-				choices = {
-					SV:T("Copy a linked group"), 
-					SV:T("Copy a group unlinked"), 
-					SV:T("Delete a group"),
-					SV:T("Delete all un referenced groups")
-					}, default = 0
+				choices = choices, default = 0
 			},
 			{
 				name = "separator", type = "TextArea", label = "", height = 0
@@ -381,13 +374,8 @@ function NotesObject:addNewGroupRef(groupChoice, linked)
 	self.activeCurrentTrack:addGroupReference(newGrouptRef)
 end
 
--- Start process
-function NotesObject:start()
-	
-	-- local groupList = self:getGroupsList()
-	-- self:show(groupList)
-	self.deleteGroup = false
-	self.deleteAllUnReferencedGroups = false
+-- Get form action
+function NotesObject:getFormAction()
 	
 	local groupList = self:getGroupsListForComboBox()
 	local userInput = self:getForm()
@@ -396,16 +384,14 @@ function NotesObject:start()
 		if userInput.answers.groupChoice ~= nil then
 			self.groupChoice  = userInput.answers.groupChoice + 1
 			local action = userInput.answers.action
-			self.linkedGroup = (action == 0)
-			self.deleteGroup = (action == 2)
-			self.deleteAllUnReferencedGroups = (action == 3)
+			self.linkedGroup = (action == 0) -- action == 1 => copy unlinked Group
 			
 			-- Delete all un referenced groups
-			if self.deleteAllUnReferencedGroups then
+			if action == 3 then
 				self:unReferencedGroupDelete()
 			else
 				-- Delete one group selected
-				if self.deleteGroup then
+				if action == 2 then
 					self:groupDelete(self.groupChoice)
 				else
 					-- Copy group to current track and playback position (linked or unlinked)
@@ -414,6 +400,17 @@ function NotesObject:start()
 			end
 		end
 	end
+end
+
+-- Start process
+function NotesObject:start()
+	
+	-- local groupList = self:getGroupsList()
+	-- self:show(groupList)
+	
+	self.isFiltered = false
+	self:getFormAction()
+	
 end
 
 -- End of process
