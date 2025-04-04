@@ -91,37 +91,41 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = notesObject.project:getTimeAxis()
-    notesObject.editor =  SV:getMainEditor()
-    notesObject.track = notesObject.editor:getCurrentTrack()
-    notesObject.selection = notesObject.editor:getSelection()
-    notesObject.selectedNotes = notesObject.selection:getSelectedNotes()
-	notesObject.currentGroupRef = notesObject.editor:getCurrentGroup()
-	notesObject.groupNotesMain = notesObject.currentGroupRef:getTarget()
+    self.project = SV:getProject()
+    self.timeAxis = self.project:getTimeAxis()
+    self.editor =  SV:getMainEditor()
+    self.track = self.editor:getCurrentTrack()
+    self.selection = self.editor:getSelection()
+    self.selectedNotes = self.selection:getSelectedNotes()
+	self.currentGroupRef = self.editor:getCurrentGroup()
+	self.groupNotesMain = self.currentGroupRef:getTarget()
 	
-	notesObject.parametersFoundCount = 0
-	notesObject.parametersRemovedCount = 0
+	self.parametersFoundCount = 0
+	self.parametersRemovedCount = 0
+	self:setRangeTime()
 	
+    return self
+end
+
+-- set range time
+function NotesObject:setRangeTime()
 	-- Get range time
-	if #notesObject.selectedNotes > 0 then
+	if #self.selectedNotes > 0 then
 		-- get current group from first note
-		local sourceNote = notesObject.selectedNotes[1]
-		notesObject.groupFromNote = sourceNote:getParent()
+		local sourceNote = self.selectedNotes[1]
+		self.groupFromNote = sourceNote:getParent()
 		
-		notesObject.timeBegin = notesObject.selectedNotes[1]:getOnset()
-		if #notesObject.selectedNotes > 1 then
-			local lastSourceNote = notesObject.selectedNotes[#notesObject.selectedNotes]
-			notesObject.timeEnd = lastSourceNote:getOnset() + lastSourceNote:getDuration()
+		self.timeBegin = self.selectedNotes[1]:getOnset()
+		if #self.selectedNotes > 1 then
+			local lastSourceNote = self.selectedNotes[#self.selectedNotes]
+			self.timeEnd = lastSourceNote:getOnset() + lastSourceNote:getDuration()
 		else
-			notesObject.timeEnd = notesObject.timeBegin + notesObject.selectedNotes[1]:getDuration()
+			self.timeEnd = self.timeBegin + self.selectedNotes[1]:getDuration()
 		end
-		for iNote = 1, #notesObject.selectedNotes do
-			notesObject.lyrics = notesObject.lyrics .. jfaTools.getSepCharLoop(iNote, " ") .. notesObject.selectedNotes[iNote]:getLyrics()
+		for iNote = 1, #self.selectedNotes do
+			self.lyrics = self.lyrics .. jfaTools.getSepCharLoop(iNote, " ") .. self.selectedNotes[iNote]:getLyrics()
 		end
 	end
-
-    return notesObject
 end
 
 -- Method to get Selected Notes Count of a NotesObject

@@ -21,8 +21,8 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"No notes selected!", "No notes selected!"},
-		},
+			{"No notes selected!", "No notes selected!"}
+		}
 	}
 end
 
@@ -58,6 +58,11 @@ function NotesObject:new()
 	notesObject.selectedNotes = notesObject.editor:getSelection():getSelectedNotes()
 
     return notesObject
+end
+
+-- Show message dialog
+function NotesObject:show(message)
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
 end
 
 -- Shift selected notes

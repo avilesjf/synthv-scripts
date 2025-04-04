@@ -25,7 +25,6 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"self.timeBeginFromClipboard: ", "self.timeBeginFromClipboard: "},
 			{"checkValidParamsFromClipboard: ", "checkValidParamsFromClipboard: "},
 			{"Def params - DisplayName: ", "Def params - DisplayName: "},
 			{"Type: ", "Type: "},
@@ -120,38 +119,48 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = notesObject.project:getTimeAxis()
-    notesObject.editor =  SV:getMainEditor()
-    notesObject.track = notesObject.editor:getCurrentTrack()
-    notesObject.selection = notesObject.editor:getSelection()
-    notesObject.selectedNotes = notesObject.selection:getSelectedNotes()
-	notesObject.currentGroupRef = notesObject.editor:getCurrentGroup()
-	notesObject.groupNotesMain = notesObject.currentGroupRef:getTarget()
+    self.project = SV:getProject()
+    self.timeAxis = self.project:getTimeAxis()
+    self.editor =  SV:getMainEditor()
+    self.track = self.editor:getCurrentTrack()
+    self.selection = self.editor:getSelection()
+    self.selectedNotes = self.selection:getSelectedNotes()
+	self.currentGroupRef = self.editor:getCurrentGroup()
+	self.groupNotesMain = self.currentGroupRef:getTarget()
 	
-	notesObject.parametersFoundCount = 0
+	self.parametersFoundCount = 0
 	
+	self:setRangeTime()
+	
+    return self
+end
+
+-- Set range time
+function NotesObject:setRangeTime()
 	-- Get range time
-	if #notesObject.selectedNotes > 0 then
+	if #self.selectedNotes > 0 then
 		-- get current group from first note
-		local sourceNote = notesObject.selectedNotes[1]
-		notesObject.groupFromNote = sourceNote:getParent()
+		local sourceNote = self.selectedNotes[1]
+		self.groupFromNote = sourceNote:getParent()
 		
-		notesObject.timeBegin = notesObject.selectedNotes[1]:getOnset()
-		if #notesObject.selectedNotes > 1 then
-			local lastSourceNote = notesObject.selectedNotes[#notesObject.selectedNotes]
-			notesObject.timeEnd = lastSourceNote:getOnset() + lastSourceNote:getDuration()
+		self.timeBegin = self.selectedNotes[1]:getOnset()
+		if #self.selectedNotes > 1 then
+			local lastSourceNote = self.selectedNotes[#self.selectedNotes]
+			self.timeEnd = lastSourceNote:getOnset() + lastSourceNote:getDuration()
 		else
-			notesObject.timeEnd = notesObject.timeBegin + notesObject.selectedNotes[1]:getDuration()
+			self.timeEnd = self.timeBegin + self.selectedNotes[1]:getDuration()
 		end
-		for iNote = 1, #notesObject.selectedNotes do
-			notesObject.lyrics = notesObject.lyrics .. jfaTools.getSepCharLoop(iNote, " ") .. notesObject.selectedNotes[iNote]:getLyrics()
+		for iNote = 1, #self.selectedNotes do
+			self.lyrics = self.lyrics .. jfaTools.getSepCharLoop(iNote, " ") .. self.selectedNotes[iNote]:getLyrics()
 		end
 	end
-	notesObject.parametersClipBoard = SV:getHostClipboard()
-	NotesObject.isParametersClipBoardTable = notesObject:isClipboardTable()
-	
-    return notesObject
+	self.parametersClipBoard = SV:getHostClipboard()
+	self.isParametersClipBoardTable = self:isClipboardTable()
+end
+
+-- Show message dialog
+function NotesObject:show(message)
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
 end
 
 -- Method to get Selected Notes Count of a NotesObject
@@ -266,7 +275,7 @@ function NotesObject:getDefaultParamDefinition(parameterName, parametersGroup)
 		local paramsDef = parametersGroup:getDefinition()
 	
 		for iRange = 1, #paramsDef.range do
-			range = range .. getStringDataForLoop(range, iRange, #paramsDef.range)
+			range = range .. jfaTools.getStringDataForLoop(range, iRange, #paramsDef.range)
 		end
 		
 		result = result ..  SV:T("Def params - DisplayName: ") .. paramsDef.displayName .. ", ".. SV:T("Type: ")
@@ -350,7 +359,10 @@ function NotesObject:setParameters(newTimeBegin)
 	local result = ""
 	local timeBeginConvClipBoard = self.timeBeginFromClipboard
 	if type(timeBeginConvClipBoard) == "string" then timeBeginConvClipBoard = tonumber(timeBeginConvClipBoard) end
-	local timeOffset = self.timeBegin - timeBeginConvClipBoard
+	local timeOffset = self.timeBegin
+	if timeBeginConvClipBoard ~= nil then
+		timeOffset = self.timeBegin - timeBeginConvClipBoard
+	end
 	local newPoints = {}
 	
 	--if self.timeBegin == timeBeginConvClipBoard then
@@ -541,7 +553,65 @@ function NotesObject:promptForPaste()
 	return resultAction	
 end
 
--- Main processing task	
+-- Main processing task
+function NotesObject:start()
+
+	-- Check if copy or paste action
+	if self.parametersFoundCountFromClipBoard == 0 then
+		self:getParameters()
+		
+		-- Copy action
+		local resultAction = self:promptForCopy()
+		
+		if resultAction then
+			-- save parameters to clipboard
+			self:saveParameters()
+			
+			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters copy done!") )
+			local result = jfaTools.tableToString(self.parametersFound)
+			if string.len(result) > 0 then
+				--SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("getParametersFound:") .. "\r" .. result)
+				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters copy DONE!") .. "\r\r"
+				.. SV:T("Next step :") .. "\r"
+				.. SV:T("Select a new note target to duplicate all parameters") .. "\r"
+				.. SV:T("and start this script again!"))
+			else
+				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters not found for selected notes!") )
+			end
+		end
+	else
+		self:getParameters()
+		-- Save new parameters to clipboard
+		self:saveParameters()
+
+		local timeBeginConvClipBoard = self.timeBeginFromClipboard
+		if type(timeBeginConvClipBoard) == "string" then timeBeginConvClipBoard = tonumber(timeBeginConvClipBoard) end
+		
+		if self.timeBegin == timeBeginConvClipBoard then
+			local groupRefTimeoffset = self.currentGroupRef:getTimeOffset()
+			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("!! STOP !!") .. "\r" .. SV:T("You cannot paste on the same selected notes!") .. "\r\r"
+				.. SV:T("(Current note time begin is ") 
+				.. self:secondsToClock(self:getBlickToSecond(self.timeBegin + groupRefTimeoffset))
+				.. ")" .. "\r"
+				.. SV:T("Parameters type count: ") .. tostring(self.parametersFoundCount)
+				)
+		else
+			-- Paste action
+			local resultAction = self:promptForPaste()
+			
+			if resultAction then
+				local resultParams = self:setParameters()
+				-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Result params:") .. "\r" .. jfaTools.tableToString(resultParams))
+				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters paste DONE!") .. "\r\r"
+				.. SV:T("Next step :") .. "\r"
+				.. SV:T("See the paste action result inside the parameters window."))
+				
+			end				
+		end
+	end
+end
+
+-- Main processing task
 function main()
 	
 	local notesObject = NotesObject:new()
@@ -550,59 +620,7 @@ function main()
 	if not notesObject:isOneNoteSelected() then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes selected!"))
 	else
-		-- Check if copy or paste action
-		if notesObject.parametersFoundCountFromClipBoard == 0 then
-			notesObject:getParameters()
-			
-			-- Copy action
-			local resultAction = notesObject:promptForCopy()
-			
-			if resultAction then
-				-- save parameters to clipboard
-				notesObject:saveParameters()
-				
-				-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters copy done!") )
-				local result = jfaTools.tableToString(notesObject.parametersFound)
-				if string.len(result) > 0 then
-					--SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("getParametersFound:") .. "\r" .. result)
-					SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters copy DONE!") .. "\r\r"
-					.. SV:T("Next step :") .. "\r"
-					.. SV:T("Select a new note target to duplicate all parameters") .. "\r"
-					.. SV:T("and start this script again!"))
-				else
-					SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters not found for selected notes!") )
-				end
-			end
-		else
-			notesObject:getParameters()
-			-- Save new parameters to clipboard
-			notesObject:saveParameters()
-
-			local timeBeginConvClipBoard = notesObject.timeBeginFromClipboard
-			if type(timeBeginConvClipBoard) == "string" then timeBeginConvClipBoard = tonumber(timeBeginConvClipBoard) end
-			
-			if notesObject.timeBegin == timeBeginConvClipBoard then
-				local groupRefTimeoffset = notesObject.currentGroupRef:getTimeOffset()
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("!! STOP !!") .. "\r" .. SV:T("You cannot paste on the same selected notes!") .. "\r\r"
-					.. SV:T("(Current note time begin is ") 
-					.. notesObject:secondsToClock(notesObject:getBlickToSecond(notesObject.timeBegin + groupRefTimeoffset))
-					.. ")" .. "\r"
-					.. SV:T("Parameters type count: ") .. tostring(notesObject.parametersFoundCount)
-					)
-			else
-				-- Paste action
-				local resultAction = notesObject:promptForPaste()
-				
-				if resultAction then
-					local resultParams = notesObject:setParameters()
-					-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Result params:") .. "\r" .. jfaTools.tableToString(resultParams))
-					SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters paste DONE!") .. "\r\r"
-					.. SV:T("Next step :") .. "\r"
-					.. SV:T("See the paste action result inside the parameters window."))
-					
-				end				
-			end
-		end
+		NotesObject:start()
 	end
 	SV:finish()
 end

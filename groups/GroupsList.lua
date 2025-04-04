@@ -9,7 +9,6 @@ Actions:
 	Copy a linked group
 	Copy a group unlinked
 	Delete a group
-	Delete all un referenced groups
 
 2025 - JF AVILES
 --]]
@@ -40,7 +39,6 @@ function getArrayLanguageStrings()
 			{"Copy a linked group", "Copy a linked group"},
 			{"Copy a group unlinked", "Copy a group unlinked"},
 			{"Delete a group", "Delete a group"},
-			{"Delete all unreferenced groups", "Delete all unreferenced groups"},
 			{"Group deleted: ", "Group deleted: "},
 			{"No groups in this project!", "No groups in this project!"},
 		},
@@ -90,20 +88,20 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-	notesObject:getHostInformations()
-	notesObject.timeAxis = notesObject.project:getTimeAxis()
-	notesObject.activeCurrentTrack = SV:getMainEditor():getCurrentTrack()
-	notesObject.numGroups = notesObject.project:getNumNoteGroupsInLibrary()
-	notesObject.numTracks = notesObject.project:getNumTracks()
+    self.project = SV:getProject()
+	self:getHostInformations()
+	self.timeAxis = self.project:getTimeAxis()
+	self.activeCurrentTrack = SV:getMainEditor():getCurrentTrack()
+	self.numGroups = self.project:getNumNoteGroupsInLibrary()
+	self.numTracks = self.project:getNumTracks()
 	
-	notesObject.playBack = SV:getPlayback()
-	notesObject.playBackCurrentSeconds = notesObject.playBack:getPlayhead()
+	self.playBack = SV:getPlayback()
+	self.playBackCurrentSeconds = self.playBack:getPlayhead()
 	
 	-- Get all groups
-	notesObject.groups = notesObject:getAllGroups()	
+	self.groups = self:getAllGroups()	
 	
-    return notesObject
+    return self
 end
 
 -- Show message dialog
@@ -206,13 +204,13 @@ end
 function NotesObject:getGroupsList()
 	local result = ""
 	
-	for iGroup = 1, #self.groups do
-		local groupName = self.groups[iGroup].group:getName()
-		local lyrics = self.groups[iGroup].lyrics
-		local numNotes = self.groups[iGroup].numNotes
+	for _, group in pairs(self.groups) do
+		local groupName = group.group:getName()
+		local lyrics = group.lyrics
+		local numNotes = group.numNotes
 		local noteText = numNotes .. " " .. SV:T("note")
-		local numLinkedRef = #self.groups[iGroup].groupsRef
-		local linkedGroup = self.groups[iGroup].linked
+		local numLinkedRef = #group.groupsRef
+		local linkedGroup = group.linked
 		local linkedText = ""
 		
 		if numLinkedRef > 0 then
@@ -236,9 +234,9 @@ function NotesObject:getGroupsList()
 		.. "\r"
 
 		-- Get group reference data
-		if #self.groups[iGroup].groupsRef > 0 then
+		if #group.groupsRef > 0 then
 			for iGroupRef = 1, numLinkedRef do
-				local groupRef = self.groups[iGroup].groupsRef[iGroupRef]
+				local groupRef = group.groupsRef[iGroupRef]
 				local track = groupRef:getParent()
 				local measure = self.timeAxis:getMeasureAt(groupRef:getOnset()) + 1
 				local pitch = groupRef:getPitchOffset()
@@ -260,13 +258,13 @@ function NotesObject:getGroupsListForComboBox()
 	local result = false
 	self.groupsListChoice = {}
 	
-	for iGroup = 1, #self.groups do
-		local groupName = self.groups[iGroup].group:getName()
-		local lyrics = self.groups[iGroup].lyrics
-		local numNotes = self.groups[iGroup].numNotes
+	for _, group in pairs(self.groups) do
+		local groupName = group.group:getName()
+		local lyrics = group.lyrics
+		local numNotes = group.numNotes
 		local noteText = numNotes .. " " .. SV:T("note")
-		local numLinkedRef = #self.groups[iGroup].groupsRef
-		local linkedGroup = self.groups[iGroup].linked
+		local numLinkedRef = #group.groupsRef
+		local linkedGroup = group.linked
 		local isValid = false
 
 		if numNotes > 1 then
@@ -282,9 +280,9 @@ function NotesObject:getGroupsListForComboBox()
 		groupItem = '"' .. groupName .. '"' .. ": " .. noteText .. lyrics .. " "
 
 		-- Get group reference data
-		if #self.groups[iGroup].groupsRef > 0 then
+		if #group.groupsRef > 0 then
 			for iGroupRef = 1, numLinkedRef do
-				local groupRef = self.groups[iGroup].groupsRef[iGroupRef]
+				local groupRef = group.groupsRef[iGroupRef]
 				local track = groupRef:getParent()
 				local measure = self.timeAxis:getMeasureAt(groupRef:getOnset()) + 1
 				local pitch = groupRef:getPitchOffset()
@@ -337,10 +335,11 @@ end
 -- Delete all unreferenced groups
 function NotesObject:unReferencedGroupDelete()
 	local iDeletedGroups = 0
-	for iGroup = 1, #self.groups do
-		local notesGroup = self.groups[iGroup].group
+	
+	for _, group in pairs(self.groups) do	
+		local notesGroup = group.group
 		
-		if not self.groups[iGroup].linked then
+		if not group.linked then
 			self.project:removeNoteGroup(notesGroup:getIndexInParent())
 			iDeletedGroups = iDeletedGroups + 1
 		end

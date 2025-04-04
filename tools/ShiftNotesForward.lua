@@ -21,8 +21,8 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"No notes selected!", "No notes selected!"},
-		},
+			{"No notes selected!", "No notes selected!"}
+		}
 	}
 end
 
@@ -60,8 +60,13 @@ function NotesObject:new()
     return notesObject
 end
 
+-- Show message dialog
+function NotesObject:show(message)
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
+end
+
 -- Shift selected notes
-function NotesObject:shiftSelectedNotes(selectedNotes)
+function NotesObject:shiftSelectedNotes()
 	-- Get time gap in blicks
 	-- A flick (frame-tick) is a very small unit of time.
 	-- It is 1/705600000 (SV.QUARTER) of a second, exactly.

@@ -102,24 +102,24 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = notesObject.project:getTimeAxis()
-    notesObject.editor =  SV:getMainEditor()
-	notesObject.numTracks = notesObject.project:getNumTracks()
+    self.project = SV:getProject()
+    self.timeAxis = self.project:getTimeAxis()
+    self.editor =  SV:getMainEditor()
+	self.numTracks = self.project:getNumTracks()
 	
-	notesObject.selection = notesObject.editor:getSelection()
-	notesObject.selectedNotes = notesObject.selection:getSelectedNotes()
-	notesObject.numSelectedNotes = #notesObject.selection:getSelectedNotes()
+	self.selection = self.editor:getSelection()
+	self.selectedNotes = self.selection:getSelectedNotes()
+	self.numSelectedNotes = #self.selection:getSelectedNotes()
 	
-	notesObject.playBack = SV:getPlayback()	
-	notesObject.currentSeconds = notesObject.playBack:getPlayhead()
-	notesObject.tracksColor = notesObject:getTracksColor()
-	notesObject.currentTrack = notesObject.editor:getCurrentTrack()
-	notesObject.initialTrackName = notesObject.currentTrack:getName()
-	notesObject.initialColorTrack = notesObject.currentTrack:getDisplayColor()
-	notesObject.trackTarget = notesObject.currentTrack
+	self.playBack = SV:getPlayback()	
+	self.currentSeconds = self.playBack:getPlayhead()
+	self.tracksColor = self:getTracksColor()
+	self.currentTrack = self.editor:getCurrentTrack()
+	self.initialTrackName = self.currentTrack:getName()
+	self.initialColorTrack = self.currentTrack:getDisplayColor()
+	self.trackTarget = self.currentTrack
 
-    return notesObject
+    return self
 end
 
 -- Get track notes count
@@ -228,9 +228,10 @@ function NotesObject:createGroup(startPosition, targetPosition)
 	local groupNotesMain = groupRefMain:getTarget()
 	local measureBlick = 0
 
-	if groupNotesMain:getNumNotes() > 0 then
-		measureBlick = self:getFirstMesure(groupNotesMain:getNote(1):getOnset())
-	end
+	-- if groupNotesMain:getNumNotes() > 0 then
+		-- measureBlick = self:getFirstMesure(groupNotesMain:getNote(1):getOnset())
+	-- end
+	
 	local mainGroupNotes = {}
 	self.THRESHOLD = self:getMaxTimeGapFromBPM(targetPosition) -- 41505882 = 0.06 seconds
 	

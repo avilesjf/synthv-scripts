@@ -56,40 +56,38 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
-	threshold = 41505882,  -- 0.03 seconds (120)
-	currentTrack = nil,
 	initialTrackName = "",
-	initialTrackNameRef = "initialTrackName",
-	initialColorTrackRef = "initialColorTrack",
-	numTracksRef = "numTracks",
-	currentTrackRef = "currentTrack",
-	tracksColorRef =  "tracksColor",
+	INITIAL_TRACK_NAME_REF = "initialTrackName",
+	INITIAL_COLOR_TRACK_REF = "initialColorTrack",
+	NUM_TRACKS_REF = "numTracks",
+	CURRENT_TRACK_REF = "currentTrack",
+	TRACKS_COLOR_REF =  "tracksColor",
+	GROUP_TAG = "GroupData:",
+	GROUP_STOP_TAG = "GroupStop:",
+	CURRENT_TRACK_COLOR_REF = "FFFF0000",
+	TRACK_TARGET_COLOR_REF = "FFFFF000",
 	tracksColor = {},
 	tracksColorStored = {},
-	initialColorTrack = "",
 	currentTrackColor = "",
-	currentTrackColorRef = "FFFF0000",
 	currentTrackColorOn = false,
-	trackTarget = {},
-	trackTargetInit = true,
-	trackTargetColor = "",
-	trackTargetColorRef = "FFFFF000",
-	currentTrack = nil,
-	currentTrackNumber = nil,
 	groupSource = nil,
 	groupSourceNumNotes = 0,
-	numTracks = 0,
-	playBack = nil,
-	currentSeconds = 0,
-	stopProcess = false,
-	sepParam = "|",
 	groupTag = "GroupData:",
 	groupStoredRefFound = nil,
 	groupStoredFound = nil,
 	groupStopTag = "GroupStop:",
 	groupStoredRefToStopPrevious = nil,
 	groupStoredToStopPrevious = nil,
-	groupFound = {}
+	initialColorTrack = "",
+	trackTargetInit = true,
+	trackTargetColor = "",
+	currentTrack = nil,
+	currentTrackNumber = nil,
+	numTracks = 0,
+	playBack = nil,
+	currentSeconds = 0,
+	stopProcess = false,
+	sepParam = "|"
 }
 
 -- Constructor method for the NotesObject class
@@ -98,24 +96,24 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = notesObject.project:getTimeAxis()
-    notesObject.editor =  SV:getMainEditor()
-	notesObject.numTracks = notesObject.project:getNumTracks()
+    self.project = SV:getProject()
+    self.timeAxis = self.project:getTimeAxis()
+    self.editor =  SV:getMainEditor()
+	self.numTracks = self.project:getNumTracks()
 	
-	notesObject.playBack = SV:getPlayback()	
-	notesObject.currentSeconds = notesObject.playBack:getPlayhead()
-	notesObject.currentSecondsDisplay = self:secondsToClock(notesObject.currentSeconds)
+	self.playBack = SV:getPlayback()	
+	self.currentSeconds = self.playBack:getPlayhead()
+	self.currentSecondsDisplay = self:secondsToClock(self.currentSeconds)
 
-	notesObject.currentTrack = SV:getMainEditor():getCurrentTrack()
-	notesObject.currentTrackNumber = notesObject.currentTrack:getIndexInParent()
-	notesObject.initialTrackName = notesObject.currentTrack:getName()
-	notesObject.initialColorTrack = notesObject.currentTrack:getDisplayColor()
+	self.currentTrack = SV:getMainEditor():getCurrentTrack()
+	self.currentTrackNumber = self.currentTrack:getIndexInParent()
+	self.initialTrackName = self.currentTrack:getName()
+	self.initialColorTrack = self.currentTrack:getDisplayColor()
 	-- Get the current group in the time position
-	notesObject.groupSource = notesObject:getGroupRef(notesObject.currentTrack, self.currentSeconds)
-	notesObject.tracksColor = notesObject:getTracksColor()
+	self.groupSource = self:getGroupRef(self.currentTrack, self.currentSeconds)
+	self.tracksColor = self:getTracksColor()
 	
-    return notesObject
+    return self
 end
 
 -- Display message box
@@ -131,8 +129,8 @@ function NotesObject:secondsToClock(timestamp)
 	  timestamp%60):gsub("%.",",")
 end
 
--- Create group with data
-function NotesObject:createGroup()
+-- Create group for internal data
+function NotesObject:createInternalGroup()
 	-- Create new group 
 	local noteGroup = SV:create("NoteGroup")
 	self.project:addNoteGroup(noteGroup)
@@ -143,12 +141,12 @@ function NotesObject:createGroup()
 end
 
 -- Set new group name with data
-function NotesObject:setNewGroupName(noteGroup, groupTag, data)
-	noteGroup:setName(groupTag .. "\r" .. data)
+function NotesObject:setNewGroupName(noteGroup, GROUP_TAG, data)
+	noteGroup:setName(GROUP_TAG .. "\r" .. data)
 end
 
 -- Get previous stored data group
-function NotesObject:getPreviousStoredGroup(groupTag)
+function NotesObject:getPreviousStoredGroup(GROUP_TAG)
 	local groupStoredRefFound = nil
 	local groupStoredFound = nil
 	
@@ -158,7 +156,7 @@ function NotesObject:getPreviousStoredGroup(groupTag)
 			local groupRef = group:getParent()
 			if groupRef ~= nil then
 				local groupName = group:getName()
-				local pos = string.find(groupName, groupTag)
+				local pos = string.find(groupName, GROUP_TAG)
 				if pos ~= nil then 
 					groupStoredRefFound = groupRef
 					groupStoredFound = group
@@ -172,9 +170,9 @@ end
 
 -- Get data content
 function NotesObject:getGroupContentData(data)
-	local pos = string.find(data, self.groupTag)
+	local pos = string.find(data, self.GROUP_TAG)
 	if pos ~= nil then
-		data = string.sub(data, pos + string.len(self.groupTag) + 1)
+		data = string.sub(data, pos + string.len(self.GROUP_TAG) + 1)
 	end
 	return data
 end
@@ -187,7 +185,7 @@ function NotesObject:setCurrentTrackColor()
 		if self.currentTrackColorOn then
 			self.currentTrackColor = self.initialColorTrack
 		else
-			self.currentTrackColor = self.currentTrackColorRef
+			self.currentTrackColor = self.CURRENT_TRACK_COLOR_REF
 		end
 		self.currentTrack:setDisplayColor("#" .. self.currentTrackColor)
 	end
@@ -196,7 +194,7 @@ end
 -- Set color for track target
 function NotesObject:setTrackTargetColor(track)
 	if track ~= nil then
-		self.trackTargetColor = self.trackTargetColorRef
+		self.trackTargetColor = self.TRACK_TARGET_COLOR_REF
 		track:setDisplayColor("#" .. self.trackTargetColor)
 	end
 end
@@ -246,8 +244,8 @@ function NotesObject:getGroupLyrics(group)
 	return lyrics
 end
 
--- Get not similar notes in target group
-function NotesObject:getNotSimilarNotes(group)
+-- Set not similar notes in target group
+function NotesObject:setNotSimilarNotes(group)
 	local targetGroupNotes = {}
 	local currentTargetGroup = self.groupSource:getTarget()
 	for iNote = 1, group:getNumNotes() do
@@ -269,13 +267,10 @@ end
 
 -- Main loop
 function NotesObject:loop()
-	-- local titleTrack = SV:T("Waiting: ")
 	local cause = ""
-	local isSimilarGroupFound = false
-	self.groupFound = {}
 	
 	self.groupStoredRefToStopPrevious, self.groupStoredToStopPrevious = 
-		self:getPreviousStoredGroup(self.groupStopTag)
+		self:getPreviousStoredGroup(self.GROUP_STOP_TAG)
 
 	if self.groupStoredToStopPrevious ~= nil then
 		self.stopProcess = true
@@ -292,7 +287,7 @@ function NotesObject:loop()
 			SV:setTimeout(10, function() self:setCurrentTrackColor() end)
 			self.currentSeconds = self.playBack:getPlayhead()
 			self.currentSecondsDisplay = self:secondsToClock(self.currentSeconds)
-			-- self.currentTrack:setName(titleTrack .. self.currentSecondsDisplay)
+			-- self.currentTrack:setName(self.currentSecondsDisplay)
 			
 			-- Find current group
 			self:scanTracks()
@@ -329,11 +324,8 @@ function NotesObject:scanTracks()
 					if isSimilarGroupFound then
 						if self.trackTargetInit then
 							SV:setTimeout(10, function() self:setTrackTargetColor(track) end)
-							-- Store initial track & color
-							table.insert(self.trackTarget, {iTrack, track, track:getDisplayColor()})
 						end
-						local groupNotesModified = self:getNotSimilarNotes(targetGroup)
-						table.insert(self.groupFound, {iTrack, track, groupRefTrack, groupNotesModified})
+						local groupNotesModified = self:setNotSimilarNotes(targetGroup)						
 					 end
 				end
 			end
@@ -410,7 +402,7 @@ end
 function NotesObject:getStoredData()
 	local result = false
 	
-	-- self.groupTag .. self.sepParam .. |initialTrackName=Track 1
+	-- self.GROUP_TAG .. self.sepParam .. |initialTrackName=Track 1
 	-- |initialColorTrack=ffff0000|numTracks=2|currentTrack=1|tracksColor=1-fff0000
 	local groupData = self:getGroupContentData(self.groupStoredFound:getName())
 
@@ -447,7 +439,7 @@ function NotesObject:isParametersOk(data)
 	local result = false
 	if data ~= nil then
 		if type(data) == "string" then
-			if string.find(data, self.initialTrackNameRef) ~= nil then
+			if string.find(data, self.INITIAL_TRACK_NAME_REF) ~= nil then
 				result = true
 			end
 		end
@@ -455,48 +447,18 @@ function NotesObject:isParametersOk(data)
 	return result
 end
 
--- Get the script name of the other instance
-function NotesObject:scriptNameInstance(hostCB, instanceKey)
-	local scriptName = ""
-	local paramSlitted = self:split(hostCB, self.sepParam)
-	
-	for iLine = 1, #paramSlitted do
-		local param = paramSlitted[iLine]
-		local paramArray = self:split(param, "=")
-		local paramKey = ""
-		local paramValue = ""
-	
-		if paramArray[1] ~= nil then
-			paramKey = self:trim(paramArray[1])
-		-- else
-			-- self:show(SV:T("Error nil value with param: ") .. param)
-		end
-		
-		if paramArray[2] ~= nil then
-			paramValue = self:trim(paramArray[2])
-		-- else
-			-- self:show(SV:T("Error nil value with param: ") .. param)
-		end
-		
-		if paramKey == instanceKey then
-			scriptName = paramValue
-		end
-	end
-	return scriptName
-end
-
 -- Set parameters from stored hidden group
 function NotesObject:setParametersFromStoredGroup(paramName, value)
-	if string.find(paramName, self.initialTrackNameRef) then
+	if string.find(paramName, self.INITIAL_TRACK_NAME_REF) then
 		self.initialTrackName = value
 	end
-	if string.find(paramName, self.initialColorTrackRef) then
+	if string.find(paramName, self.INITIAL_COLOR_TRACK_REF) then
 		self.initialColorTrack = value
 	end
-	if string.find(paramName, self.numTracksRef) then
+	if string.find(paramName, self.NUM_TRACKS_REF) then
 		self.numTracks = tonumber(value)
 	end
-	if string.find(paramName,self.currentTrackRef) then
+	if string.find(paramName,self.CURRENT_TRACK_REF) then
 		local iTrack = tonumber(value)
 		if iTrack <= self.numTracks then
 			self.currentTrack = self.project:getTrack(iTrack)
@@ -505,7 +467,7 @@ function NotesObject:setParametersFromStoredGroup(paramName, value)
 			self:stopScript()
 		end
 	end
-	if string.find(paramName, self.tracksColorRef) then
+	if string.find(paramName, self.TRACKS_COLOR_REF) then
 		-- tracksColor=1-fff09c9c,2-fff09c9c
 		local tracks = self:split(value, ",")
 		
@@ -542,13 +504,13 @@ end
 function NotesObject:storeToHiddenGroup()
 	
 	if self.groupStoredFound == nil then
-		self.groupStoredRefFound, self.groupStoredFound = self:createGroup()
-		local data = self.initialTrackNameRef	.. "=" .. self.initialTrackName		.. self.sepParam
-			.. self.initialColorTrackRef		.. "=" .. self.initialColorTrack 	.. self.sepParam
-			.. self.numTracksRef				.. "=" .. self.numTracks			.. self.sepParam
-			.. self.currentTrackRef				.. "=" .. self.currentTrack:getIndexInParent() .. self.sepParam
-			.. self.tracksColorRef				.. "=" .. self.tracksColor
-		self:setNewGroupName(self.groupStoredFound, self.groupTag, data)
+		self.groupStoredRefFound, self.groupStoredFound = self:createInternalGroup()
+		local data = self.INITIAL_TRACK_NAME_REF	.. "=" .. self.initialTrackName		.. self.sepParam
+			.. self.INITIAL_COLOR_TRACK_REF		.. "=" .. self.initialColorTrack 	.. self.sepParam
+			.. self.NUM_TRACKS_REF				.. "=" .. self.numTracks			.. self.sepParam
+			.. self.CURRENT_TRACK_REF				.. "=" .. self.currentTrack:getIndexInParent() .. self.sepParam
+			.. self.TRACKS_COLOR_REF				.. "=" .. self.tracksColor
+		self:setNewGroupName(self.groupStoredFound, self.GROUP_TAG, data)
 		
 		-- Get this stored data
 		self:getStoredData()
@@ -557,16 +519,16 @@ end
 
 -- Create groups to stop process
 function NotesObject:groupToStopProcess()
-	self.groupStoredRefToStopPrevious, self.groupStoredToStopPrevious = self:createGroup()
-	self:setNewGroupName(self.groupStoredFound, self.groupStopTag, "STOP")
+	self.groupStoredRefToStopPrevious, self.groupStoredToStopPrevious = self:createInternalGroup()
+	self:setNewGroupName(self.groupStoredFound, self.GROUP_STOP_TAG, "STOP")
 end
 
 -- Start process
 function NotesObject:startProcess()
 	self.groupSourceNumNotes = self.groupSource:getTarget():getNumNotes()
-	self.groupStoredRefFound, self.groupStoredFound = self:getPreviousStoredGroup(self.groupTag)
+	self.groupStoredRefFound, self.groupStoredFound = self:getPreviousStoredGroup(self.GROUP_TAG)
 	
-	-- Previous script process
+	-- Is first script processing
 	if self.groupStoredFound == nil then	
 		self:storeToHiddenGroup()
 		SV:setTimeout(100, function() self:loop() end)
@@ -585,6 +547,7 @@ function main()
 		notesObject:startProcess()
 	else
 		notesObject:show(SV:T("No group found in current track and playhead position!"))
+		notesObject:finishScriptProcess()
 	end
 end
 

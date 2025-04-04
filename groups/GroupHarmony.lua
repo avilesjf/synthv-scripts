@@ -170,12 +170,12 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-	notesObject:getHostInformations()
-	notesObject.keyScaleTypeTitleFound  = SV:T("Major")
-	notesObject.trackNameHarmony = SV:T("Track H")
+    self.project = SV:getProject()
+	self:getHostInformations()
+	self.keyScaleTypeTitleFound  = SV:T("Major")
+	self.trackNameHarmony = SV:T("Track H")
 	
-	notesObject.transposition = { 
+	self.transposition = { 
 		-- Specify your own default {SV:T("default"), 1, {"+2,+5", "-2,-5", "+2,+5,+7", "-2,-5,-7"}},
 		{SV:T("1 note"),  8, {"+7", "+6", "+5", "+4", "+3", "+2", "+1", "0", "-3", "-5", "-7"}},
 		{SV:T("2 notes"), 2, {"+1,+3", "+2,+5", "+2,+4", "+3,+5", "+3,+6", "-2,-5", "-3,-5"}},
@@ -185,7 +185,7 @@ function NotesObject:new()
 		{SV:T("Build your own"), 1, {"+0"}}
 	}
 	
-	notesObject.allScales = {
+	self.allScales = {
 			-- KeyScale type, Intervals, Gaps between degrees (for info only, not used)
 			{SV:T("Major"),			{0,2,4,5,7,9,11,12}, {2, 2, 1, 2, 2, 2, 1}},
 			{SV:T("Natural Minor"),	{0,2,3,5,7,8,10,12}, {2, 1, 2, 2, 1, 2, 2}},
@@ -207,7 +207,7 @@ function NotesObject:new()
 			{SV:T("Indian"),		{0,1,3,4,7,8,10,12}, {1, 2, 1, 3, 1, 2, 2}},
 			{SV:T("Hungarian major"),{0,3,4,6,7,9,10,12}, {3, 1, 2, 1, 2, 1, 2}}
 		}
-    return notesObject
+    return self
 end
 
 -- Display message box
