@@ -496,12 +496,6 @@ function NotesObject:vibrato(ticksPerSecond, noteStartTick, noteDurationTicks, v
         -- frequencyModulation = {5.5, 5.7, 6.0, 6.0, 6.0, 5.7} -- Frequency modulation
     }
     
-    -- Apply to a note (in ticks, with 480 ticks per beat)
-    -- local ticksPerSecond = 480 -- For a tempo of 60 BPM
-    -- local noteStartTick = 480  -- Start at beat 1
-    -- local noteDurationTicks = 1920 -- Duration of 4 beats
-    -- local vibratoDelay = 0.3   -- 300ms delay before vibrato starts
-    
     -- Generate vibrato points
     local vibratoPoints = self:applyVibratoToNote(
         noteStartTick, 
@@ -511,8 +505,8 @@ function NotesObject:vibrato(ticksPerSecond, noteStartTick, noteDurationTicks, v
         vibratoParams
     )
     
-    -- Convert to control points
-    local controlPoints = self:exportVibratoToControlPoints(vibratoPoints, 0.05)
+    -- Convert to control points -- 0.01 = 10ms default
+    local controlPoints = self:exportVibratoToControlPoints(vibratoPoints, 0.02)
     
     -- -- Control points
     -- result = result .. "Vibrato control points:"
@@ -593,7 +587,7 @@ function NotesObject:addPointsToPitchDeltaParameter(notePos, points, modulationD
 	
 	
 	if isSimplify then 
-		local threshold = 0.002 -- default
+		local threshold = 0.01 -- 0.002 default
 		paramPitchDelta:simplify(notePos, newPos, threshold)
 	end
 end
