@@ -52,6 +52,7 @@ Read loudness audio data and apply loudness parameters.
 
 ## parameters-scripts
 Shift offset parameters down/up/left/right.
+Recreate a vibrato envelope with pitch delta parameters.
 
 ## Modifying these scripts or making your own
 If you copy, modify, fork, etc. these scripts, crediting me for the original source could be a good choice and be free to notify me.
