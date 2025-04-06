@@ -65,8 +65,17 @@ NotesObject = {
 	quarterBlicks = -1,
 	currentBPM = 120,
 	coefModulation = 100,
-	modelChoice = {},
-	modelChoiceList = {},
+	vibratoModels = {},
+	vibratoModelsList = {},
+	frequencyModModels = {},
+	frequencyModModelsList = {},
+	controlPointsMilliSeconds = 0.02, 	-- 0.01 = 10ms default
+	attackTimeDefault = 0.1,
+	attackTimeProgressive = 0.5,
+	defaultVibratoModel = 1,			-- 1 (1 to 3) default frequency vibrato model
+	overrideDepthDefaultValue = 1,		-- 1 (0.5 to 1.5) default vibrato depth
+	overrideStartDefaultValue = 0, 		-- 0 (5% to 50%) default vibrato starting note
+	progressiveVibrato = false,			-- default progressive vibrato
 	timeGapSeconds = 0.01	-- Gap in milliseconds 1 millisecond = 1411200 blicks
 }
 
@@ -92,35 +101,77 @@ function NotesObject:new()
 	self.endTrackPosition = self.currentTrack:getGroupReference(self.currentTrack:getNumGroups()):getEnd()
 	self.timeGapBlicks = self.timeAxis:getBlickFromSeconds(self.timeGapSeconds)
 	
-	self.modelChoice = self:setVibratoModel() -- Add vibrato model choice
-	self.modelChoiceList = self:getVibratoModel()
+	self.vibratoModels = self:setVibratoModels() -- Add vibrato models
+	self.frequencyModModels = self:setFrequencyModulationModels() -- Add frequency models
+	self.frequencyModModelActive = self.frequencyModModels[1]
+	self.vibratoModelsList = self:getVibratoModels()
+	self.frequencyModModelsList = self:getFrequencyModulationModelsList()
 	
     return self
 end
 
--- Set vibrato model
-function NotesObject:setVibratoModel()
+-- Set vibrato models
+function NotesObject:setVibratoModels()
 	-- startNote, endNote in percentage
 	-- vibratoDepth a coefficient of vibrato depth
-	local modelChoice = {
-		{startNote = 0,	 vibratoDepth = 0.8, endNote = 0},
-		{startNote = 30, vibratoDepth = 1.1, endNote = 0},
-		{startNote = 50, vibratoDepth = 0.8, endNote = 0},
+	-- frequencyModModel variation in time
+	local vibratoModels = {
+		{startNote = 0,	 vibratoDepth = 1.5, endNote = 0, frequencyModModel = 1},
+		{startNote = 30, vibratoDepth = 1.2, endNote = 0, frequencyModModel = 1},
+		{startNote = 50, vibratoDepth = 1.5, endNote = 0, frequencyModModel = 3}
 	}	
-	return modelChoice
+	return vibratoModels
 end
 
--- Set vibrato model
-function NotesObject:getVibratoModel()
-	local modelChoiceList = {}
+-- Set frequency modulation models
+function NotesObject:setFrequencyModulationModels()
+	local frequencyModulations = {
+		{5.7, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0},
+		{5.5, 5.7, 6.0, 6.2, 6.2, 6.2, 5.0},
+		{5.5, 5.7, 6.0, 6.0, 6.0, 5.7},
+		{6.0}
+	}
+	return frequencyModulations
+end
 
-	for k, model in pairs(self.modelChoice) do
-		local modelList = SV:T("Start/End note (%): ") 
-			.. model.startNote .. " / " .. model.endNote
-			.. ", " .. SV:T("Vibrato depth: ") .. model.vibratoDepth 
-		table.insert(modelChoiceList, modelList)
+-- Get frequency modulation model
+function NotesObject:getFrequencyModulationModel(model)
+	local result = ""
+	local sep = ""
+	for i, val in pairs(self.frequencyModModels[model]) do
+		result = result .. sep .. val
+		sep = ", "
 	end
-	return modelChoiceList
+	return result
+end
+
+-- Get frequency modulation models list
+function NotesObject:getFrequencyModulationModelsList()
+	local frequencyModulationModelsList = {}
+	for i, freq in pairs(self.frequencyModModels) do
+		local modelList = ""
+		local sep = ""
+		for j, val in pairs(freq) do
+			modelList = modelList .. sep .. val
+			sep = ", "
+		end
+		table.insert(frequencyModulationModelsList, modelList)
+	end
+	return frequencyModulationModelsList
+end
+
+-- Set vibrato models
+function NotesObject:getVibratoModels()
+	local vibratoModelsList = {}
+
+	for k, model in pairs(self.vibratoModels) do
+		local modelList = SV:T("Start/End note (%): ") 
+			.. model.startNote .. "/" .. model.endNote
+			.. ", " .. SV:T("Depth: ") .. model.vibratoDepth
+			.. ", " .. SV:T("Freq: ") .. model.frequencyModModel
+		table.insert(vibratoModelsList, modelList)
+	end
+	return vibratoModelsList
 end
 
 -- Show message dialog
@@ -143,164 +194,6 @@ function NotesObject:getObjectProperties(obj)
 	end
 	return result
 end
-
--- Get first note in group
-function NotesObject:getFirstNoteInGroup()
-	local noteFound = nil
-	local notesGroup = self.currentGroupRef:getTarget()
-	if notesGroup:getNumNotes() > 1 then
-		noteFound = notesGroup:getNote(1)
-	end
-	return noteFound
-end
-
--- Get last note in group
-function NotesObject:getLastNoteInGroup()
-	local noteFound = nil
-	local notesGroup = self.currentGroupRef:getTarget()
-	if notesGroup:getNumNotes() > 1 then
-		noteFound = notesGroup:getNote(notesGroup:getNumNotes())
-	end
-	return noteFound
-end
-
--- Get First and Last note in group
-function NotesObject:getFirstAndLastNoteInGroup()
-	local firstNotePosition = -1
-	local lastNotePosition = -1
-	local firstNote = self:getFirstNoteInGroup()
-	local lastNote = self:getLastNoteInGroup()
-	if firstNote ~= nil then
-		firstNotePosition = firstNote:getOnset()
-	end
-	if lastNote ~= nil then
-		lastNotePosition = lastNote:getEnd()
-	end
-	return firstNotePosition, lastNotePosition
-end
-
--- Get current note in position
-function NotesObject:getCurrentNoteInPosition(point)
-	local noteFound = nil
-	local notesGroup = self.currentGroupRef:getTarget()
-	
-	for iNote = 1, notesGroup:getNumNotes() do
-		local note = notesGroup:getNote(iNote)
-		if note:getOnset() <= point and note:getEnd() >= point then
-			noteFound = note
-			break
-		end
-	end
-	return noteFound
-end
-
--- Get group range time
-function NotesObject:getGroupRangeTime(firstNewPointPosition, lastNewPointPosition)
-	local groupBegin = self.currentGroupRef:getOnset()
-	local groupNewBegin = groupBegin
-	local groupEnd = self.currentGroupRef:getOnset() + self.currentGroupRef:getDuration()
-	local groupNewEnd = groupEnd
-	if firstNewPointPosition < groupBegin then
-		groupNewBegin = firstNewPointPosition - self.timeGapBlicks
-	end
-	if lastNewPointPosition > groupEnd then
-		groupNewEnd = lastNewPointPosition + self.timeGapBlicks
-	end
-	return groupBegin, groupNewBegin, groupEnd, groupNewEnd
-end
-
--- Add end points
-function NotesObject:addEndPoint(lastNotePosition, lastNewPointPosition, groupEnd, groupNewEnd)
-	local endPoints = self.paramsGroup:getPoints(lastNewPointPosition + 1, groupEnd)
-	
-	-- If no more points after last point updated
-	if #endPoints == 0 then
-		-- Add a new point to reset position from last point value
-		if lastNotePosition > -1 and lastNewPointPosition < lastNotePosition then
-			if self.paramsGroup:get(lastNotePosition) ~= self.defaultValue then
-				self.paramsGroup:add(lastNotePosition, self.defaultValue)
-			end
-		else
-			if lastNewPointPosition > lastNotePosition then
-				if self.paramsGroup:get(lastNewPointPosition + self.timeGapBlicks) ~= self.defaultValue then
-					self.paramsGroup:add(lastNewPointPosition + self.timeGapBlicks, self.defaultValue)
-				end
-			end
-		end
-		
-		if lastNewPointPosition > groupEnd then
-			if self.paramsGroup:get(lastNewPointPosition + self.timeGapBlicks) ~= self.defaultValue then
-				self.paramsGroup:add(lastNewPointPosition + (self.timeGapBlicks * 2), self.defaultValue)
-			end
-		end
-	end
-end
-
--- Add begin points
-function NotesObject:addBeginPoint(firstNotePosition, firstNewPointPosition, groupNewBegin, groupBegin)
-	local firstPoints = self.paramsGroup:getPoints(0, groupNewBegin)
-
-	-- If no points before first point updated
-	if #firstPoints == 0 then			
-		-- Add a new point to reset position from last point value
-		if firstNotePosition > -1 and firstNewPointPosition > firstNotePosition then
-			-- Fix new default value to start note
-			if self.paramsGroup:get(firstNotePosition) ~= self.defaultValue then
-				self.paramsGroup:add(firstNotePosition, self.defaultValue)
-			end
-		else
-			if firstNewPointPosition < firstNotePosition then
-				if self.paramsGroup:get(firstNewPointPosition - self.timeGapBlicks) ~= self.defaultValue then
-					self.paramsGroup:add(firstNewPointPosition - self.timeGapBlicks, self.defaultValue)
-				end
-			end
-		end
-		
-		if firstNewPointPosition < groupBegin then
-			if self.paramsGroup:get(firstNewPointPosition - self.timeGapBlicks) ~= self.defaultValue then
-				self.paramsGroup:add(firstNewPointPosition - (self.timeGapBlicks * 2), self.defaultValue)
-			end
-		end
-	end
-end
-
--- Shift selected points
-function NotesObject:shiftSelectedPoints(points)
-	local newPoints = {}
-	local addedPoints = 0
-	
-	if points[1]> 0 then
-		firstNewPointval = self.paramsGroup:get(points[1])
-	end
-	
-	for _, p in pairs(points) do
-		local val = self.paramsGroup:get(p)
-		
-		self.paramsGroup:remove(p)
-		
-		local newVal = val + (self.newGap * self.direction)
-		self.paramsGroup:add(p, newVal)
-		addedPoints = addedPoints + 1
-		table.insert(newPoints, p)
-	end
-	
-	if addedPoints > 0 then
-		local firstNewPointPosition = newPoints[1]
-		local firstNotePosition, lastNotePosition = self:getFirstAndLastNoteInGroup()
-		local lastNewPointPosition = newPoints[#newPoints]
-		local groupBegin, groupNewBegin, groupEnd, groupNewEnd = self:getGroupRangeTime(firstNewPointPosition, lastNewPointPosition)
-		local notePosition = self:getCurrentNoteInPosition(firstNewPointPosition)
-		if notePosition ~= nil then
-			firstNotePosition = notePosition:getOnset()
-			lastNotePosition = notePosition:getEnd()
-		end
-		self:addEndPoint(lastNotePosition, lastNewPointPosition, groupEnd, groupNewEnd)
-		self:addBeginPoint(firstNotePosition, firstNewPointPosition, groupNewBegin, groupBegin)
-	end
-	
-	return newPoints
-end
-
 
 -- Get current blicks per second & quarter 
 function NotesObject:getCurrentBlicksPerSecond(positionBlicks)
@@ -483,16 +376,23 @@ function NotesObject:exportVibratoToControlPoints(vibratoPoints, controlPointInt
     return controlPoints
 end
 
--- Example usage
-function NotesObject:vibrato(ticksPerSecond, noteStartTick, noteDurationTicks, vibratoDelay)
-    -- Vibrato parameters
+-- Get vibrato points
+function NotesObject:getVibratoPoints(ticksPerSecond, noteStartTick, noteDurationTicks, 
+										vibratoDelay, frequencyModulationActive,
+										isProgressiveVibrato)
+    local attackTimeActive = self.attackTimeDefault
+	if isProgressiveVibrato then
+		attackTimeActive = self.attackTimeProgressive
+	end
+	
+	-- Vibrato parameters
     local vibratoParams = {
         amplitude = 0.5,       -- Half-tone (+/- 50 cents)
         frequency = 5.5,       -- 5.5 Hz (cycles per second)
-        sampleRate = 100,      -- 100 samples per second
-        attackTime = 0.2,      -- 200ms attack for 0.2
+        sampleRate = 200,      -- 100 samples per second
+        attackTime = attackTimeActive, -- 100ms attack for 0.1 and 0.5 = progressive vibrato
         releaseTime = 0.1,     -- 300ms release for 0.3
-        frequencyModulation = {5.5, 5.7, 6.0, 6.2, 6.2, 6.2, 5.0} -- Frequency modulation
+		frequencyModulation = frequencyModulationActive
         -- frequencyModulation = {5.5, 5.7, 6.0, 6.0, 6.0, 5.7} -- Frequency modulation
     }
     
@@ -506,7 +406,7 @@ function NotesObject:vibrato(ticksPerSecond, noteStartTick, noteDurationTicks, v
     )
     
     -- Convert to control points -- 0.01 = 10ms default
-    local controlPoints = self:exportVibratoToControlPoints(vibratoPoints, 0.02)
+    local controlPoints = self:exportVibratoToControlPoints(vibratoPoints, self.controlPointsMilliSeconds)
     
     -- -- Control points
     -- result = result .. "Vibrato control points:"
@@ -518,18 +418,14 @@ function NotesObject:vibrato(ticksPerSecond, noteStartTick, noteDurationTicks, v
     return controlPoints
 end
 
--- Get vibrato model choice
-function NotesObject:getModelChoice(model_choice)	
-	local percentStartNote = self.modelChoice[model_choice].startNote
-	local modulationDepth = self.modelChoice[model_choice].vibratoDepth
-	local percentEndNote = self.modelChoice[model_choice].endNote
-	
-	return percentStartNote, modulationDepth, percentEndNote
-end
-
 -- Add vibrato to selected notes
-function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth)
-	local percentStartNote, modulationDepth, percentEndNote = self:getModelChoice(model_choice)
+function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth, 
+						override_FrequencyModel, overrideStart, isProgressiveVibrato)
+
+	local percentStartNote = self.vibratoModels[model_choice].startNote
+	local modulationDepth = self.vibratoModels[model_choice].vibratoDepth
+	local percentEndNote = self.vibratoModels[model_choice].endNote
+	local frequencyModModel = self.vibratoModels[model_choice].frequencyModModel
 
 	-- Loop all selected notes
 	for k, note in pairs(self.selectedNotes) do
@@ -549,11 +445,23 @@ function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth)
 			paramPitchDelta:remove(notePos, notePosEnd)
 			
 			local newModulationDepth = self.coefModulation * modulationDepth
-			if override_depth > 0 then
+			if override_depth > self.overrideDepthDefaultValue then
 				newModulationDepth = self.coefModulation * override_depth
 			end
+
+			-- 1 == default frequency model
+			if override_FrequencyModel ~= self.defaultVibratoModel then
+				frequencyModModel = override_FrequencyModel - 1
+			end
+			local frequencyModModelActive = self.frequencyModModels[frequencyModModel]
+			self.frequencyModModelActive = frequencyModModelActive
+			
 			local noteDurationSeconds = self.timeAxis:getSecondsFromBlick(noteDuration)
-			local vibratoDelayInSeconds = noteDurationSeconds * percentStartNote / 100
+			local vibratoDelayInSeconds = noteDurationSeconds * percentStartNote / 100			
+			if overrideStart ~= self.overrideStartDefaultValue then
+				vibratoDelayInSeconds = noteDurationSeconds * overrideStart / 100
+			end
+			
 			local notePosStart = 0 -- SV:seconds2Blick(0.02, self.currentBPM)
 			if percentEndNote > 0 then
 				local endNoteDurationSeconds = noteDurationSeconds * percentEndNote / 100
@@ -562,8 +470,11 @@ function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth)
 			end
 			
 			-- Get vibrato points
-			local points = self:vibrato(self.blicksPerSeconds, 
-											notePosStart, noteDuration, vibratoDelayInSeconds)
+			local points = self:getVibratoPoints(self.blicksPerSeconds, 
+											notePosStart, noteDuration, 
+											vibratoDelayInSeconds,
+											frequencyModModelActive,
+											isProgressiveVibrato)
 			-- self:saveToClipboard(pointsString)
 			self:addPointsToPitchDeltaParameter(notePos, points, newModulationDepth, paramPitchDelta)
 		end
@@ -574,7 +485,7 @@ end
 function NotesObject:addPointsToPitchDeltaParameter(notePos, points, modulationDepth, paramPitchDelta)
 	-- Apply vibrato to pitchDelta parameters
 	local newPos = notePos
-	local isSimplify = false
+	local isSimplify = false -- not used default
 	
 	for k, point in pairs(points) do
 		newPos = notePos + self.timeAxis:getBlickFromSeconds(point.time)
@@ -594,14 +505,16 @@ end
 
 -- Create user input form
 function NotesObject:getForm()
-	local comboChoice = {}
-	local sliderLoudness = {}
-	local overrideDepthDefaultValue = 0
-	local overrideDepthMinValue = 0
+	local overrideDepthDefaultValue = self.overrideDepthDefaultValue
+	local overrideDepthMinValue = 0.5
 	local overrideDepthMaxValue = 1.5
-	local overrideDepthLevelInterval = 0.5
-	
-	sliderOverrideDepth = {
+	local overrideDepthLevelInterval = 0.25
+	local overrideStartDefaultValue = self.overrideStartDefaultValue
+	local overrideStartMinValue = 0
+	local overrideStartMaxValue = 50
+	local overrideStartLevelInterval = 5
+
+	local sliderOverrideDepth = {
 			name = "overrideDepth", type = "Slider",
 			label = SV:T("Override vibrato depth"),
 			format = "%1.1f Depth",
@@ -610,11 +523,42 @@ function NotesObject:getForm()
 			interval = overrideDepthLevelInterval, 
 			default = overrideDepthDefaultValue
 		}
+	
+	local sliderOverrideStart = {
+			name = "overrideStart", type = "Slider",
+			label = SV:T("Override start note"),
+			format = "%1.1f %",
+			minValue = overrideStartMinValue, 
+			maxValue = overrideStartMaxValue, 
+			interval = overrideStartLevelInterval, 
+			default  = overrideStartDefaultValue
+		}
+	
+	local checkboxProgressiveVibrato = {
+			name = "isProgressiveVibrato",
+			text = SV:T("Progressive vibrato"),
+			type = "CheckBox",
+			default = self.progressiveVibrato
+		}
+	
+	if #self.vibratoModelsList > 0 then
+		vibratoComboChoice = {
+			name = "vibratoModel", type = "ComboBox", label = SV:T("Select a vibrato model"), 
+			choices = self.vibratoModelsList, default = self.defaultVibratoModel - 1
+		}
+	end
 
-	if #self.modelChoiceList > 0 then
-		comboChoice = {
-			name = "modelChoice", type = "ComboBox", label = SV:T("Choose a model"), 
-			choices = self.modelChoiceList, default = 0
+	if #self.frequencyModModelsList > 0 then
+		-- Add a default value (not overrided)
+		local frequencyModModelsList = {}
+		table.insert(frequencyModModelsList, SV:T("Default model"))
+		for _, freq in pairs(self.frequencyModModelsList) do
+			table.insert(frequencyModModelsList, freq)
+		end
+		
+		frequencyModelComboChoice = {
+			name = "frequencyModel", type = "ComboBox", label = SV:T("Override a frequency model"), 
+			choices = frequencyModModelsList, default = 0
 		}
 	end
 	
@@ -629,12 +573,14 @@ function NotesObject:getForm()
 					.. SV:T("in the Notes Panel!"), 
 				height = 0
 			},
-			comboChoice,
+			vibratoComboChoice,
 			sliderOverrideDepth,
+			frequencyModelComboChoice,
+			sliderOverrideStart,
+			checkboxProgressiveVibrato,
 			{
 				name = "separator", type = "TextArea", label = "", height = 0
 			},
-			
 		}
 	}
 	return SV:showCustomDialog(form)
@@ -645,10 +591,16 @@ function NotesObject:start()
 	local userInput = self:getForm()
 	
 	if userInput.status then
-		if userInput.answers.modelChoice ~= nil then
-			local model_choice = userInput.answers.modelChoice + 1 -- see self.modelChoice
-			local overrideDepth = userInput.answers.overrideDepth + 1
-			self:addVibratoToSelectedNotes(model_choice, overrideDepth)
+		if userInput.answers.vibratoModel ~= nil then
+			local model_choice = userInput.answers.vibratoModel + 1 -- see self.vibratoModel
+			local overrideDepth = userInput.answers.overrideDepth
+			local overrideFrequencyModel = userInput.answers.frequencyModel + 1
+			local overrideStart = userInput.answers.overrideStart
+			
+			self.progressiveVibrato = userInput.answers.isProgressiveVibrato
+
+			self:addVibratoToSelectedNotes(model_choice, overrideDepth, 
+				overrideFrequencyModel, overrideStart, self.progressiveVibrato)
 		end
 	end
 end
