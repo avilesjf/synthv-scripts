@@ -75,16 +75,16 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-	notesObject.numTracks = notesObject.project:getNumTracks()
-	notesObject.currentTrack = SV:getMainEditor():getCurrentTrack()
-	notesObject.currentTrackName = notesObject.currentTrack:getName()
-	notesObject.currentTrackNumber = notesObject.currentTrack:getIndexInParent()
-	notesObject.projectFileName = notesObject.project:getFileName()
-	notesObject.notesFileName = notesObject:getNotesFilePath(notesObject.projectFileName, notesObject.currentTrackNumber)
-	notesObject.noteTag = notesObject.noteTag:gsub("xx", notesObject.currentTrackNumber)
+    self.project = SV:getProject()
+	self.numTracks = self.project:getNumTracks()
+	self.currentTrack = SV:getMainEditor():getCurrentTrack()
+	self.currentTrackName = self.currentTrack:getName()
+	self.currentTrackNumber = self.currentTrack:getIndexInParent()
+	self.projectFileName = self.project:getFileName()
+	self.notesFileName = self:getNotesFilePath(self.projectFileName, self.currentTrackNumber)
+	self.noteTag = self.noteTag:gsub("xx", self.currentTrackNumber)
 	
-    return notesObject
+    return self
 end
 
 -- Get notes file path

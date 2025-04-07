@@ -73,10 +73,10 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = SV:getProject():getTimeAxis()
+    self.project = SV:getProject()
+    self.timeAxis = SV:getProject():getTimeAxis()
 	
-    return notesObject
+    return self
 end
 
 -- Show message dialog

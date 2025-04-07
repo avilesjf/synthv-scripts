@@ -7,6 +7,7 @@ Synthesizer V Studio Pro Script
 lua file name: VibratoToPitchDelta.lua
 
 This script will recreate a vibrato envelope with pitch delta parameters
+Save user updated dialog box values to external txt file (isPresetSave = true)
 
 Set shortcut to ALT + V
 
@@ -22,11 +23,22 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
+			{"Unable to save preset:", "Unable to save preset:"},
 			{"Start/End note (%): ", "Start/End note (%): "},
-			{"Vibrato depth: ", "Vibrato depth: "},
+			{"Depth: ", "Depth: "},
+			{"Model: ", "Model: "},
 			{"ERROR! Tempo not found!", "ERROR! Tempo not found!"},
+			{"Preset: ", "Preset: "},
 			{"Override vibrato depth", "Override vibrato depth"},
-			{"Choose a model", "Choose a model"},
+			{"Depth", "Depth"},
+			{"Force rate and override frequency modulation", "Force rate and override frequency modulation"},
+			{"Rate", "Rate"},
+			{"Override start note", "Override start note"},
+			{"%", "%"},
+			{"Progressive vibrato", "Progressive vibrato"},
+			{"Select a vibrato model", "Select a vibrato model"},
+			{"Default model", "Default model"},
+			{"Override a frequency model", "Override a frequency model"},
 			{"Vibrato modulation", "Vibrato modulation"},
 			{"Do not forget to reset Vibrato Modulation to 0", "Do not forget to reset Vibrato Modulation to 0"},
 			{"in the Notes Panel!", "in the Notes Panel!"},
@@ -49,10 +61,13 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
-	direction = 1, -- Upper
-	newGap = 0.1,
 	PARAMETER_REFERENCE = "pitchDelta",
-	defaultValue = 1,
+	isPresetSave = true, 				-- preset data is saved into a local txt file project
+	presetFileNameExtension = "-PresetVibrato.txt",
+	presetRecord = "",
+	presetValues = {},
+	projectFileName = "",
+	presetVibratoFileName = "",
 	currentGroupRef = nil,
 	currentGroupNotes = nil,
 	paramsGroup = nil,
@@ -69,13 +84,30 @@ NotesObject = {
 	vibratoModelsList = {},
 	frequencyModModels = {},
 	frequencyModModelsList = {},
+	frequencyModulationDefault = 6.0,
 	controlPointsMilliSeconds = 0.02, 	-- 0.01 = 10ms default
-	attackTimeDefault = 0.1,
-	attackTimeProgressive = 0.5,
-	defaultVibratoModel = 1,			-- 1 (1 to 3) default frequency vibrato model
-	overrideDepthDefaultValue = 1,		-- 1 (0.5 to 1.5) default vibrato depth
-	overrideStartDefaultValue = 0, 		-- 0 (5% to 50%) default vibrato starting note
+	attackTimeDefault = 0.1,			-- default attack
+	attackTimeProgressive = 0.5,		-- attenuate attack for progressive vibrato
 	progressiveVibrato = false,			-- default progressive vibrato
+	defaultVibratoModel = 1,			-- 1 (1 to 3) default frequency vibrato model
+	defaultFrequencyModel = 1,			-- 1 default frequency model
+	overrideDepthDefaultValue = 1,		-- 1 (0.5 to 1.5) default vibrato depth
+	overrideDepthMinValue = 0.5,
+	overrideDepthMaxValue = 2,
+	overrideDepthLevelInterval = 0.25,
+	overrideRateDefaultValue = 1,		-- 1 (0.1 to 2) default vibrato rate
+	overrideRateMinValue = 0.5,
+	overrideRateMaxValue = 1.5,
+	overrideRateLevelInterval = 0.1,
+	overrideStartDefaultValue = 0, 		-- 0 (0 to 50%) default vibrato starting note
+	overrideStartMinValue = 0,
+	overrideStartMaxValue = 50,
+	overrideStartLevelInterval = 5,
+	modelSelected = 1,
+	overrideDepthSelected = 1, 
+	overrideRateSelected = 1,
+	overrideFrequencyModelSelected = 0,
+	overrideStartSelected = 0,
 	timeGapSeconds = 0.01	-- Gap in milliseconds 1 millisecond = 1411200 blicks
 }
 
@@ -107,7 +139,68 @@ function NotesObject:new()
 	self.vibratoModelsList = self:getVibratoModels()
 	self.frequencyModModelsList = self:getFrequencyModulationModelsList()
 	
+	self.projectFileName = self.project:getFileName()
+	self.presetVibratoFileName = self:getVibratoPresetFilePath(self.projectFileName)
+	
     return self
+end
+
+-- Get vibrato preset file path
+function NotesObject:getVibratoPresetFilePath(projectFileName)
+	local notesFileName = projectFileName
+	-- Update filename extension
+	notesFileName = notesFileName:gsub("%.svp", self.presetFileNameExtension)
+	return notesFileName
+end
+
+-- Save preset to text file
+function NotesObject:savePresetToTextFile(preset, filename)
+	local fo, errMessage = io.open(filename, "w")
+	if fo then
+	  fo:write(preset)
+	  fo:close()
+	else
+	  self.show(SV:T("Unable to save preset:") .. "\r" .. errMessage)
+	end
+end
+
+-- Read preset from text file
+function NotesObject:readPresetFromTextFile(fileName)
+	local notes = ""
+	local fhandle = io.open(fileName, 'r')
+	
+	if fhandle ~= nil then
+		-- Read file
+		notes = fhandle:read("*a")
+		io.close(fhandle)
+	end
+	return notes
+end
+
+-- Check if file exists
+function NotesObject:isFileExists(fileName)
+	local result = false
+	local file = io.open(fileName, "r")
+	if file ~= nil then
+		io.close(file)
+		result = true
+	end
+	return result
+end
+
+-- Get filename only
+function NotesObject:getFileNameOnly(filename)
+      return filename:match("^.+\\(.+)$")
+end
+
+-- Split string by sep char
+function NotesObject:split(str, sep)
+   local result = {}
+   local regex = ("([^%s]+)"):format(sep)
+   for each in str:gmatch(regex) do
+	  table.insert(result, each)
+   end
+   return result
 end
 
 -- Set vibrato models
@@ -128,8 +221,7 @@ function NotesObject:setFrequencyModulationModels()
 	local frequencyModulations = {
 		{5.7, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0},
 		{5.5, 5.7, 6.0, 6.2, 6.2, 6.2, 5.0},
-		{5.5, 5.7, 6.0, 6.0, 6.0, 5.7},
-		{6.0}
+		{6.2}
 	}
 	return frequencyModulations
 end
@@ -168,7 +260,7 @@ function NotesObject:getVibratoModels()
 		local modelList = SV:T("Start/End note (%): ") 
 			.. model.startNote .. "/" .. model.endNote
 			.. ", " .. SV:T("Depth: ") .. model.vibratoDepth
-			.. ", " .. SV:T("Freq: ") .. model.frequencyModModel
+			.. ", " .. SV:T("Model: ") .. model.frequencyModModel
 		table.insert(vibratoModelsList, modelList)
 	end
 	return vibratoModelsList
@@ -419,8 +511,9 @@ function NotesObject:getVibratoPoints(ticksPerSecond, noteStartTick, noteDuratio
 end
 
 -- Add vibrato to selected notes
-function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth, 
-						override_FrequencyModel, overrideStart, isProgressiveVibrato)
+function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth,
+						override_FrequencyModel, override_start, override_rate,
+						isProgressiveVibrato)
 
 	local percentStartNote = self.vibratoModels[model_choice].startNote
 	local modulationDepth = self.vibratoModels[model_choice].vibratoDepth
@@ -445,7 +538,7 @@ function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth,
 			paramPitchDelta:remove(notePos, notePosEnd)
 			
 			local newModulationDepth = self.coefModulation * modulationDepth
-			if override_depth > self.overrideDepthDefaultValue then
+			if override_depth ~= self.overrideDepthDefaultValue then
 				newModulationDepth = self.coefModulation * override_depth
 			end
 
@@ -454,12 +547,19 @@ function NotesObject:addVibratoToSelectedNotes(model_choice, override_depth,
 				frequencyModModel = override_FrequencyModel - 1
 			end
 			local frequencyModModelActive = self.frequencyModModels[frequencyModModel]
+
+			-- Override frequencyModModelActive
+			if override_rate ~= self.overrideRateDefaultValue then
+				frequencyModModelActive = {}
+				table.insert(frequencyModModelActive, self.frequencyModulationDefault  * override_rate)
+			end
+
 			self.frequencyModModelActive = frequencyModModelActive
-			
+		
 			local noteDurationSeconds = self.timeAxis:getSecondsFromBlick(noteDuration)
 			local vibratoDelayInSeconds = noteDurationSeconds * percentStartNote / 100			
-			if overrideStart ~= self.overrideStartDefaultValue then
-				vibratoDelayInSeconds = noteDurationSeconds * overrideStart / 100
+			if override_start ~= self.overrideStartDefaultValue then
+				vibratoDelayInSeconds = noteDurationSeconds * override_start / 100
 			end
 			
 			local notePosStart = 0 -- SV:seconds2Blick(0.02, self.currentBPM)
@@ -505,46 +605,66 @@ end
 
 -- Create user input form
 function NotesObject:getForm()
-	local overrideDepthDefaultValue = self.overrideDepthDefaultValue
-	local overrideDepthMinValue = 0.5
-	local overrideDepthMaxValue = 1.5
-	local overrideDepthLevelInterval = 0.25
-	local overrideStartDefaultValue = self.overrideStartDefaultValue
-	local overrideStartMinValue = 0
-	local overrideStartMaxValue = 50
-	local overrideStartLevelInterval = 5
-
+	
+	local newVibratoModel = self.defaultVibratoModel
+	local newFrequencyModel = self.defaultFrequencyModel
+	local newProgressiveVibrato = self.progressiveVibrato
+	local newOverrideDepthValue = self.overrideDepthDefaultValue
+	local newOverrideRateValue = self.overrideRateDefaultValue
+	local newOverrideStartValue = self.overrideStartDefaultValue
+	local presetLabel = ""
+	
+	if #self.presetValues > 0 then
+		newVibratoModel = self.presetValues[1].vibratoModel
+		newFrequencyModel = self.presetValues[1].frequencyModel
+		newOverrideDepthValue =  self.presetValues[1].overrideDepth
+		newOverrideRateValue =  self.presetValues[1].overrideRate
+		newOverrideStartValue = self.presetValues[1].overrideStart
+		newProgressiveVibrato = self.presetValues[1].progressiveVibrato
+		presetLabel = SV:T("Preset: ") .. self:getFileNameOnly(self.presetVibratoFileName)
+	end
+	
 	local sliderOverrideDepth = {
 			name = "overrideDepth", type = "Slider",
 			label = SV:T("Override vibrato depth"),
-			format = "%1.1f Depth",
-			minValue = overrideDepthMinValue, 
-			maxValue = overrideDepthMaxValue, 
-			interval = overrideDepthLevelInterval, 
-			default = overrideDepthDefaultValue
+			format = "%1.1f" .. " " .. SV:T("Depth"),
+			minValue = self.overrideDepthMinValue, 
+			maxValue = self.overrideDepthMaxValue, 
+			interval = self.overrideDepthLevelInterval, 
+			default  = newOverrideDepthValue
+		}
+
+	local sliderOverrideRate = {
+			name = "overrideRate", type = "Slider",
+			label = SV:T("Force rate and override frequency modulation"),
+			format = "%1.1f" .. " " .. SV:T("Rate"),
+			minValue = self.overrideRateMinValue, 
+			maxValue = self.overrideRateMaxValue, 
+			interval = self.overrideRateLevelInterval, 
+			default  = newOverrideRateValue
 		}
 	
 	local sliderOverrideStart = {
 			name = "overrideStart", type = "Slider",
 			label = SV:T("Override start note"),
-			format = "%1.1f %",
-			minValue = overrideStartMinValue, 
-			maxValue = overrideStartMaxValue, 
-			interval = overrideStartLevelInterval, 
-			default  = overrideStartDefaultValue
+			format = "%1.1f"  .. " " .. SV:T("%"),
+			minValue = self.overrideStartMinValue, 
+			maxValue = self.overrideStartMaxValue, 
+			interval = self.overrideStartLevelInterval, 
+			default  = newOverrideStartValue
 		}
 	
 	local checkboxProgressiveVibrato = {
 			name = "isProgressiveVibrato",
 			text = SV:T("Progressive vibrato"),
 			type = "CheckBox",
-			default = self.progressiveVibrato
+			default = newProgressiveVibrato
 		}
 	
 	if #self.vibratoModelsList > 0 then
 		vibratoComboChoice = {
 			name = "vibratoModel", type = "ComboBox", label = SV:T("Select a vibrato model"), 
-			choices = self.vibratoModelsList, default = self.defaultVibratoModel - 1
+			choices = self.vibratoModelsList, default = newVibratoModel - 1
 		}
 	end
 
@@ -558,7 +678,7 @@ function NotesObject:getForm()
 		
 		frequencyModelComboChoice = {
 			name = "frequencyModel", type = "ComboBox", label = SV:T("Override a frequency model"), 
-			choices = frequencyModModelsList, default = 0
+			choices = frequencyModModelsList, default = newFrequencyModel - 1
 		}
 	end
 	
@@ -574,33 +694,111 @@ function NotesObject:getForm()
 				height = 0
 			},
 			vibratoComboChoice,
-			sliderOverrideDepth,
 			frequencyModelComboChoice,
+			sliderOverrideDepth,
 			sliderOverrideStart,
+			sliderOverrideRate,
 			checkboxProgressiveVibrato,
 			{
-				name = "separator", type = "TextArea", label = "", height = 0
+				name = "separator", type = "TextArea", label = presetLabel, height = 0
 			},
 		}
 	}
 	return SV:showCustomDialog(form)
 end
 
+-- Get preset content
+function NotesObject:getPresetContent(presetContent)
+	local presetValues = {}
+	local preset = "" -- preset:
+	local vibratoModel = self.modelSelected
+	local frequencyModel = self.overrideFrequencyModelSelected
+	local overrideDepth =  self.overrideDepthSelected
+	local overrideRate = self.overrideRateSelected
+	local overrideStart = self.overrideStartSelected
+	
+	if #presetContent > 0 then
+		preset = self:split(presetContent, ":")[2] -- preset:
+		if #preset > 0 then
+			local tagPreset = self:split(preset, ",") -- progressiveVibrato=false,..
+			for _, tagItem in pairs(tagPreset) do
+				local tagContent = self:split(tagItem, "=") -- progressiveVibrato=false
+				local tagName = tagContent[1]
+				local tagValue = tagContent[2]
+				
+				if tagName == "progressiveVibrato" then
+					progressiveVibrato = (tagValue == "true")
+				end
+				if tagName == "vibratoModel" then
+					vibratoModel = tonumber(tagValue)
+				end
+				if tagName == "frequencyModel" then
+					frequencyModel = tonumber(tagValue)
+				end
+				if tagName == "overrideDepth" then
+					overrideDepth =  tonumber(tagValue)
+				end
+				if tagName == "overrideRate" then
+					overrideRate = tonumber(tagValue)
+				end
+				if tagName == "overrideStart" then
+					overrideStart = tonumber(tagValue)
+				end
+			end
+			
+			table.insert(presetValues, {
+				progressiveVibrato = progressiveVibrato, 
+				vibratoModel = vibratoModel,
+				frequencyModel = frequencyModel,
+				overrideDepth = overrideDepth,
+				overrideRate = overrideRate,
+				overrideStart = overrideStart
+				})
+		end
+	end
+	return presetValues
+end
+
+-- Set data preset
+function NotesObject:setDataPreset()
+	local presetContent = "Preset1:"
+	presetContent = presetContent .. "progressiveVibrato=" .. tostring(self.progressiveVibrato)  .. ","
+	presetContent = presetContent .. "vibratoModel=" .. self.modelSelected  .. ","
+	presetContent = presetContent .. "frequencyModel=" .. self.overrideFrequencyModelSelected  .. ","
+	presetContent = presetContent .. "overrideDepth=" .. self.overrideDepthSelected  .. ","
+	presetContent = presetContent .. "overrideRate=" .. self.overrideRateSelected  .. ","
+	presetContent = presetContent .. "overrideStart=" .. self.overrideStartSelected
+	
+	return presetContent
+end
+
 -- Start process
 function NotesObject:start()
+	if self.isPresetSave then
+		self.presetRecord = self:readPresetFromTextFile(self.presetVibratoFileName)
+		self.presetValues = self:getPresetContent(self.presetRecord)
+	end
+
 	local userInput = self:getForm()
 	
 	if userInput.status then
 		if userInput.answers.vibratoModel ~= nil then
-			local model_choice = userInput.answers.vibratoModel + 1 -- see self.vibratoModel
-			local overrideDepth = userInput.answers.overrideDepth
-			local overrideFrequencyModel = userInput.answers.frequencyModel + 1
-			local overrideStart = userInput.answers.overrideStart
+			self.modelSelected = userInput.answers.vibratoModel + 1 -- see self.vibratoModel
+			self.overrideDepthSelected = userInput.answers.overrideDepth
+			self.overrideRateSelected = userInput.answers.overrideRate
+			self.overrideFrequencyModelSelected = userInput.answers.frequencyModel + 1
+			self.overrideStartSelected = userInput.answers.overrideStart
 			
 			self.progressiveVibrato = userInput.answers.isProgressiveVibrato
 
-			self:addVibratoToSelectedNotes(model_choice, overrideDepth, 
-				overrideFrequencyModel, overrideStart, self.progressiveVibrato)
+			self:addVibratoToSelectedNotes(self.modelSelected, self.overrideDepthSelected, 
+				self.overrideFrequencyModelSelected, self.overrideStartSelected, 
+				self.overrideRateSelected, self.progressiveVibrato)
+			
+			if self.isPresetSave then
+				self.presetContent = self:setDataPreset()
+				self:savePresetToTextFile(self.presetContent, self.presetVibratoFileName)
+			end
 		end
 	end
 end

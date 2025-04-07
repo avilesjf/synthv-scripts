@@ -60,19 +60,19 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-	notesObject.editor = SV:getMainEditor()
-	notesObject.selection = notesObject.editor:getSelection()
-	notesObject.selectedNotes = notesObject.selection:getSelectedNotes()
-	notesObject.hasSelectedNotes = notesObject.selection:hasSelectedNotes()
+    self.project = SV:getProject()
+	self.editor = SV:getMainEditor()
+	self.selection = self.editor:getSelection()
+	self.selectedNotes = self.selection:getSelectedNotes()
+	self.hasSelectedNotes = self.selection:hasSelectedNotes()
 	
-	if notesObject.hasSelectedNotes then
-		notesObject.lastNote = notesObject.selectedNotes[#notesObject.selectedNotes]
-		notesObject.notesGroup = notesObject.lastNote:getParent()
-		notesObject.indexParent = notesObject.lastNote:getIndexInParent()
+	if self.hasSelectedNotes then
+		self.lastNote = self.selectedNotes[#self.selectedNotes]
+		self.notesGroup = self.lastNote:getParent()
+		self.indexParent = self.lastNote:getIndexInParent()
 	end
 	
-    return notesObject
+    return self
 end
 
 -- Display message box

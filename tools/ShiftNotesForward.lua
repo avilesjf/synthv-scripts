@@ -54,12 +54,12 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = notesObject.project:getTimeAxis()
-    notesObject.editor =  SV:getMainEditor()
-	notesObject.selectedNotes = notesObject.editor:getSelection():getSelectedNotes()
+    self.project = SV:getProject()
+    self.timeAxis = self.project:getTimeAxis()
+    self.editor =  SV:getMainEditor()
+	self.selectedNotes = self.editor:getSelection():getSelectedNotes()
 
-    return notesObject
+    return self
 end
 
 -- Show message dialog

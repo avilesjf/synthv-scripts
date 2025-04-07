@@ -56,15 +56,15 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = notesObject.project:getTimeAxis()
-    notesObject.editor =  SV:getMainEditor()
-	notesObject.selectedNotes = notesObject.editor:getSelection():getSelectedNotes()
-	if notesObject.selectedNotes ~= nil and #notesObject.selectedNotes > 0 then
-		notesObject.noteFirst = notesObject.selectedNotes[1]
+    self.project = SV:getProject()
+    self.timeAxis = self.project:getTimeAxis()
+    self.editor =  SV:getMainEditor()
+	self.selectedNotes = self.editor:getSelection():getSelectedNotes()
+	if self.selectedNotes ~= nil and #self.selectedNotes > 0 then
+		self.noteFirst = self.selectedNotes[1]
 	end
 
-    return notesObject
+    return self
 end
 
 -- Create temp measure mark

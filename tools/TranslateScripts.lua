@@ -92,10 +92,10 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-	notesObject:getHostInformations()
+    self.project = SV:getProject()
+	self:getHostInformations()
 	
-    return notesObject
+    return self
 end
 
 -- Show message dialog

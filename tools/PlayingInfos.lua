@@ -82,19 +82,19 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-    notesObject.timeAxis = notesObject.project:getTimeAxis()
-    notesObject.editor =  SV:getMainEditor()
-    notesObject.track = notesObject.editor:getCurrentTrack()
-	notesObject.trackName = notesObject.track:getName()
-	notesObject.groups = notesObject:storeGroupsName()
+    self.project = SV:getProject()
+    self.timeAxis = 	self.project:getTimeAxis()
+    self.editor =  SV:getMainEditor()
+    self.track = 	self.editor:getCurrentTrack()
+	self.trackName = 	self.track:getName()
+	self.groups = 	self:storeGroupsName()
+
+	self.playBack = SV:getPlayback()	
+	self.navigate = SV:getMainEditor():getNavigation()
+	self.currentSeconds = 	self.playBack:getPlayhead()
+	self.projectDuration = 	self:getProjectDuration()
 	
-	notesObject.playBack = SV:getPlayback()	
-	notesObject.navigate = SV:getMainEditor():getNavigation()
-	notesObject.currentSeconds = notesObject.playBack:getPlayhead()
-	notesObject.projectDuration = notesObject:getProjectDuration()
-	
-    return notesObject
+    return 	self
 end
 
 -- Get project duration

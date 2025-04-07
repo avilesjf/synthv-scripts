@@ -157,13 +157,13 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    notesObject.project = SV:getProject()
-	notesObject:getHostInformations()
-	notesObject.mainHostVersion = notesObject:GetMainHostVersionNumber()
-	notesObject.initialPathsInfos = notesObject:getInitialPathsInfos()
-	-- notesObject:show("version=" .. notesObject.initialPathsInfos.version)
+    self.project = SV:getProject()
+	self:getHostInformations()
+	self.mainHostVersion = self:GetMainHostVersionNumber()
+	self.initialPathsInfos = self:getInitialPathsInfos()
+	-- self:show("version=" .. self.initialPathsInfos.version)
 	
-    return notesObject
+    return self
 end
 
 -- Get initial paths infos
