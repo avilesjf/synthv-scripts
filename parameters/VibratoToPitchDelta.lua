@@ -800,6 +800,9 @@ function NotesObject:start()
 				self:savePresetToTextFile(self.presetContent, self.presetVibratoFileName)
 			end
 		end
+		self:start()
+	else
+		SV:finish()
 	end
 end
 
@@ -807,6 +810,4 @@ end
 function main()
 	local notesObject = NotesObject:new()
 	notesObject:start()
-	
-	SV:finish()
 end
