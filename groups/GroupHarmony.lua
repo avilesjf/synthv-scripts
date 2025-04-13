@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group Harmony V1.6'
+local SCRIPT_TITLE = 'Group Harmony V1.7'
 
 --[[
 
@@ -16,7 +16,7 @@ Add only one track or multiple tracks depending on user selection.
 7/ Adding a lower output level slider for new generated track loudness
 8/ Adding a max random pitch offset to add a time gap
 9/ Use current track to duplicate new track (template to keep voice set)
-10/ Random pitch deviation to impact (in %) automation pitch
+10/ Random pitch deviation to impact (in %) automation pitch -- Deleted cause manual mode no more available on SynthV 2
 
 Degrees I     II     III  IV      V       VI       VII   +I
 Major C 1      2      3    4      5        6         7    8
@@ -24,7 +24,7 @@ Major C 1      2      3    4      5        6         7    8
 		C  Db  D  Eb  E    F  Gb  G   Ab   A   Bb    B    C
 		1  2   3  4   5    6  7   8   9   10   11   12
 
-New version 1.6 to help with language translation
+New version 1.7 to use in SynthV >= 2.0
 
 2025 - JF AVILES
 --]]
@@ -35,7 +35,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 6,
+		versionNumber = 7,
 		minEditorVersion = 65540
 	}
 end
@@ -94,7 +94,8 @@ function getArrayLanguageStrings()
 			{"Please note that new random pitch shift only works", "Please note that new random pitch shift only works"},
 			{"if the selected notes are in manual mode!", "if the selected notes are in manual mode!"},
 			{"Lower output level for new harmony groups", "Lower output level for new harmony groups"},
-			{"Max random pitch offset (default time shift +-20 ms)", "Max random pitch offset (default time shift +-20 ms)"},
+			{"Max random pitch offset (default time shift +-", "Max random pitch offset (default time shift +-"},
+			{" ms)", " ms)"},
 			{"Random pitch deviation tuning (default +-10%)", "Random pitch deviation tuning (default +-10%)"},
 			{"New track", "New track"},
 			{"Select destination track:", "Select destination track:"},
@@ -159,9 +160,13 @@ NotesObject = {
 	newTrackRef = nil,
 	randomSeedActive = false,
 	randomSeedValue = 42,
-	pitchDeviation = 0,
+	-- pitchDeviation = 0, -- Manual mode is not available in Synth V2 version 2.0 until ?
 	tracks = {},
 	trackListChoice = {},
+	outputLevelDefaultValue = 0,
+	-- pitchDeviationDefaultValue = 20,  -- No more working on SynthV 2
+	timeGapDefaultValue = 20, -- 20 ms
+	isCurrentVoiceTrack = false,
 	DEBUG = false,
 	logs = ""
 }
@@ -244,6 +249,18 @@ function NotesObject:logsShow()
 		self:show(self.logs)
 	end
 end
+-- Get object properties
+
+function NotesObject:getObjectProperties(obj)
+	local result = ""
+	for k, v in pairs(obj) do
+		if obj[k] ~= nil then
+			-- result = result .. k .. "=" .. type(v) .. ":" ..tostring(v) .. "\r"
+			result = result .. k .. "=" .. tostring(v) .. "\r"
+		end
+	end
+	return result
+end
 	
 -- Create a new track
 function NotesObject:createTrack()
@@ -321,26 +338,25 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 	local scaleInfo1 = SV:T("Degrees")   .. "     " .. 	SV:T("I           II           III    IV          V          VI       VII      +I")
 	local scaleInfo2 = SV:T("Major C")   .. "      " .. SV:T("1          2            3      4          5           6          7       8")
 	local scaleInfo3 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
-	local newTimeGap = 0
 	local sliderTimeGap = ""
 	local sliderLoudness = ""
-	local timeGapDefaultValue = 20
+	local timeGapDefaultValue = self.timeGapDefaultValue
 	local timeGapMinValue =  0
 	local timeGapMaxValue =  50
 	local timeGapInterval =  1
-	local outputLevelDefaultValue = 0
+	local outputLevelDefaultValue = self.outputLevelDefaultValue
 	local outputLevelMinValue = -10
 	local outputLevelMaxValue = 2
 	local outputLevelInterval = 1
-	local pitchDeviationDefaultValue = 20
-	local pitchDeviationMinValue = 0
-	local pitchDeviationMaxValue = 100
-	local pitchDeviationInterval = 5
+	-- local pitchDeviationDefaultValue = self.pitchDeviationDefaultValue
+	-- local pitchDeviationMinValue = 0
+	-- local pitchDeviationMaxValue = 100
+	-- local pitchDeviationInterval = 5
 	local trackListCombo = ""
 	local defaultKeyPos = 0
 	local trackClone = ""
-	local pitchInfos = ""
-	local pitchDeviation = ""
+	-- local pitchInfos = ""
+	-- local pitchDeviation = "" -- Manual mode is not available in Synth V2 version 2.0 until ?
 	
 	if isFirst then
 		
@@ -378,15 +394,16 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 							choices = transposition, default = posTranposition - 1}
 		end
 		
-		scaleKeyType = {
-			name = "scaleKeyType", type = "TextArea", 
-			label = SV:T("Key scale type selected: ") .. self.keyScaleTypeTitleFound, 
-			height = 0
-		}
+		-- scaleKeyType = {
+			-- name = "scaleKeyType", type = "TextArea", 
+			-- label = SV:T("Key scale type selected: ") .. self.keyScaleTypeTitleFound,
+			-- height = 0
+		-- }
+		scaleKeyType = ""
 		
 		scaleChoice = {
 			name = "scaleKeySelected", type = "TextArea", 
-			label = SV:T("Key scale selected: ") .. self.keyScaleFound, 
+			label = SV:T("Key scale selected: ") .. self.keyScaleFound .. " " .. self.keyScaleTypeTitleFound, 
 			height = 0
 		}
 		
@@ -394,15 +411,15 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 			name = "isTrackClone",
 			text = SV:T("Use current track as a source voice for new tracks"),
 			type = "CheckBox",
-			default = false
+			default = self.isCurrentVoiceTrack
 		}
 		
-		pitchInfos = {
-			name = "infos", type = "TextArea", 
-			label = SV:T("Please note that new random pitch shift only works") .. "\r" 
-				.. SV:T("if the selected notes are in manual mode!"), 
-			height = 0
-		}
+		-- pitchInfos = {
+			-- name = "infos", type = "TextArea", 
+			-- label = SV:T("Please note that new random pitch shift only works") .. "\r" 
+				-- .. SV:T("if the selected notes are in manual mode!"), 
+			-- height = 0
+		-- }
 
 		sliderLoudness = {
 			name = "loudnessHarmony", type = "Slider",
@@ -413,26 +430,27 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 			interval = outputLevelInterval, 
 			default = outputLevelDefaultValue
 		}
-
+		
 		sliderTimeGap = {
 			name = "newTimeGap", type = "Slider",
-			label = SV:T("Max random pitch offset (default time shift +-20 ms)"),
+			label = SV:T("Max random pitch offset (default time shift +-") .. timeGapDefaultValue .. SV:T(" ms)"),
 			format = "%3.0f",
 			minValue = timeGapMinValue, 
 			maxValue = timeGapMaxValue, 
 			interval = timeGapInterval, 
 			default = timeGapDefaultValue
 		}
-
-		pitchDeviation = {
-			name = "newPitchDeviation", type = "Slider",
-			label = SV:T("Random pitch deviation tuning (default +-10%)"),
-			format = "%3.0f",
-			minValue = pitchDeviationMinValue, 
-			maxValue = pitchDeviationMaxValue, 
-			interval = pitchDeviationInterval, 
-			default = pitchDeviationDefaultValue
-		}
+		
+		-- Manual mode is not available in Synth V2 version 2.0 until ?
+		-- pitchDeviation = {
+			-- name = "newPitchDeviation", type = "Slider",
+			-- label = SV:T("Random pitch deviation tuning (default +-10%)"),
+			-- format = "%3.0f",
+			-- minValue = pitchDeviationMinValue, 
+			-- maxValue = pitchDeviationMaxValue, 
+			-- interval = pitchDeviationInterval, 
+			-- default = pitchDeviationDefaultValue
+		-- }
 		
 		-- is not multiple tracks
 		if self.harmonyChoice == 1 then
@@ -440,7 +458,8 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 			self.trackListChoice = self.tracks
 			table.insert(self.trackListChoice, SV:T("New track")) -- default choice
 			
-			trackListCombo = {name = "trackChoice", type = "ComboBox", label = SV:T("Select destination track:"),
+			trackListCombo = {name = "trackChoice", type = "ComboBox", 
+							label = SV:T("Select destination track:"),
 							choices = self.trackListChoice, default = #self.trackListChoice - 1}
 		end
 	end
@@ -467,8 +486,8 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 			sliderTimeGap,
 			comboChoice,
 			trackClone,
-			pitchInfos,
-			pitchDeviation,
+			-- pitchInfos,
+			-- pitchDeviation,
 			{
 				name = "separator", type = "TextArea", label = "", height = 0
 			}
@@ -511,6 +530,7 @@ function NotesObject:start()
 	-- Check groups selected
 	if #groupsSelected == 0 then
 		self:show(SV:T("Please select groups first on Arrangement view!"))
+		SV:finish()
 	else		
 		self.currentTrack = SV:getMainEditor():getCurrentTrack()
 		-- Group selected
@@ -547,6 +567,9 @@ function NotesObject:start()
 		local isFirst = true
 		local userInput = self:callForms(isFirst, keyScaleFound, keyFoundDisplay, 
 												keyScaleFoundTrack, groupsSelected)
+		if not userInput.status then
+			SV:finish()
+		end
 	end
 end
 
@@ -584,9 +607,17 @@ function NotesObject:callForms(isFirst, keyScaleFound, keyFoundDisplay, keyScale
 		
 		if userInput.status then			
 			self.isTrackClone = userInput.answers.isTrackClone
-			self.pitchDeviation = userInput.answers.newPitchDeviation
+			self.isCurrentVoiceTrack = self.isTrackClone
+			-- self.pitchDeviation = userInput.answers.newPitchDeviation -- no more available in SynthV 2.0
+			-- self.pitchDeviationDefaultValue = userInput.answers.newPitchDeviation
+			self.timeGapDefaultValue = math.floor(userInput.answers.newTimeGap)
+			self.outputLevelDefaultValue = userInput.answers.loudnessHarmony
+
 			-- Duplicate note groups & create tracks
 			local numGroups = self:duplicateNotes(groupsSelected, userInput.answers)
+			
+			-- Reopen dialog
+			self:callForms(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected)
 		end		
 	end
 	
@@ -767,12 +798,14 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 					note:setPitch(notePitch)
 					
 					-- Add time gap
-					-- local noteTimeGap = note:getOnset() + (SV.QUARTER * newTimeGap / 100)
-					-- note:setOnset(noteTimeGap)
-					local attributes = note:getAttributes()
-					local newRandomGap = self:getNewTimeGap(newTimeGap)
-					attributes.tNoteOffset = newRandomGap / 1000
-					note:setAttributes(attributes)
+					local newRandomGap = self:getNewTimeGap(newTimeGap) / 10
+					local noteTimeGap = note:getOnset() + (SV.QUARTER * newRandomGap / 100)
+					note:setOnset(noteTimeGap)
+					-- local attributes = note:getAttributes()
+					-- No more working on SynthV 2
+					-- local newRandomGap = self:getNewTimeGap(newTimeGap)
+					-- attributes.tNoteOffset = newRandomGap / 1000
+					-- note:setAttributes(attributes)
 				end			
 				self.project:addNoteGroup(newNoteGroup)
 				
@@ -789,7 +822,7 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 				end
 				
 				-- Update pitch deviation
-				self:updatePitchParameters(newNoteGroup, firstNote, lastNote)
+				-- self:updatePitchParameters(newNoteGroup, firstNote, lastNote)
 				
 				table.insert(newGroupRefs, newGrouptRef)
 			end
@@ -804,35 +837,35 @@ function NotesObject:getNewTimeGap(timeGap)
 	if self.randomSeedActive then
 		math.randomseed(self.randomSeedValue)
 	end
-	local newTimeGap = math.random(-timeGap, timeGap)
+	local newTimeGap = math.random(-timeGap/2, timeGap)
 	return newTimeGap
 end
 
--- Update pitch deviation
-function NotesObject:getNewPitchDeviation(pitch)
-	if self.randomSeedActive then
-		math.randomseed(self.randomSeedValue)
-	end
+-- -- Update pitch deviation
+-- function NotesObject:getNewPitchDeviation(pitch)
+	-- if self.randomSeedActive then
+		-- math.randomseed(self.randomSeedValue)
+	-- end
 	
-	if math.floor(pitch) == 0 then
-		newPitch = self:randomGaussian(-1, 1)
-	else
-		-- -10%
-		local newPitchStart = math.floor(math.abs(pitch) * (1 - (1 * self.pitchDeviation / 100)))
-		-- +10%
-		local newPitchEnd = math.floor(math.abs(pitch) * (1 + (1 * self.pitchDeviation / 100)))
+	-- if math.floor(pitch) == 0 then
+		-- newPitch = self:randomGaussian(-1, 1)
+	-- else
+		-- -- -10%
+		-- local newPitchStart = math.floor(math.abs(pitch) * (1 - (1 * self.pitchDeviation / 100)))
+		-- -- +10%
+		-- local newPitchEnd = math.floor(math.abs(pitch) * (1 + (1 * self.pitchDeviation / 100)))
 		
-		if pitch < 0 then
-			newPitch = math.random(-1 * newPitchEnd, -1 * newPitchStart)
-			--newPitch = self:randomGaussian(-1 * newPitchEnd, -1 * newPitchStart)
-		else
-			newPitch = math.random(newPitchStart, newPitchEnd)
-			--newPitch = self:randomGaussian(newPitchStart, newPitchEnd)
-		end
-	end
+		-- if pitch < 0 then
+			-- newPitch = math.random(-1 * newPitchEnd, -1 * newPitchStart)
+			-- --newPitch = self:randomGaussian(-1 * newPitchEnd, -1 * newPitchStart)
+		-- else
+			-- newPitch = math.random(newPitchStart, newPitchEnd)
+			-- --newPitch = self:randomGaussian(newPitchStart, newPitchEnd)
+		-- end
+	-- end
 	
-	return newPitch
-end
+	-- return newPitch
+-- end
 
 -- Random gaussian
 function NotesObject:randomGaussian(mean, stddev)
@@ -848,44 +881,44 @@ function NotesObject:randomGaussian(mean, stddev)
 	return mean + stddev * u * s
 end
 
--- Update pitch deviation
-function NotesObject:updatePitchParameters(notesGroup, firstNote, lastNote)
-	local paramsGroup = notesGroup:getParameter("pitchDelta")
-	-- local paramPointsFound = {}
-	local parametersFoundCount = 0
-	-- local pointCount = 0
-	local timeBegin = firstNote:getOnset()
-	local timeEnd = lastNote:getOnset() + lastNote:getDuration()
+-- -- Update pitch deviation
+-- function NotesObject:updatePitchParameters(notesGroup, firstNote, lastNote)
+	-- local paramsGroup = notesGroup:getParameter("pitchDelta")
+	-- -- local paramPointsFound = {}
+	-- local parametersFoundCount = 0
+	-- -- local pointCount = 0
+	-- local timeBegin = firstNote:getOnset()
+	-- local timeEnd = lastNote:getOnset() + lastNote:getDuration()
 
-	if paramsGroup ~= nil then
-		local allPoint = paramsGroup:getAllPoints()
-		-- pitchDelta=1:[1426381361, 6.7873301506042]|2:[1605705119, 161.53845214844]|3:[1624581303, 0.0]
-		-- Loop all parameters points
-		for iPoint = 1, #allPoint do
-			local pts = allPoint[iPoint]
-			local array = {}
-			local dataStr = ""
+	-- if paramsGroup ~= nil then
+		-- local allPoint = paramsGroup:getAllPoints()
+		-- -- pitchDelta=1:[1426381361, 6.7873301506042]|2:[1605705119, 161.53845214844]|3:[1624581303, 0.0]
+		-- -- Loop all parameters points
+		-- for iPoint = 1, #allPoint do
+			-- local pts = allPoint[iPoint]
+			-- local array = {}
+			-- local dataStr = ""
 			
-			-- Loop each pair point
-			for iPosPoint = 1, #pts do
-				local currentPoint = allPoint[iPoint][1]
+			-- -- Loop each pair point
+			-- for iPosPoint = 1, #pts do
+				-- local currentPoint = allPoint[iPoint][1]
 				
-				-- Only time inside selected notes
-				if currentPoint >= timeBegin  and currentPoint <= timeEnd  then
-					dataStr = tostring(allPoint[iPoint][iPosPoint])
-					array[iPosPoint] = allPoint[iPoint][iPosPoint]
+				-- -- Only time inside selected notes
+				-- if currentPoint >= timeBegin  and currentPoint <= timeEnd  then
+					-- dataStr = tostring(allPoint[iPoint][iPosPoint])
+					-- array[iPosPoint] = allPoint[iPoint][iPosPoint]
 					
-					local pitchVariation = self:getNewPitchDeviation(allPoint[iPoint][iPosPoint])
-					-- Update value point
-					local newValue = pitchVariation
-					paramsGroup:remove(currentPoint)
-					paramsGroup:add(currentPoint, newValue)						
-				end
-			end
-		end
-		paramsGroup:simplify(timeBegin, timeEnd, 0.01)
-	end
-end
+					-- local pitchVariation = self:getNewPitchDeviation(allPoint[iPoint][iPosPoint])
+					-- -- Update value point
+					-- local newValue = pitchVariation
+					-- paramsGroup:remove(currentPoint)
+					-- paramsGroup:add(currentPoint, newValue)						
+				-- end
+			-- end
+		-- end
+		-- paramsGroup:simplify(timeBegin, timeEnd, 0.01)
+	-- end
+-- end
 
 -- trim string
 function NotesObject:trim(s)
@@ -1185,6 +1218,4 @@ end
 function main()
 	local NotesObject = NotesObject:new()
 	NotesObject:start()
-	
-	SV:finish()
 end
