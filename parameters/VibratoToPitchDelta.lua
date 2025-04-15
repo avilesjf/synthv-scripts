@@ -24,21 +24,37 @@ function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
 			{"Unable to save preset:", "Unable to save preset:"},
-			{"Start/End note (%): ", "Start/End note (%): "},
-			{"depth: ", "depth: "},
-			{"Model: ", "Model: "},
+			{"L", "L"},
+			{"R", "R"},
+			{"Depth", "Depth"},
+			{"Frq", "Frq"},
+			{"Ph", "Ph"},
 			{"ERROR! Tempo not found!", "ERROR! Tempo not found!"},
+			{"Default values", "Default values"},
 			{"Preset: ", "Preset: "},
-			{"Override vibrato depth", "Override vibrato depth"},
-			{"Force rate and override frequency modulation", "Force rate and override frequency modulation"},
+			{"Values overrided!", "Values overrided!"},
 			{"Override start note", "Override start note"},
-			{"%", "%"},
+			{"sec", "sec"},
+			{"start", "start"},
+			{"Override left", "Override left"},
+			{"left", "left"},
+			{"Override right", "Override right"},
+			{"right", "right"},
+			{"Override vibrato depth", "Override vibrato depth"},
+			{"smt", "smt"},
+			{"depth", "depth"},
+			{"Frequency", "Frequency"},
+			{"Hz", "Hz"},
+			{"freq", "freq"},
+			{"Phase", "Phase"},
+			{"x", "x"},
+			{"phase", "phase"},
 			{"Select a vibrato model", "Select a vibrato model"},
-			{"Default model", "Default model"},
-			{"Override a frequency model", "Override a frequency model"},
+			{"Reset to default values", "Reset to default values"},
 			{"Vibrato modulation", "Vibrato modulation"},
 			{"Do not forget to reset Vibrato Modulation to 0", "Do not forget to reset Vibrato Modulation to 0"},
 			{"in the Notes Panel!", "in the Notes Panel!"},
+			{"No note selected!", "No note selected!"},
 		},
 	}
 end
@@ -254,6 +270,9 @@ function NotesObject:getObjectProperties(obj)
 	for k, v in pairs(obj) do
 		if obj[k] ~= nil then
 			result = result .. k .. "=" .. tostring(v) .. "\r"
+			if type(v) == "table" then
+				result = result .. self:getObjectProperties(v)  .. "\r"
+			end
 		end
 	end
 	return result
@@ -513,6 +532,10 @@ end
 
 -- Create user input form
 function NotesObject:getForm()
+	if self.isPresetSave then
+		self.presetRecord = self:readPresetFromTextFile(self.presetVibratoFileName)
+		self.presetValues = self:getPresetContent(self.presetRecord)		
+	end
 	
 	local newVibratoModel = self.defaultVibratoModel
 	local newOverrideStartValue = self.overrideStartDefaultValue
@@ -650,7 +673,8 @@ function NotesObject:getForm()
 				name = "separator", type = "TextArea", label = presetLabel, height = 0
 			},
 		}
-	}
+	}	
+	
 	return SV:showCustomDialog(form)
 end
 
@@ -759,15 +783,9 @@ function NotesObject:getNewValue(defaultValue, newValue)
 	return newVal
 end
 
--- Start process
-function NotesObject:start()
-	if self.isPresetSave then
-		self.presetRecord = self:readPresetFromTextFile(self.presetVibratoFileName)
-		self.presetValues = self:getPresetContent(self.presetRecord)		
-	end
+-- Dialog response
+function NotesObject:dialogResponse(userInput)
 
-	local userInput = self:getForm()
-	
 	if userInput.status then
 		if userInput.answers.vibratoModel ~= nil then
 			local valuesFromModel = false
@@ -827,7 +845,6 @@ function NotesObject:start()
 				releaseTime = self.overrideRightSelected,	-- 300ms release for 0.3
 				frequencyModulation = self.frequencyModulationActive
 			}
-		
 
 			self:addVibratoToSelectedNotes(vibratoParams, notePosStart, self.overrideStartSelected)
 			
@@ -836,7 +853,17 @@ function NotesObject:start()
 				self:savePresetToTextFile(self.presetContent, self.presetVibratoFileName)
 			end
 		end
-		self:start()
+	end
+end
+
+-- Start process
+function NotesObject:start()
+
+	local userInput = self:getForm()
+	
+	if userInput.status then
+		self:dialogResponse(userInput)
+		self:start() 
 	end
 end
 
