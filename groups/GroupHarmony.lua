@@ -165,7 +165,7 @@ NotesObject = {
 	trackListChoice = {},
 	outputLevelDefaultValue = 0,
 	-- pitchDeviationDefaultValue = 20,  -- No more working on SynthV 2
-	timeGapDefaultValue = 20, -- 20 ms
+	timeGapDefaultValue = 0, -- 20 ms
 	isCurrentVoiceTrack = false,
 	DEBUG = false,
 	logs = ""
@@ -772,6 +772,8 @@ end
 -- Loop into groups to duplicate & transpose notes
 function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale, newTimeGap, newLoudness)
 	local newGroupRefs = {}
+	-- Add time gap
+	local newRandomGap = self:getNewTimeGap(newTimeGap) / 10
 	for _, refGroup in pairs(groupsSelected) do
 		local groupName = refGroup:getTarget():getName()
 		
@@ -797,8 +799,6 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 						note:getPitch(), tonumber(pitchTarget), posKeyInScale)
 					note:setPitch(notePitch)
 					
-					-- Add time gap
-					local newRandomGap = self:getNewTimeGap(newTimeGap) / 10
 					local noteTimeGap = note:getOnset() + (SV.QUARTER * newRandomGap / 100)
 					note:setOnset(noteTimeGap)
 					-- local attributes = note:getAttributes()
