@@ -31,6 +31,7 @@ Groups time shift to move notes before or after the current beat.
 Harmony: Copy selected groups to new tracks (or select one) and transpose all notes in desired scale.
 Group synchronization for duplicate groups across multiple tracks.
 List all groups in the project, copy a group linked or not, delete a group or all un referenced groups.
+Expand current group size to the last existing note inside.
 
 ## lyrics-scripts
 Extracting lyrics easier to save all lyrics of a song. 

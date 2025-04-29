@@ -1,0 +1,104 @@
+local SCRIPT_TITLE = 'Group size V1.0'
+
+--[[
+
+Synthesizer V Studio Pro Script
+ 
+lua file name: GroupSize.lua
+
+Usage: Run this script to adjust size to the last note inside
+During recording more notes could be inserted than the auto created group of notes,
+so this script expand current group size to the last existing note inside.
+
+2025 - JF AVILES
+--]]
+
+function getClientInfo()
+	return {
+		name = SV:T(SCRIPT_TITLE),
+		category = "_JFA_Groups",
+		author = "JFAVILES",
+		versionNumber = 1,
+		minEditorVersion = 65540
+	}
+end
+
+-- Define a class "NotesObject"
+NotesObject = {
+	project = nil,
+	timeAxis = nil,
+	editor = nil,
+	hostinfo = nil,
+	osType = "",
+	osName = "",
+	hostName = "",
+	languageCode = "", 
+	hostVersion = "",
+	hostVersionNumber = 0,
+	activeCurrentTrack = nil,
+	groupRef = nil,
+}
+
+-- Constructor method for the NotesObject class
+function NotesObject:new()
+    local notesObject = {}
+    setmetatable(notesObject, self)
+    self.__index = self
+	
+    self.project = SV:getProject()
+	self:getHostInformations()
+	self.timeAxis = self.project:getTimeAxis()
+	self.editor = SV:getMainEditor()
+	self.activeCurrentTrack = self.editor:getCurrentTrack()
+	self.groupRef = self.editor:getCurrentGroup()
+	
+    return self
+end
+
+-- Show message dialog
+function NotesObject:show(message)
+	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
+end
+
+-- Get host informations
+function NotesObject:getHostInformations()
+	self.hostinfo = SV:getHostInfo()
+	self.osType = self.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
+	self.osName = self.hostinfo.osName
+	self.hostName = self.hostinfo.hostName
+	self.languageCode = self.hostinfo.languageCode
+	self.hostVersion = self.hostinfo.hostVersion
+	self.hostVersionNumber = self.hostinfo.hostVersionNumber
+end
+
+-- Start process
+function NotesObject:start()
+	local groupNotes = self.groupRef:getTarget()
+	
+	-- Create new group reference
+	local newGroupRef = SV:create("NoteGroupReference", groupNotes)
+    newGroupRef:setTimeOffset(self.groupRef:getTimeOffset())
+    newGroupRef:setPitchOffset(self.groupRef:getPitchOffset())
+	local voiceAttributes = self.groupRef:getVoice()
+	voiceAttributes._ = "" -- Force array to be seen as object if empty
+	newGroupRef:setVoice(voiceAttributes)
+	
+	-- Add to current track
+	self.activeCurrentTrack:addGroupReference(newGroupRef)
+	
+	-- Remove original group ref
+	self.activeCurrentTrack:removeGroupReference(self.groupRef:getIndexInParent())	
+	-- self:show(SV:T("group resized!"))
+end
+
+function main()
+
+	local notesObject = NotesObject:new()
+	-- Is current group
+	if #notesObject.groupRef == nil then
+		notesObject:show(SV:T("Please select a group first!"))
+	else
+		notesObject:start()
+	end
+	SV:finish()
+end
