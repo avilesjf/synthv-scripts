@@ -136,6 +136,7 @@ NotesObject = {
 	transpositionRefPosition = 2,
 	transpositionRefData = 3,
 	isOnlyOneKeyFound = false,
+	isTrackKeyFound = false,
 	posKeyInScaleForm = 0,
     allScales = {},
 	SEP_KEYS = "/",
@@ -237,8 +238,8 @@ function NotesObject:logsShow()
 		self:show(self.logs)
 	end
 end
--- Get object properties
 
+-- Get object properties
 function NotesObject:getObjectProperties(obj)
 	local result = ""
 	for k, v in pairs(obj) do
@@ -341,6 +342,10 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 		
 		if self.isOnlyOneKeyFound then
 			defaultKeyPos = self.posKeyInScaleForm
+		else
+			if self.isTrackKeyFound then
+				defaultKeyPos = self.posKeyInScaleForm
+			end
 		end
 
 		scaleChoice = {
@@ -486,8 +491,9 @@ function NotesObject:start()
 		local keyFoundDisplay = SV:T("Keys found major (minor): ") .. keyScaleFound
 		
 		self.isOnlyOneKeyFound = false
+		self.isTrackKeyFound = false
 		self.posKeyInScaleForm = 0
-		if string.find(keyScaleFound, self.SEP_KEYS)== nil then
+		if string.find(keyScaleFound, self.SEP_KEYS) == nil then
 			self.isOnlyOneKeyFound = true
 			keyScaleFoundMajor = self:split(keyScaleFound, "(")[1]
 			self.posKeyInScaleForm = self:getKeyPosInKeynames(self.keyNames, keyScaleFoundMajor) -1
@@ -504,9 +510,12 @@ function NotesObject:start()
 			self.relativeMinorScalekeys = SV:T("Relative minor keys: ") 
 				.. table.concat(self.relativeMinorScaleKeysChoice, "/")
 			
-			if string.len(keyScaleFoundTrack) > 0 then
+			if #keyScaleFoundTrack > 0 then
 				if keyScaleFound ~= keyScaleFoundTrack then
 					keyFoundDisplay = keyScaleFound .. "\r" .. SV:T("Track: ") .. keyScaleFoundTrack
+					keyScaleFoundMajor = self:split(keyScaleFoundTrack, "(")[1]
+					self.isTrackKeyFound = true
+					self.posKeyInScaleForm = self:getKeyPosInKeynames(self.keyNames, keyScaleFoundMajor) -1
 				end
 			end
 		end
