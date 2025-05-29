@@ -27,7 +27,6 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"self.timeBeginFromClipboard: ", "self.timeBeginFromClipboard: "},
 			{"checkValidParamsFromClipboard: ", "checkValidParamsFromClipboard: "},
 			{"Def params - DisplayName: ", "Def params - DisplayName: "},
 			{"Type: ", "Type: "},
@@ -226,12 +225,10 @@ function NotesObject:checkValidParamsFromClipboard()
 				-- Get timeBegin parameters from clipboard
 				if label == "timeBegin" then
 					self.timeBeginFromClipboard = data
-					-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("self.timeBeginFromClipboard: ") .. tostring(self.timeBeginFromClipboard))
 				end
 			end
 		end
 	end
-	-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("checkValidParamsFromClipboard: ") .. self:getParametersLabelFoundInClipboard())
 	return result	
 end
 
@@ -337,9 +334,9 @@ function NotesObject:getParameters()
 				end
 			end
 		end
-		
+
 		-- Add note time & lyrics
-		if self.parametersFoundCount > 1 then
+		if self.parametersFoundCount >= 1 then
 			result["timeBegin"] = self.timeBegin
 			result["timeEnd"] = self.timeEnd
 			result["lyrics"] = self.lyrics
@@ -363,6 +360,7 @@ function NotesObject:setParameters(newTimeBegin)
 	local timeBeginConvClipBoard = self.timeBeginFromClipboard
 	if type(timeBeginConvClipBoard) == "string" then timeBeginConvClipBoard = tonumber(timeBeginConvClipBoard) end
 	local timeOffset = self.timeBegin
+	
 	if timeBeginConvClipBoard ~= nil then
 		timeOffset = self.timeBegin - timeBeginConvClipBoard
 	end
@@ -425,9 +423,7 @@ function NotesObject:setParameters(newTimeBegin)
 		end
 	end
 	
-	-- self:getNewPoints(newPoints)
 	self:setNewPoints(newPoints)
-	-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("setParameters:") .. "\r" .. result)
     return result
 end
 
@@ -435,7 +431,7 @@ end
 function NotesObject:getNewPoints(newPoints)
 	local result = ""
 	if newPoints == nil then
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("NO new points!"))
+		self:show(SV:T("NO new points!"))
 	else
 		local iPoint = 0
 		for label, data in pairs(newPoints) do
@@ -444,14 +440,13 @@ function NotesObject:getNewPoints(newPoints)
 			local iPointDetail = 0
 			for labelPoint, dataPoint in pairs(data[iPoint]) do
 				iPointDetail = iPointDetail + 1
-				-- ²result = result .. "labelPoint: " .. tostring(iPointDetail) .. "= " .. tostring(dataPoint) .. "\r"
+				-- result = result .. "labelPoint: " .. tostring(iPointDetail) .. "= " .. tostring(dataPoint) .. "\r"
 				for iLineSub = 1, #dataPoint do
 					result = result .. jfaTools.getStringDataForLoop(tostring(dataPoint[iLineSub]), iLineSub, #dataPoint)
 				end
 				result = result .. "\r"
 			end
 		end
-		-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("New points found:") .. "\r" .. result)
 	end
 	return result
 end
@@ -460,7 +455,7 @@ end
 function NotesObject:setNewPoints(newPoints)
 	local result = ""
 	if newPoints == nil then
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("NO new points!"))
+		self:show(SV:T("NO new points!"))
 	else
 		
 		local iPoint = 0
@@ -491,7 +486,6 @@ function NotesObject:setNewPoints(newPoints)
 				end
 			end
 		end
-		-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("New points found:") .. "\r" .. result)
 	end
 	return result
 end
@@ -570,16 +564,14 @@ function NotesObject:start()
 			-- save parameters to clipboard
 			self:saveParameters()
 			
-			-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters copy done!") )
 			local result = jfaTools.tableToString(self.parametersFound)
 			if string.len(result) > 0 then
-				--SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("getParametersFound:") .. "\r" .. result)
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters copy DONE!") .. "\r\r"
+				self:show(SV:T("Parameters copy DONE!") .. "\r\r"
 				.. SV:T("Next step :") .. "\r"
 				.. SV:T("Select a new note target to duplicate all parameters") .. "\r"
 				.. SV:T("and start this script again!"))
 			else
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters not found for selected notes!") )
+				self:show(SV:T("Parameters not found for selected notes!") )
 			end
 		end
 	else
@@ -592,7 +584,7 @@ function NotesObject:start()
 		
 		if self.timeBegin == timeBeginConvClipBoard then
 			local groupRefTimeoffset = self.currentGroupRef:getTimeOffset()
-			SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("!! STOP !!") .. "\r" .. SV:T("You cannot paste on the same selected notes!") .. "\r\r"
+			self:show(SV:T("!! STOP !!") .. "\r" .. SV:T("You cannot paste on the same selected notes!") .. "\r\r"
 				.. SV:T("(Current note time begin is ") 
 				.. self:secondsToClock(self:getBlickToSecond(self.timeBegin + groupRefTimeoffset))
 				.. ")" .. "\r"
@@ -604,8 +596,7 @@ function NotesObject:start()
 			
 			if resultAction then
 				local resultParams = self:setParameters()
-				-- SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Result params:") .. "\r" .. jfaTools.tableToString(resultParams))
-				SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Parameters paste DONE!") .. "\r\r"
+				self:show(SV:T("Parameters paste DONE!") .. "\r\r"
 				.. SV:T("Next step :") .. "\r"
 				.. SV:T("See the paste action result inside the parameters window."))
 				
@@ -621,7 +612,7 @@ function main()
 
 	-- At least one note must be selected
 	if not notesObject:isOneNoteSelected() then
-		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("No notes selected!"))
+		notesObject:show(SV:T("No notes selected!"))
 	else
 		NotesObject:start()
 	end
