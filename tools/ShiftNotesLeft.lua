@@ -43,6 +43,7 @@ end
 NotesObject = {
 	project = nil,
 	timeAxis = nil,
+	arrangement = nil,
 	editor = nil,
 	direction = -1, -- direction (left = -1 & right = +1)
 	noteTimeGap = SV.QUARTER / 4, -- moving left/right QUARTER/4
@@ -83,10 +84,10 @@ function NotesObject:start()
 	else
 		-- No notes selected
 		local timeViewRange = self.navigation:getTimeViewRange()
-        local newPos = timeViewRange[1] + (self.noteTimeGap * self.direction)
+		local newPos = timeViewRange[1] + (self.noteTimeGap * self.direction)
 		-- Scroll left/right
 		self.navigation:setTimeLeft(newPos)
-	end	
+	end
 end
 
 -- Main process
