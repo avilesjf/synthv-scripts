@@ -47,6 +47,7 @@ Extracting (and copy into the clipboard) all existing shortcuts into the file: s
 Duplicate selected notes to a new target position.
 Microtonality: Update pitchDelta for each individual key for notes.
 Shift notes: Backward or forward in very short gap or in previous/next first measure bar.
+Shift notes: Move pitch notes value up/down.
 Playing SynthV: Displaying time in the track name and key notes inside groups during play.
 Store and display internal project notes for a track.
 Retrieving all SV:T(text) inside a script and generate a function for translation language.
