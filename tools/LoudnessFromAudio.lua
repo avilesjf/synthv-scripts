@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Loudness from audio file V1.0'
+local SCRIPT_TITLE = 'Loudness from audio file V2.0'
 
 --[[
 
@@ -6,19 +6,11 @@ Synthesizer V Studio Pro Script
  
 lua file name: LoudnessFromAudio.lua
 
-Read Json loudness audio data and apply loudness parameters
-
-Json is generated from audiowaveform.exe
-command line:
-audiowaveform.exe -i audioFile -o jsonFile
+Extract loudness audio wave form and apply the corresponding loudness parameters
 
 Warnings! 
 AudioFile must be a wav file format!
 This version tested on Windows 11 only!
-AudioWaveform v1.10.1
-
-audiowaveform:
-https://github.com/bbc/audiowaveform
 
 Json source code included:
 https://gist.github.com/tylerneylon/59f4bcf316be525b30ab
@@ -35,8 +27,30 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
+			{"File: ", "File: "},
+			{"Group: ", "Group: "},
 			{"Enter the full path audio filename", "Enter the full path audio filename"},
+			{"Unsupported float format: only 32-bit float is supported", "Unsupported float format: only 32-bit float is supported"},
+			{"tag is nil", "tag is nil"},
+			{"Unsupported format tag: ", "Unsupported format tag: "},
+			{"Unable to open file: ", "Unable to open file: "},
+			{"Invalid file format: missing RIFF header", "Invalid file format: missing RIFF header"},
+			{"Invalid file format: missing WAVE header", "Invalid file format: missing WAVE header"},
+			{"Invalid file format: missing fmt chunk", "Invalid file format: missing fmt chunk"},
+			{"Unsupported bit depth: ", "Unsupported bit depth: "},
+			{" (supported: 8, 16, 24, 32)", " (supported: 8, 16, 24, 32)"},
+			{"Unsupported format combination: ", "Unsupported format combination: "},
+			{"-bit", "-bit"},
+			{"Data chunk not found", "Data chunk not found"},
+			{"WAV file analyzed:", "WAV file analyzed:"},
+			{"  Format: %s %d-bit PCM", "  Format: %s %d-bit PCM"},
+			{"  Channels: %d", "  Channels: %d"},
+			{"  Sample rate: %d Hz", "  Sample rate: %d Hz"},
+			{"  Duration: %.2f seconds", "  Duration: %.2f seconds"},
+			{"  Analysis window: %d ms (%d samples)", "  Analysis window: %d ms (%d samples)"},
+			{"  File size: %d Kb", "  File size: %d Kb"},
 			{"not found!", "not found!"},
+			{"WAV Volume Analysis", "WAV Volume Analysis"},
 			{"Done!", "Done!"},
 			{"Nothing to read!", "Nothing to read!"},
 		},
@@ -48,7 +62,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Tools",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -57,15 +71,26 @@ end
 NotesObject = {
 	project = nil,
 	timeAxis = nil,
-	audioWaveFormExe = "D:/Tools/audiowaveform-1.10.1.win64/audiowaveform.exe",
-	pathAudioFile = "D:/Mes musiques/Autre/GoogleFemale1/",
-	audioFile = "GoogleFemale1.wav",
-	jsonFile = "GoogleFemale1.json",
-	jsonExt = ".json",
-	loudnessWeight = 2000, -- divide sample value (2000) to reduce loudness to ~10 db
-	askForWaveFile = false,
-	isExecutableChained = true
+	currentGroupRef = nil,
+	currentGroupNotes = nil,
+	currentGroupName = "",
+	pathAudioFile = "D:/Mes musiques/Autre/GoogleFemale1/", -- put your wave file path for testing only
+	audioFile = "GoogleFemale1.wav", -- put your wave file for testing only
+	askForWaveFile = true, -- fasle for testing only
+	loudnessWeight = 10, -- multiply values (10) to increase loudness
+	window_size_ms = 10, -- Default 10ms window
+	file_size = 0,
+	fmt_size = 0,
+	audio_format = 0,
+	num_channels = 0,
+	sample_rate = 0,
+	byte_rate = 0,
+	block_align = 0,
+	bits_per_sample = 0,
+	total_samples = 0,
+	sample_readers = {}	-- Sample reading functions based on format
 }
+
 
 -- Constructor method for the NotesObject class
 function NotesObject:new()
@@ -75,7 +100,9 @@ function NotesObject:new()
 	
     self.project = SV:getProject()
     self.timeAxis = SV:getProject():getTimeAxis()
-	
+	self.currentGroupRef = SV:getMainEditor():getCurrentGroup()
+	self.currentGroupNotes = self.currentGroupRef:getTarget()
+	self.currentGroupName = self.currentGroupNotes:getName()
     return self
 end
 
@@ -84,30 +111,102 @@ function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
 end
 
--- Get group notes
-function NotesObject:getGroupNotes()
-	local groupNotes = nil
-	local track = SV:getMainEditor():getCurrentTrack()
-	local mainGroupRef = track:getGroupReference(1) -- main group
-	local groupNotesMain = mainGroupRef:getTarget()
-	local numNotes = groupNotesMain:getNumNotes()
-	
-	if numNotes > 0 then
-		groupNotes = groupNotesMain
-	else
-		local numGroups = track:getNumGroups()
-		local lyrics = ""
-		for iGroup = 1, numGroups do
-			local groupRef = track:getGroupReference(iGroup)
-			local groupNotesFound = groupRef:getTarget()
-			numNotes = groupNotesFound:getNumNotes()
-			if numNotes > 0 then
-				groupNotes = groupNotesFound
-				break
-			end
-		end
-	end
-	return groupNotes
+-- local functions
+-- Function to read a little-endian integer of n bytes
+local function read_little_endian(file, n)
+    local result = 0
+    for i = 0, n - 1 do
+        local byte = file:read(1)
+        if not byte then return nil end
+        result = result + string.byte(byte) * (256 ^ i)
+    end
+    return result
+end
+
+-- Function to read a big-endian integer of n bytes
+local function read_big_endian(file, n)
+    local result = 0
+    for i = 0, n - 1 do
+        local byte = file:read(1)
+        if not byte then return nil end
+        result = result * 256 + string.byte(byte)
+    end
+    return result
+end
+
+-- Function to read IEEE 754 32-bit float (little-endian)
+local function read_float32(file)
+    local bytes = file:read(4)
+    if not bytes or #bytes < 4 then return nil end
+    
+    local b1, b2, b3, b4 = string.byte(bytes, 1, 4)
+    local bits = b4 * 16777216 + b3 * 65536 + b2 * 256 + b1
+    
+    local sign = (bits >= 2147483648) and -1 or 1
+    local exponent = math.floor(bits / 8388608) % 256
+    local mantissa = bits % 8388608
+    
+    if exponent == 0 then
+        return sign * mantissa * (2 ^ -149)
+    elseif exponent == 255 then
+        return (mantissa == 0) and (sign * math.huge) or 0/0 -- inf or nan
+    else
+        return sign * (1 + mantissa / 8388608) * (2 ^ (exponent - 127))
+    end
+end
+
+-- Function to read a signed 8-bit integer
+local function read_int8(file)
+    local value = file:read(1)
+    if not value then return nil end
+    local byte = string.byte(value)
+    return (byte >= 128) and (byte - 256) or byte
+end
+
+-- Function to read an unsigned 8-bit integer
+local function read_uint8(file)
+    local value = file:read(1)
+    if not value then return nil end
+    return string.byte(value) - 128 -- Convert to signed range for consistency
+end
+
+-- Function to read a signed 16-bit integer
+local function read_int16(file)
+    local value = read_little_endian(file, 2)
+    if not value then return nil end
+    return (value >= 32768) and (value - 65536) or value
+end
+
+-- Function to read a signed 24-bit integer
+local function read_int24(file)
+    local value = read_little_endian(file, 3)
+    if not value then return nil end
+    return (value >= 8388608) and (value - 16777216) or value
+end
+
+-- Function to read a signed 32-bit integer
+local function read_int32(file)
+    local value = read_little_endian(file, 4)
+    if not value then return nil end
+    return (value >= 2147483648) and (value - 4294967296) or value
+end
+
+-- Function to calculate RMS (Root Mean Square) of samples
+local function calculate_rms(samples)
+    if #samples == 0 then return 0 end
+    local sum = 0
+    for _, sample in ipairs(samples) do
+        sum = sum + sample * sample
+    end
+    return math.sqrt(sum / #samples)
+end
+
+-- Function to convert RMS to dB
+local function rms_to_db(rms, max_value)
+    if rms == 0 then
+        return -math.huge -- -∞ dB for silence
+    end
+    return 20 * math.log(rms / max_value)
 end
 
 -- Read file content
@@ -134,53 +233,11 @@ function NotesObject:quotedFile(file)
 	return quote .. file .. quote
 end
 
-function NotesObject:getJsonFilename(audioFile)
-	local extension = audioFile:match("^.+%.(.+)$")
-	local jsonFile = string.gsub(audioFile, "%." .. extension, self.jsonExt) -- rename (wav or mp3) to json
-	return jsonFile
-end
-
 -- Get host os
 function NotesObject:getHostOs()
 	local hostinfo = SV:getHostInfo()
 	local osType = hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
 	return osType
-end
-
--- Get waveform in json
-function NotesObject:getJsonWaveform(audioWaveFormExe, audioFile)
-	local hostOS = self:getHostOs()
-	local jsonFile = self:getJsonFilename(audioFile)
-	local parameters = "-i" .. ' ' .. audioFile .. ' ' .. "-o" .. ' ' .. jsonFile
-	local command = ""
-	
-	if hostOS == "Windows" then
-		command = "call "
-		.. self:quotedFile(audioWaveFormExe) 
-		.. " -i "
-		.. self:quotedFile(audioFile) 
-		.. " -o "
-		.. self:quotedFile(jsonFile)	
-	else
-		-- TODO:
-		command = "call "
-		.. self:quotedFile(audioWaveFormExe) 
-		.. " -i "
-		.. self:quotedFile(audioFile) 
-		.. " -o "
-		.. self:quotedFile(jsonFile)		
-	end
-	
-	-- Clear previous json file
-	if self:isFileExists(jsonFile) then
-		-- Check to be sure to remove a json file
-		if string.find(jsonFile, self.jsonExt) ~= nil then
-			os.remove(jsonFile)
-		end
-	end
-	
-	os.execute(command)
-	return jsonFile
 end
 
 -- Get clean filename
@@ -200,11 +257,285 @@ function NotesObject:getWaveFile()
 	return filename
 end
 
+-- Get object properties
+local function getObjectProperties(obj)
+	local result = ""
+	for k, v in pairs(obj) do
+		if obj[k] ~= nil then
+			result = result .. "{" .. k .. " : " 
+			if type(v) == "table" then
+				result = result .. getObjectProperties(v)  .. ","
+			else
+				result = result .. tostring(v) .. "}"
+			end
+		end
+	end
+	return result
+end
+
+-- Function to detect sample format from format tag and bits per sample
+function NotesObject:get_sample_format(format_tag, bits_per_sample)
+	local sampleFormat = ""
+	local error = false
+	
+    if format_tag == 1 then -- PCM
+        sampleFormat = "signed"
+    elseif format_tag == 3 then -- IEEE Float
+        if bits_per_sample == 32 then
+            sampleFormat = "float"
+        else
+            sampleFormat = SV:T("Unsupported float format: only 32-bit float is supported")
+			error = true
+        end
+    elseif format_tag == 65534 then -- EXTENSIBLE
+        sampleFormat = "signed" -- Assume signed PCM for EXTENSIBLE
+    else
+		if format_tag == nil then
+			format_tag = SV:T("tag is nil")
+		end
+		sampleFormat = SV:T("Unsupported format tag: ") .. format_tag
+		error = true
+    end
+	return sampleFormat, error
+end
+
+-- Main function to analyze a WAV file
+function NotesObject:analyze_wav_file(filename)
+    local result = ""
+    local infos = ""
+	local error = false
+    local volume_data = {}
+	local sample_reader = nil
+	local fileOpened = false
+	local max_value = 0
+	local sample_format = ""
+	local error_Format = ""
+	
+    local file = io.open(filename, "rb")
+    if not file then
+		result = SV:T("Unable to open file: ") .. filename
+		error = true
+    end
+    
+	if not error then
+		fileOpened = true
+		-- Read WAV header
+		local riff_header = file:read(4)
+		if riff_header ~= "RIFF" then
+			result = SV:T("Invalid file format: missing RIFF header")
+			error = true
+		end
+	end
+
+	if not error then
+		self.file_size = math.floor((tonumber(read_little_endian(file, 4))/1024))
+		local wave_header = file:read(4)
+		if wave_header ~= "WAVE" then
+			result = SV:T("Invalid file format: missing WAVE header")
+			error = true
+		end
+	end
+
+	if not error then
+		-- Read empty data chunk
+		local data_empty = file:read(4)
+		while data_empty and data_empty ~= "fmt " do
+			-- Skip unknown chunk
+			local chunk_size = read_little_endian(file, 4)
+			if chunk_size and chunk_size > 0 then
+				file:read(chunk_size)
+			end
+			data_empty = file:read(4)
+		end
+		
+		if data_empty ~= "fmt " then
+			result = SV:T("Invalid file format: missing fmt chunk")
+			error = true
+		end
+	end
+	
+   	if not error then
+ 
+		self.fmt_size = read_little_endian(file, 4)
+		self.audio_format = read_little_endian(file, 2)
+		self.num_channels = read_little_endian(file, 2)
+		self.sample_rate = read_little_endian(file, 4)
+		self.byte_rate = read_little_endian(file, 4)
+		self.block_align = read_little_endian(file, 2)
+		self.bits_per_sample = read_little_endian(file, 2)
+		
+		-- Skip any extra fmt data
+		if self.fmt_size > 16 then
+			file:read(self.fmt_size - 16)
+		end
+		
+		-- Validate supported formats
+		local supported_bits = {8, 16, 24, 32}
+		local bits_supported = false
+		for _, bits in ipairs(supported_bits) do
+			if self.bits_per_sample == bits then
+				bits_supported = true
+				break
+			end
+		end
+		
+		if not bits_supported then
+			result = SV:T("Unsupported bit depth: ") .. self.bits_per_sample .. SV:T(" (supported: 8, 16, 24, 32)")
+			error = true
+		end
+	end
+	
+	if not error then
+		-- Get sample format and reader		
+		sample_format, error_Format = self:get_sample_format(self.audio_format, self.bits_per_sample)
+		if error_Format then
+			result = sample_format
+			error = true
+		end
+		
+		if not error then
+			local reader_info = self.sample_readers[self.bits_per_sample] -- [8] or [16] or [24] or [32]
+			sample_reader = reader_info[sample_format] -- [16].signed or [24].signed etc. => read_int16(file) or read_int24(file) ...
+			max_value = (sample_format == "float") and reader_info.float_max or reader_info.max_value
+			
+			if not sample_reader then
+				result = SV:T("Unsupported format combination: ") .. sample_format .. " " .. self.bits_per_sample .. SV:T("-bit")
+				error = true
+			end
+		end
+    end
+    
+    if not error then
+		-- Read data chunk
+		local data_header = file:read(4)
+		while data_header and data_header ~= "data" do
+			-- Skip unknown chunk
+			local chunk_size = read_little_endian(file, 4)
+			if chunk_size and chunk_size > 0 then
+				file:read(chunk_size)
+			end
+			data_header = file:read(4)
+		end
+		
+		if not data_header or data_header ~= "data" then
+			result = SV:T("Data chunk not found")
+			error = true
+		end
+    end
+	
+	if not error then
+
+		local data_size = read_little_endian(file, 4)
+		
+		-- Calculate analysis parameters
+		local samples_per_window = math.floor((self.sample_rate * self.window_size_ms) / 1000)
+		local bytes_per_sample = (self.bits_per_sample / 8) * self.num_channels
+		self.total_samples = data_size / bytes_per_sample
+		
+		infos = SV:T("WAV file analyzed:") .. "\r"
+			.. string.format(SV:T("  Format: %s %d-bit PCM"), sample_format, self.bits_per_sample) .. "\r"
+			.. string.format(SV:T("  Channels: %d"), self.num_channels) .. "\r"
+			.. string.format(SV:T("  Sample rate: %d Hz"), self.sample_rate) .. "\r"
+			.. string.format(SV:T("  Duration: %.2f seconds"), self.total_samples / self.sample_rate) .. "\r"
+			.. string.format(SV:T("  Analysis window: %d ms (%d samples)"), self.window_size_ms, samples_per_window) .. "\r"
+			.. string.format(SV:T("  File size: %d Kb"), self.file_size) .. "\r"
+		
+		-- Extract volume data
+		local current_time = 0
+		local finish_analysis = false
+		while true do
+			local sample_data = {}
+			
+			-- Read a window of samples
+			for i = 1, samples_per_window do
+				local sample_sum = 0
+				local valid_sample = true
+				
+				-- Read all channels for this sample
+				for channel = 1, self.num_channels do
+					local sample = sample_reader(file)
+					if not sample then
+						valid_sample = false
+						finish_analysis = true
+						break
+					end
+					
+					-- Normalize float samples
+					if sample_format == "float" then
+						sample = sample * max_value
+					end
+					
+					sample_sum = sample_sum + math.abs(sample)
+				end
+				
+				if finish_analysis then
+					break
+				end
+				
+				if valid_sample then
+					-- Average across channels
+					table.insert(sample_data, sample_sum / self.num_channels)
+				end
+			end
+			
+			if not finish_analysis then
+				-- Calculate volume for this window
+				if #sample_data > 0 then
+					local rms = calculate_rms(sample_data)
+					local volume_db = rms_to_db(rms, max_value)
+					local volume_normalized = math.max(0, math.min(1, (volume_db + 60) / 60)) -- Normalize -60dB to 0dB -> 0 to 1
+					
+					table.insert(volume_data, {
+						time = current_time,
+						volume = volume_normalized,
+						volume_db = volume_db,
+						rms = rms
+					})
+					
+					current_time = current_time + (self.window_size_ms / 1000)
+				end
+			else
+				break
+			end
+		end
+	end
+	
+	if fileOpened then 
+		file:close()
+	end
+	
+    return error, result, infos, volume_data
+end
+
 -- Start project notes processing
 function NotesObject:start()
 	local result = false
-	self.jsonFile = ""
 	local filename = ""
+	
+	self.sample_readers = {
+		[8] = {
+			signed = read_int8,
+			unsigned = read_uint8,
+			max_value = 127
+		},
+		[16] = {
+			signed = read_int16,
+			unsigned = read_int16, -- 16-bit is typically signed
+			max_value = 32767
+		},
+		[24] = {
+			signed = read_int24,
+			unsigned = read_int24, -- 24-bit is typically signed
+			max_value = 8388607
+		},
+		[32] = {
+			signed = read_int32,
+			unsigned = read_int32, -- 32-bit is typically signed
+			max_value = 2147483647,
+			float = read_float32,
+			float_max = 1.0
+		}
+	}	-- Sample reading functions based on format
 	
 	if self.askForWaveFile then
 		filename = self:getWaveFile()
@@ -221,57 +552,86 @@ function NotesObject:start()
 	else
 		self.audioFile = self.pathAudioFile .. self.audioFile
 	end
-
-	-- Chain a command line to generate the Json loudness file
-	if self.isExecutableChained then
-		self.jsonFile = self:getJsonWaveform(self.audioWaveFormExe, self.audioFile)
-	else 
-		self.jsonFile = self:getJsonFilename(self.audioFile)
-	end
 	
-	-- if process not ok
-	if not self:isFileExists(self.jsonFile) then
-		self:show(self.jsonFile .. " " .. SV:T("not found!"))
-	else
+	-- Analyze audio wav file
+	local error, result, infos, volume_data = self:analyze_wav_file(self.audioFile)
+	
+	if not error then
+		local json_data = {
+			metadata = {
+				format = SV:T("WAV Volume Analysis"),
+				timestamp = os.date("%Y-%m-%d %H:%M:%S"),
+				total_data = #volume_data
+			},
+			volume_data = {}
+		}
+		
+	    -- Simplify data for JSON (just time and normalized volume)
+		for _, data in ipairs(volume_data) do
+			table.insert(json_data.volume_data, {
+				time = math.floor(data.time * 1000) / 1000, -- Round to 3 decimals
+				volume = math.floor(data.volume * 1000) / 1000 -- Round to 3 decimals
+			})
+		end
+		json = load_json()	
+		local json_string = json.stringify(json_data)
+
 		-- Process is ok
-		local groupNotes = self:getGroupNotes()
+		local groupNotes = self.currentGroupNotes
+		local firstNote = groupNotes:getNote(1)
 		local lastNote = groupNotes:getNote(groupNotes:getNumNotes())
 		local loudness = groupNotes:getParameter("loudness")
 		loudness:removeAll()
-		
-		local jsonData = self:readAll(self.jsonFile)
-		
-		if jsonData ~= nil then
-			if #jsonData > 0 then
-				load_json()
-				local js = json.parse(jsonData)
-				-- channels":1,"sample_rate":44100,"samples_per_pixel":256,"bits":16,"length":1796,
-				local version = js.version
-				local channels = js.channels
-				local sample_rate = js.sample_rate
-				local samples_per_pixel = js.samples_per_pixel
-				local bits = js.bits
-				local length = js.length
-				local data = js.data
+			
+		if json_string ~= nil then
+			if #json_string > 0 then
+				local js = json.parse(json_string)
+				-- {
+				  -- "metadata": {
+					-- "format": "WAV Volume Analysis",
+					-- "timestamp": "2025-06-28 10:30:00",
+					-- "total_samples": 1250
+				  -- },
+				  -- "volume_data": [
+					-- {"time": 0.0, "volume": 0.245},
+					-- {"time": 0.1, "volume": 0.387},
+					-- {"time": 0.2, "volume": 0.512}
+				  -- ]
+				-- }
+
+				local length = #volume_data -- js.length
+				local data = js.volume_data
 				
+				local firstPos = self.timeAxis:getSecondsFromBlick( firstNote:getOnset() - SV.QUARTER)
 				local lastPos = self.timeAxis:getSecondsFromBlick(lastNote:getEnd())
-				local timeRatio = length / lastPos * 2 -- 1796 / 10.379 = 173.19 * 2 = 346.38
+
+				-- Add first note pos volume = 0
+				local timeFist = self.timeAxis:getBlickFromSeconds(firstPos)
+				loudness:add(timeFist, 0)
+				-- Add last note pos volume = 0
+				local timeLast = self.timeAxis:getBlickFromSeconds(lastPos)
+				loudness:add(timeLast, 0)
 				
-				for iPos = 1, #data, 1 do
-					local timeInfo = self.timeAxis:getBlickFromSeconds(iPos/timeRatio)
-					if data[iPos] > 0 then
-						loudness:add(timeInfo, data[iPos]/self.loudnessWeight) -- Add loudness
+				for iPos = 1, #data do
+					local timeInfo = self.timeAxis:getBlickFromSeconds(data[iPos].time)
+					if data[iPos].volume > 0 then
+						loudness:add(timeInfo, data[iPos].volume * self.loudnessWeight) -- Add loudness
 					end
 				end
 				loudness:simplify(groupNotes:getNote(1):getOnset(), lastNote:getOnset(), 0.01)
+				
 				result = true
-				self:show(SV:T("Done!"))
+				self:show(SV:T("Group: ") .. self.currentGroupName .. "\r"
+				.. SV:T("File: ") .. self.audioFile .. "\r"
+				.. infos .. "\r" .. SV:T("Done!"))
 			else
 				self:show(SV:T("Nothing to read!"))
 			end
 		else
 			self:show(SV:T("Nothing to read!"))
 		end
+	else
+		self:show(result) -- error
 	end
 	return result
 end
