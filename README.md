@@ -53,7 +53,6 @@ Playing SynthV: Displaying time in the track name and key notes inside groups du
 Store and display internal project notes for a track.
 Retrieving all SV:T(text) inside a script and generate a function for translation language.
 Read loudness audio data and apply loudness parameters.
-Mute/unmute selected notes by duplicating them in the same location.
 
 ## parameters-scripts
 Shift offset parameters down/up/left/right.
