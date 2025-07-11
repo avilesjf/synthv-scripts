@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group size V1.0'
+local SCRIPT_TITLE = 'Group size V2.0'
 
 --[[
 
@@ -9,6 +9,8 @@ lua file name: GroupSize.lua
 Usage: Run this script to adjust size to the last note inside
 During recording more notes could be inserted than the auto created group of notes,
 so this script expand current group size to the last existing note inside.
+
+Note: Compatible with the Synthesizer V version 2.1.1
 
 2025 - JF AVILES
 --]]
@@ -22,7 +24,6 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"group resized!", "group resized!"},
 			{"Please select a group first!", "Please select a group first!"},
 		},
 	}
@@ -86,24 +87,63 @@ function NotesObject:getHostInformations()
 	self.hostVersionNumber = self.hostinfo.hostVersionNumber
 end
 
+-- Start check current group
+function NotesObject:getObjectProperties(obj)
+	local result = ""
+	for k, v in pairs(obj) do
+		if obj[k] ~= nil then
+			result = result .. k .. "=" .. tostring(v) .. "\r"
+			if type(v) == "table" then
+				result = result .. self:getObjectProperties(v)  .. "\r"
+			end
+		end
+	end
+	return result
+end
+-- Get first mesure before fist note
+function NotesObject:getFirstMesure(notePos)
+	local measurePos = 0
+	local measureBlick = 0
+	local measureFirst = self.timeAxis:getMeasureAt(notePos)
+	local checkExistingMeasureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
+	
+	if checkExistingMeasureMark ~= nil then
+		if checkExistingMeasureMark.position == measureFirst then
+			measurePos = checkExistingMeasureMark.position
+			measureBlick = checkExistingMeasureMark.positionBlick
+		else
+			self.timeAxis:addMeasureMark(measureFirst, 
+						checkExistingMeasureMark.numerator, 
+						checkExistingMeasureMark.denominator)
+			local measureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
+			measurePos = measureMark.position
+			measureBlick = measureMark.positionBlick
+			self.timeAxis:removeMeasureMark(measureFirst)
+		end
+	else
+		-- Temporary measure mark addition
+		self.timeAxis:addMeasureMark(measureFirst, 4, 4)
+		local measureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
+		measurePos = measureMark.position
+		measureBlick = measureMark.positionBlick
+		self.timeAxis:removeMeasureMark(measureFirst)
+	end
+	return measureBlick
+end
+
 -- Start process
 function NotesObject:start()
 	local groupNotes = self.groupRef:getTarget()
+	local firstNotePos = groupNotes:getNote(1):getOnset()
+	local lastNoteDuration = groupNotes:getNote(groupNotes:getNumNotes()):getDuration()
+	local lastNotePos = groupNotes:getNote(groupNotes:getNumNotes()):getOnset()
 	
-	-- Create new group reference
-	local newGroupRef = SV:create("NoteGroupReference", groupNotes)
-    newGroupRef:setTimeOffset(self.groupRef:getTimeOffset())
-    newGroupRef:setPitchOffset(self.groupRef:getPitchOffset())
-	local voiceAttributes = self.groupRef:getVoice()
-	voiceAttributes._ = "" -- Force array to be seen as object if empty
-	newGroupRef:setVoice(voiceAttributes)
+	-- Get first mesure bar
+	local firstMeasureBar = self:getFirstMesure(firstNotePos) + 1 
+	local durationBetweenFirstLastNote = lastNotePos - firstMeasureBar -- or firstNotePos if you prefer
+	local newGap = durationBetweenFirstLastNote + lastNoteDuration
 	
-	-- Add to current track
-	self.activeCurrentTrack:addGroupReference(newGroupRef)
-	
-	-- Remove original group ref
-	self.activeCurrentTrack:removeGroupReference(self.groupRef:getIndexInParent())	
-	-- self:show(SV:T("group resized!"))
+	self.groupRef:setTimeRange(firstMeasureBar, newGap)
 end
 
 function main()
