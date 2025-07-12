@@ -112,7 +112,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 8,
+		versionNumber = 9,
 		minEditorVersion = 65540
 	}
 end
