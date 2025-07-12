@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group Harmony V1.8'
+local SCRIPT_TITLE = 'Group Harmony V2.0'
 
 --[[
 
@@ -15,6 +15,7 @@ Add only one track or multiple tracks depending on user selection.
 6/ Add scale key type (Major, Natural Minor, Melodic Minor etc..
 7/ Adding a lower output level slider for new generated track loudness
 8/ Use current track to duplicate new track (template to keep voice set)
+9/ Generate AI retakes for each new group harmony
 
 
 Degrees I     II     III  IV      V       VI       VII   +I
@@ -23,7 +24,7 @@ Major C 1      2      3    4      5        6         7    8
 		C  Db  D  Eb  E    F  Gb  G   Ab   A   Bb    B    C
 		1  2   3  4   5    6  7   8   9   10   11   12
 
-New version 1.8 to use with SynthV >= 2.0
+New version 2.0 to use with SynthV >= 2.1.1
 
 2025 - JF AVILES
 --]]
@@ -156,6 +157,11 @@ NotesObject = {
 	trackListChoice = {},
 	outputLevelDefaultValue = 0,
 	isCurrentVoiceTrack = false,
+	languageOverride = "", 		-- Language override (Empty string => disabled)
+	retakes = true, 			-- Enable AI retakes
+	newDurationRetakes = true,	-- AI retakes
+	newPitchRetakes = true,		-- AI retakes
+	newTimbreRetakes = true,	-- AI retakes
 	DEBUG = false,
 	logs = ""
 }
@@ -753,18 +759,24 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 				
 				-- Add group reference to project new track
 				local newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
+				
 				-- Adjust time offset
 				newGrouptRef:setTimeOffset(groupRefTimeoffset)
 				
-				-- Loudness lower
-				local voiceAttributes = newGrouptRef:getVoice()
-				if newLoudness ~= 0 then
-					voiceAttributes.paramLoudness = newLoudness
-					newGrouptRef:setVoice(voiceAttributes)
-				end
+				-- Adjust time range & voice attributes
+				newGrouptRef:setTimeRange(refGroup:getOnset(), refGroup:getDuration())
+				newGrouptRef:setVoice(refGroup:getVoice())
 				
-				-- Update pitch deviation
-				-- self:updatePitchParameters(newNoteGroup, firstNote, lastNote)
+				if #self.languageOverride > 0 then
+					-- Update notes language
+					self:updateNotesLanguageOverride(newNoteGroup)
+				end
+							
+				-- AI retakes
+				if self.retakes then
+					-- Update AI retakes
+					self:updateAIRetakes(newNoteGroup)
+				end
 				
 				table.insert(newGroupRefs, newGrouptRef)
 			end
@@ -774,7 +786,30 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 	return newGroupRefs
 end
 
--- trim string
+-- Update notes language override
+function NotesObject:updateNotesLanguageOverride(newNoteGroup)
+	
+	for iNote = 1, newNoteGroup:getNumNotes() do
+		local note = newNoteGroup:getNote(iNote)
+		note:setLanguageOverride(self.languageOverride)
+	end
+end
+
+-- Update AI Retakes for new group note harmony
+function NotesObject:updateAIRetakes(newNoteGroup)
+	
+	for iNote = 1, newNoteGroup:getNumNotes() do
+		local note = newNoteGroup:getNote(iNote)
+		local retakeListNote = note:getRetakes()
+			if retakeListNote ~= nil then
+				-- Generate new AI retakes
+				local takeId = retakeListNote:generateTake(self.newDurationRetakes, self.newPitchRetakes, self.newTimbreRetakes)
+				retakeListNote:setActiveTake(takeId)
+			end
+	end
+end
+
+-- Trim string
 function NotesObject:trim(s)
   return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
 end
