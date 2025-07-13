@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Group create from DAW V1.1'
+local SCRIPT_TITLE = 'Group create from DAW V1.2'
 
 --[[
 
@@ -6,20 +6,23 @@ Synthesizer V Studio Pro Script
  
 lua file name: GroupcreatefromDAW.lua
 
+Version for Synthesizer V version >= 2.1.1
+
 Drag and drop notes from DAW: Automate group creation
 1/ Waiting any newly created track
 2/ Move imported DAW notes into a new group of notes
 Version with dialog box
 
 Note: Stopping this script:
-A/ Without finish it with a drag&drop DAW): 
-	1- Update numbers of selected notes by selecting a new existing note
-	2- Creating a new note on the piano roll
-	3- Run this script again! (hidden group used for this feature)
+A/ If you want to STOP this script without the required drag&drop DAW (multiple options): 
+	A- STOP this script by creating a new note on the piano roll
+	B- STOP this script by selecting a new existing note
+	C- STOP this script by running this script again! 
+		(hidden group used for this feature)
 
-Warning: 
+Warning:
 Do not stop script by "Abort All Running Scripts", 
-this will loose your original track name!
+this will loose your previous original track name!
 
 2025 - JF AVILES
 --]]
@@ -52,7 +55,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 65540
 	}
 end
@@ -256,12 +259,8 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 	local maxLengthResult = 30
 	local numGroups = self.newDAWTrack:getNumGroups()
 	local groupRefMain = self.newDAWTrack:getGroupReference(self.newDAWTrack:getNumGroups())
+	local durationGroupRefMain = groupRefMain:getDuration()
 	local groupNotesMain = groupRefMain:getTarget()
-	local measureBlick = 0
-	
-	-- if groupNotesMain:getNumNotes() > 0 then
-		-- measureBlick = self:getFirstMesure(groupNotesMain:getNote(1):getOnset())
-	-- end
 	
 	local mainGroupNotes = {}
 	self.THRESHOLD = self:getMaxTimeGapFromBPM(targetPosition) -- 41505882 = 0.06 seconds
@@ -277,7 +276,7 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 	for iNote = 1, #mainGroupNotes do
 		local note = mainGroupNotes[iNote]:clone()
 		-- Update position within the new group
-		note:setOnset(mainGroupNotes[iNote]:getOnset() - measureBlick)
+		note:setOnset(mainGroupNotes[iNote]:getOnset())
 		
 		if self.linkNotesActive then
 			if previousNote ~= nil then
@@ -294,7 +293,8 @@ function NotesObject:createGroup(startPosition, targetPosition, track)
 	local resultLyrics = self:renameOneGroup(self.timeAxis, maxLengthResult, noteGroup)
 	
 	self.newGrouptRef = SV:create("NoteGroupReference", noteGroup)
-	self.newGrouptRef:setTimeOffset(measureBlick + startPosition)
+	self.newGrouptRef:setTimeOffset(startPosition)
+	self.newGrouptRef:setTimeRange(startPosition, durationGroupRefMain) -- v2.1.1
 	
 	track:addGroupReference(self.newGrouptRef)
 	return true
