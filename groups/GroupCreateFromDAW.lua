@@ -20,10 +20,6 @@ A/ If you want to STOP this script without the required drag&drop DAW (multiple 
 	C- STOP this script by running this script again! 
 		(hidden group used for this feature)
 
-Warning:
-Do not stop script by "Abort All Running Scripts", 
-this will loose your previous original track name!
-
 2025 - JF AVILES
 --]]
 
@@ -55,7 +51,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 65540
 	}
 end
@@ -549,14 +545,11 @@ function NotesObject:scanNewTrack()
 	SV:setTimeout(200, function() self:setTrackTargetColor() end)
 	self.currentSeconds = self.playBack:getPlayhead()
 	local secondsInfo = self:secondsToClock(self.currentSeconds)
-	self.trackTarget:setName(titleTrack .. secondsInfo)
 	
 	-- Check if a new track is created
 	if self.numTracks < self.project:getNumTracks() then
 		self.newDAWTrack = self:getLastTrack()
 		local numNotesNewDAWTrack = self:getTrackNumNotes(self.newDAWTrack)
-		-- Display the new track name
-		self.trackTarget:setName(secondsInfo .. " " .. self.newDAWTrack:getName())
 		
 		if numNotesNewDAWTrack > 0 then
 			local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
@@ -597,7 +590,6 @@ function NotesObject:setTrackTarget()
 	
 	if not self.isNewTrack then
 		if self.trackTarget ~= nil then
-			self.trackTarget:setName(self.initialTrackName)
 			self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
 		end
 	end
