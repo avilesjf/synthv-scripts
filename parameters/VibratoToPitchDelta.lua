@@ -1,4 +1,4 @@
-local SCRIPT_TITLE = 'Vibrato to pitch delta V1.1'
+local SCRIPT_TITLE = 'Vibrato to pitch delta V1.2'
 
 --[[
 
@@ -64,7 +64,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Parameters",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 65540
 	}
 end
@@ -486,6 +486,9 @@ function NotesObject:addVibratoToSelectedNotes(vibratoParams, notePosStart, vibr
 		local paramPitchDelta = self.currentGroupNotes:getParameter(self.PARAMETER_REFERENCE)
 		local noteDurationSeconds = self.timeAxis:getSecondsFromBlick(noteDuration)
 		local vibratoDelayInSeconds = noteDurationSeconds * vibratoStartNote
+		local attributes = note:getAttributes()
+		-- set the note vibrato depth to zero
+		note:setAttributes({dF0VbrMod=0})
 
 		self.currentBPM = self:getProjectTempo(notePos)
 		self.blicksPerSeconds = self:getCurrentBlicksPerSecond(notePos)
@@ -536,7 +539,7 @@ function NotesObject:getForm()
 		self.presetRecord = self:readPresetFromTextFile(self.presetVibratoFileName)
 		self.presetValues = self:getPresetContent(self.presetRecord)		
 	end
-	
+	local vibratoComboChoice = {}
 	local newVibratoModel = self.defaultVibratoModel
 	local newOverrideStartValue = self.overrideStartDefaultValue
 	local newOverrideLeftValue = self.overrideLeftDefaultValue
@@ -586,6 +589,7 @@ function NotesObject:getForm()
 			interval = self.overrideStartLevelInterval, 
 			default  = newOverrideStartValue
 		}
+	
 	local sliderOverrideLeft  = {
 			name = "overrideLeft", type = "Slider",
 			label = SV:T("Override left"),
@@ -674,8 +678,7 @@ function NotesObject:getForm()
 			},
 		}
 	}	
-	
-	return SV:showCustomDialog(form)
+	return SV:showCustomDialog(form)	
 end
 
 -- Get preset content
@@ -855,14 +858,12 @@ function NotesObject:dialogResponse(userInput)
 		end
 	end
 end
-
+  
 -- Start process
 function NotesObject:start()
-
 	local userInput = self:getForm()
-	
 	if userInput.status then
-		self:dialogResponse(userInput)
+		self:dialogResponse(userInput)		
 		self:start() 
 	end
 end
@@ -872,6 +873,7 @@ function main()
 	local notesObject = NotesObject:new()
 	if notesObject.hasSelectedNotes then
 		notesObject:start()
+		
 	else
 		notesObject:show(SV:T("No note selected!"))
 	end	
