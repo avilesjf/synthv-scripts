@@ -22,6 +22,10 @@ If you find any issues with these scripts,
 make a new GitHub issue (https://github.com/avilesjf/synthv-scripts/issues/new) 
 or message me on the SynthV Forums (https://forum.synthesizerv.com/u/jfa/summary).
 
+## panel-scripts (>= 2.1.2b1)
+Harmony: Generates new tracks and transpose all notes in desired scale (with AI retakes).
+Melody:  Generates melodies based on scale, style, length and speed.
+
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
 Copy/paste all automation parameters corresponding to the selected notes.
@@ -56,8 +60,7 @@ Retrieving all SV:T(text) inside a script and generate a function for translatio
 Read loudness audio data and apply loudness parameters.
 
 ## parameters-scripts
-Shift offset parameters down/up/left/right.
-Recreate a vibrato envelope with pitch delta parameters.
+Shift offset parameters (pitch/loudness/etc.) down/up/left/right.
 
 ## Modifying these scripts or making your own
 If you copy, modify, fork, etc. these scripts, crediting me for the original source could be a good choice and be free to notify me.

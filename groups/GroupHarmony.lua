@@ -13,9 +13,8 @@ Add only one track or multiple tracks depending on user selection.
 4/ A comboBox to choose harmony model
 5/ A special case to input and build user model (input text: +3,+6,-4 etc.)
 6/ Add scale key type (Major, Natural Minor, Melodic Minor etc..
-7/ Adding a lower output level slider for new generated track loudness
-8/ Use current track to duplicate new track (template to keep voice set)
-9/ Generate AI retakes for each new group harmony
+7/ Use current track to duplicate new track (template to keep voice set)
+8/ Generate AI retakes for each new group harmony
 
 
 Degrees I     II     III  IV      V       VI       VII   +I
@@ -155,7 +154,6 @@ NotesObject = {
 	newTrackRef = nil,
 	tracks = {},
 	trackListChoice = {},
-	outputLevelDefaultValue = 0,
 	isCurrentVoiceTrack = false,
 	languageOverride = "", 		-- Language override (Empty string => disabled)
 	retakes = true, 			-- Enable AI retakes
@@ -189,25 +187,24 @@ function NotesObject:new()
 	
 	self.allScales = {
 			-- KeyScale type, Intervals, Gaps between degrees (for info only, not used)
-			{SV:T("Major"),			{0,2,4,5,7,9,11,12}, {2, 2, 1, 2, 2, 2, 1}},
-			{SV:T("Natural Minor"),	{0,2,3,5,7,8,10,12}, {2, 1, 2, 2, 1, 2, 2}},
-			{SV:T("Melodic Minor"),	{0,2,3,5,7,9,11,12}, {2, 1, 2, 2, 2, 2, 1}},
-			{SV:T("Harmonic Minor"),{0,2,3,5,7,8,11,12}, {2, 1, 2, 2, 1, 2, 1}},
-			{SV:T("Ionian"),		{0,2,4,5,7,9,11,12}, {2, 2, 1, 2, 2, 2, 1}},
-			{SV:T("Dorian"),		{0,2,3,5,7,9,10,12}, {2, 1, 2, 2, 2, 1, 2}},
-			{SV:T("Phrygian"),		{0,1,3,5,7,8,10,12}, {1, 2, 2, 2, 1, 2, 2}},
-			{SV:T("Locrian"),		{0,1,3,5,6,8,10,12}, {1, 2, 2, 1, 2, 2, 2}},
-			{SV:T("Lydian"),		{0,2,4,6,7,9,11,12}, {2, 2, 2, 1, 2, 2, 1}},
-			{SV:T("Mixolydian"),	{0,2,4,5,7,9,10,12}, {2, 2, 1, 2, 2, 1, 2}},
-			{SV:T("Aeolian"),		{0,2,3,5,7,8,10,12}, {2, 1, 2, 2, 1, 2, 2}},
-			{SV:T("Locrian"),		{0,1,3,5,6,8,10,12}, {1, 2, 2, 1, 2, 2, 2}},
-			{SV:T("Blues Major"),	{0,2,3,4,7,9,12},	 {2, 1, 1, 3, 2, 3}},
-			{SV:T("Blues Minor"),	{0,3,5,6,7,10,12},	 {3, 2, 1, 1, 3, 2}},
-			{SV:T("Japanese"),		{0,1,5,7,8,12},		 {1, 4, 2, 1, 5}},
-			{SV:T("Chinese"),		{0,2,4,7,9,12},		 {2, 4, 3, 2, 3}}, 
-			{SV:T("Chinese 2"),		{0,4,6,7,11,12},	 {4, 2, 1, 5, 1}},
-			{SV:T("Indian"),		{0,1,3,4,7,8,10,12}, {1, 2, 1, 3, 1, 2, 2}},
-			{SV:T("Hungarian major"),{0,3,4,6,7,9,10,12}, {3, 1, 2, 1, 2, 1, 2}}
+			{SV:T("Major"),			{0,2,4,5,7,9,11,12}, {2,2,1,2,2,2,1}},
+			{SV:T("Natural Minor"),	{0,2,3,5,7,8,10,12}, {2,1,2,2,1,2,2}},
+			{SV:T("Melodic Minor"),	{0,2,3,5,7,9,11,12}, {2,1,2,2,2,2,1}},
+			{SV:T("Harmonic Minor"),{0,2,3,5,7,8,11,12}, {2,1,2,2,1,2,1}},
+			{SV:T("Ionian"),		{0,2,4,5,7,9,11,12}, {2,2,1,2,2,2,1}},
+			{SV:T("Dorian"),		{0,2,3,5,7,9,10,12}, {2,1,2,2,2,1,2}},
+			{SV:T("Phrygian"),		{0,1,3,5,7,8,10,12}, {1,2,2,2,1,2,2}},
+			{SV:T("Locrian"),		{0,1,3,5,6,8,10,12}, {1,2,2,1,2,2,2}},
+			{SV:T("Lydian"),		{0,2,4,6,7,9,11,12}, {2,2,2,1,2,2,1}},
+			{SV:T("Mixolydian"),	{0,2,4,5,7,9,10,12}, {2,2,1,2,2,1,2}},
+			{SV:T("Aeolian"),		{0,2,3,5,7,8,10,12}, {2,1,2,2,1,2,2}},
+			{SV:T("Blues Major"),	{0,2,3,4,7,9,12},	 {2,1,1,3,2,3}},
+			{SV:T("Blues Minor"),	{0,3,5,6,7,10,12},	 {3,2,1,1,3,2}},
+			{SV:T("Japanese"),		{0,1,5,7,8,12},		 {1,4,2,1,5}},
+			{SV:T("Chinese"),		{0,2,4,7,9,12},		 {2,4,3,2,3}}, 
+			{SV:T("Chinese 2"),		{0,4,6,7,11,12},	 {4,2,1,5,1}},
+			{SV:T("Indian"),		{0,1,3,4,7,8,10,12}, {1,2,1,3,1,2,2}},
+			{SV:T("Hungarian major"),{0,3,4,6,7,9,10,12},{3,1,2,1,2,1,2}}
 		}
     return self
 end
@@ -250,13 +247,15 @@ function NotesObject:getObjectProperties(obj)
 	local result = ""
 	for k, v in pairs(obj) do
 		if obj[k] ~= nil then
-			-- result = result .. k .. "=" .. type(v) .. ":" ..tostring(v) .. "\r"
-			result = result .. k .. "=" .. tostring(v) .. "\r"
+			result = result .. k .. "=" .. tostring(v) .. "\n"
+			if type(v) == "table" then
+				result = result .. self:getObjectProperties(v)  .. "\n"
+			end
 		end
 	end
 	return result
 end
-	
+
 -- Create a new track
 function NotesObject:createTrack()
 	local newTrack = SV:create("Track")
@@ -312,17 +311,6 @@ function NotesObject:getScalesTitle()
 	return scales
 end
 
--- Get scale from title
-function NotesObject:getScaleFromTitle(scaleSearch)
-	local scale = {}
-	for iScale = 1, #self.allScales do
-		if scaleSearch == self.allScales[iScale][1] then
-			scale = self.allScales[iScale]
-		end
-	end
-	return scale
-end
-
 -- Create user input form
 function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, 
 					groupSelected, transposition, transpositionLabel,  posTranposition)
@@ -333,7 +321,6 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 	local scaleInfo1 = SV:T("Degrees")   .. "     " .. 	SV:T("I           II           III    IV          V          VI       VII      +I")
 	local scaleInfo2 = SV:T("Major C")   .. "      " .. SV:T("1          2            3      4          5           6          7       8")
 	local scaleInfo3 = SV:T("Key")       .. "              " .. SV:T("C  Db  D   Eb   E      F  Gb  G  Ab  A  Bb   B      C")
-	local sliderLoudness = ""
 	local outputLevelDefaultValue = self.outputLevelDefaultValue
 	local outputLevelMinValue = -10
 	local outputLevelMaxValue = 2
@@ -402,16 +389,6 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 			default = self.isCurrentVoiceTrack
 		}
 		
-		sliderLoudness = {
-			name = "loudnessHarmony", type = "Slider",
-			label = SV:T("Lower output level for new harmony groups"),
-			format = "%3.0f",
-			minValue = outputLevelMinValue, 
-			maxValue = outputLevelMaxValue, 
-			interval = outputLevelInterval, 
-			default = outputLevelDefaultValue
-		}
-		
 		-- is not multiple tracks
 		if self.harmonyChoice == 1 then
 			self.tracks = self:getTracksList()
@@ -442,7 +419,6 @@ function NotesObject:getForm(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFo
 			scaleChoice,
 			scaleKeyType,
 			trackListCombo,
-			sliderLoudness,
 			comboChoice,
 			trackClone,
 			{
@@ -504,7 +480,6 @@ function NotesObject:start()
 			keyScaleFoundMajor = self:split(keyScaleFound, "(")[1]
 			self.posKeyInScaleForm = self:getKeyPosInKeynames(self.keyNames, keyScaleFoundMajor) -1
 		end
-		self.keyScaleChoice = {}
 
 		self.keyScaleChoice = self.keyNames
 		self.relativeMinorkeyScaleChoice = {}
@@ -547,19 +522,19 @@ function NotesObject:callForms(isFirst, keyScaleFound, keyFoundDisplay, keyScale
 		
 		if userInput.status then
 			-- call itself to display next dialog box for Harmony selection
-			self.keyScaleFound = self:getkeyScaleChoiceFromPos(userInput.answers.scaleKeyChoice)
+			self.keyScaleFound = self.keyScaleChoice[userInput.answers.scaleKeyChoice + 1]
 			self.keyScaleTypeFound  		= userInput.answers.scaleKeyType + 1
 			self.keyScaleTypeTitleFound  	= self.allScales[self.keyScaleTypeFound][1]
 			self.keyScaleTypeValuesFound	= self.allScales[self.keyScaleTypeFound][2]		
-			self.harmonyChoice 				= userInput.answers.harmonyChoice + 1
+			self.harmonyChoice 				= userInput.answers.harmonyChoice + 1 -- One, two notes ...
 			
 			isFirst = false
 			self:callForms(isFirst, keyScaleFound, keyFoundDisplay, keyScaleFoundTrack, groupsSelected)
 		end
 	else
 		local formId = self.harmonyChoice
-		-- harmony selection
-		transposition = self.transposition[formId][self.transpositionRefData]
+		-- Harmony selection: One, two notes ...
+		transposition = self.transposition[formId][self.transpositionRefData] -- -3, -5
 		local defaultPosTransposition = self.transposition[formId][self.transpositionRefPosition]
 		transpositionLabel = self.transposition[formId][self.transpositionRefLabel]
 					
@@ -569,7 +544,6 @@ function NotesObject:callForms(isFirst, keyScaleFound, keyFoundDisplay, keyScale
 		if userInput.status then			
 			self.isTrackClone = userInput.answers.isTrackClone
 			self.isCurrentVoiceTrack = self.isTrackClone
-			self.outputLevelDefaultValue = userInput.answers.loudnessHarmony
 
 			-- Duplicate note groups & create tracks
 			local numGroups = self:duplicateNotes(groupsSelected, userInput.answers)
@@ -586,7 +560,6 @@ end
 function NotesObject:duplicateNotes(groupsSelected, userInputAnswer)
 	local pitchPosInput = userInputAnswer.pitch
 	local pitchInputText = userInputAnswer.pitchText
-	local newLoudness = userInputAnswer.loudnessHarmony
 	local pitchTarget = ""
 	local pitchTargets = {}
 	local trackChoice = 0
@@ -616,13 +589,13 @@ function NotesObject:duplicateNotes(groupsSelected, userInputAnswer)
 	end
 	
 	local posKeyInScale = self:getKeyPosInKeynames(self.keyNames, self.keyScaleFound) -1
-	
+
 	self.currentKeyNames = self:copyTable(self.keyNames)
 	
 	-- Rotate table content, start note to new key
 	self:shiftTable(self.currentKeyNames, posKeyInScale)
 	self.keysInScale = self:getKeysInScale(self.currentKeyNames, self.keyScaleFound)
-	
+
 	if string.len(self.keyScaleFound) == 0 then
 		self:show(SV:T("Error: No scale key found!"))
 		return -1
@@ -641,8 +614,7 @@ function NotesObject:duplicateNotes(groupsSelected, userInputAnswer)
 	-- Only one track to add
 	if not isMultipleTracks then
 		local track = nil
-		local newGroupRefs = self:groupLoop(groupsSelected, isFixed, pitchTarget, 
-														posKeyInScale, newLoudness)
+		local newGroupRefs = self:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
 		-- New track
 		if #self.trackListChoice == trackChoice or trackChoice == 0 then
 			if self.isTrackClone then
@@ -667,8 +639,7 @@ function NotesObject:duplicateNotes(groupsSelected, userInputAnswer)
 			
 			pitchTarget = self:trim(pitchTargets[iTrack])
 			isFixed = (pitchTarget == "Fixed")
-			local newGroupRefs = self:groupLoop(groupsSelected, isFixed, pitchTarget, 
-															posKeyInScale, newLoudness)
+			local newGroupRefs = self:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
 			if self.isTrackClone then
 				track = self:cloneTrack()
 			else
@@ -688,7 +659,7 @@ function NotesObject:duplicateNotes(groupsSelected, userInputAnswer)
 		self:deleteClonedTrack()
 	end
 
-	self:logsShow()
+	-- self:logsShow()
 	return numGroups
 end
 
@@ -727,59 +698,55 @@ function NotesObject:deleteClonedTrack()
 end
 
 -- Loop into groups to duplicate & transpose notes
-function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale, newLoudness)
+function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
 	local newGroupRefs = {}
 
 	for _, refGroup in pairs(groupsSelected) do
-		local groupName = refGroup:getTarget():getName()
-		
-		-- Ignore main group, only selected groups
-		if groupName ~= "main" then
-			local noteGroup = refGroup:getTarget()			
-			local groupRefTimeoffset = refGroup:getTimeOffset()
+		-- local groupName = refGroup:getTarget():getName()
+		local noteGroup = refGroup:getTarget()
+		local groupRefTimeoffset = refGroup:getTimeOffset()
 
-			-- Clone source group
-			local newNoteGroup = noteGroup:clone()
-			local selectedNotes = newNoteGroup:getNumNotes()
-			
-			if selectedNotes >= 0 then
-			
-				-- Duplicate transposed notes into a new track to create
-				-- Tranpose notes
-				local firstNote = newNoteGroup:getNote(1)
-				local lastNote = newNoteGroup:getNote(selectedNotes)
-				local firstNotePitch = firstNote:getPitch()
-				for iNote = 1, selectedNotes do
-					local note = newNoteGroup:getNote(iNote)			
-					local notePitch = self:getNewPitch(isFixed, firstNotePitch, 
-						note:getPitch(), tonumber(pitchTarget), posKeyInScale)
-					note:setPitch(notePitch)				
-				end			
-				self.project:addNoteGroup(newNoteGroup)
-				
-				-- Add group reference to project new track
-				local newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
-				
-				-- Adjust time offset
-				newGrouptRef:setTimeOffset(groupRefTimeoffset)
-				
-				-- Adjust time range & voice attributes
-				newGrouptRef:setTimeRange(refGroup:getOnset(), refGroup:getDuration())
-				newGrouptRef:setVoice(refGroup:getVoice())
-				
-				if #self.languageOverride > 0 then
-					-- Update notes language
-					self:updateNotesLanguageOverride(newNoteGroup)
-				end
-							
-				-- AI retakes
-				if self.retakes then
-					-- Update AI retakes
-					self:updateAIRetakes(newNoteGroup)
-				end
-				
-				table.insert(newGroupRefs, newGrouptRef)
+		-- Clone source group
+		local newNoteGroup = noteGroup:clone()
+		local selectedNotes = newNoteGroup:getNumNotes()
+		
+		if selectedNotes >= 0 then
+		
+			-- Duplicate transposed notes into a new track to create
+			-- Tranpose notes
+			local firstNote = newNoteGroup:getNote(1)
+			local lastNote = newNoteGroup:getNote(selectedNotes)
+			local firstNotePitch = firstNote:getPitch()
+			for iNote = 1, selectedNotes do
+				local note = newNoteGroup:getNote(iNote)
+				local notePitch = self:getNewPitch(isFixed, firstNotePitch, 
+					note:getPitch(), tonumber(pitchTarget), posKeyInScale)
+				note:setPitch(notePitch)				
 			end
+			self.project:addNoteGroup(newNoteGroup)
+			
+			-- Add group reference to project new track
+			local newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
+			
+			-- Adjust time offset
+			newGrouptRef:setTimeOffset(groupRefTimeoffset)
+			
+			-- Adjust time range & voice attributes
+			newGrouptRef:setTimeRange(refGroup:getOnset(), refGroup:getDuration())
+			newGrouptRef:setVoice(refGroup:getVoice())
+			
+			if #self.languageOverride > 0 then
+				-- Update notes language
+				self:updateNotesLanguageOverride(newNoteGroup)
+			end
+						
+			-- AI retakes
+			if self.retakes then
+				-- Update AI retakes
+				self:updateAIRetakes(newNoteGroup)
+			end
+			
+			table.insert(newGroupRefs, newGrouptRef)
 		end
 	end
 	
@@ -1020,17 +987,6 @@ function NotesObject:getKeyPosInKeynames(keyNames, keyfound)
 		end
 	end
 	return posKeyInScale
-end
-
--- Get key scale found from position self.keyScaleChoice
-function NotesObject:getkeyScaleChoiceFromPos(scaleKeyPosInput)
-	local keyScaleFound = ""
-	for iPos = 1, #self.keyScaleChoice do
-		if scaleKeyPosInput == iPos -1 then
-			keyScaleFound = self.keyScaleChoice[iPos]
-		end
-	end
-	return keyScaleFound
 end
 
 -- Get keys in scale
