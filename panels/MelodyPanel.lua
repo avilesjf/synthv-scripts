@@ -52,12 +52,12 @@ function getArrayLanguageStrings()
 			{"lydian", "lydian"},
 			{"mixolydian", "mixolydian"},
 			{"aeolian", "aeolian"},
-			{"blues_minor", "blues_minor"},
+			{"blues minor", "blues minor"},
 			{"japanese", "japanese"},
 			{"chinese", "chinese"},
 			{"chinese 2", "chinese 2"},
 			{"indian", "indian"},
-			{"hungarian_major", "hungarian_major"},
+			{"hungarian major", "hungarian major"},
 			{"Style pop", "Style pop"},
 			{"Style ballad", "Style ballad"},
 			{"Style edm", "Style edm"},
@@ -71,34 +71,34 @@ function getArrayLanguageStrings()
 			{"Octave down", "Octave down"},
 			{"Octave base", "Octave base"},
 			{"Octave up", "Octave up"},
+			{"1/16", "1/16"},
+			{"1/32", "1/32"},
+			{"1/64", "1/64"},
 			{"Group created!", "Group created!"},
 			{"Error: Empty group, nothing created!", "Error: Empty group, nothing created!"},
 			{"Auto play melody", "Auto play melody"},
 			{"Loop into melody", "Loop into melody"},
 			{"Apply", "Apply"},
 			{"Select a key scale", "Select a key scale"},
-			{"Select a scale", "Select a scale"},
+			{"Select a scale type", "Select a scale type"},
 			{"Select a style", "Select a style"},
 			{"Select a rhythm", "Select a rhythm"},
 			{"Select melody length", "Select melody length"},
 			{"Select octave (down:-1, base:0, up:+1)", "Select octave (down:-1, base:0, up:+1)"},
+			{"Note position to measure bar", "Note position to measure bar"},
 		},
 	}
 end
 
 -- Define a class "NotesObject"
 NotesObject = {
-	project = nil,
-	timeAxis = nil,
-	editor = nil,
-	currentTrack = nil,
 	playBack = nil,
 	playHeadPosition = nil,
 	displayVersion = false,  -- display version & author
 	currentSeconds = 0,
-	timeStretch = 0.5,
 	octaveRange = 1,
-	minimumSpacing = 0.1,
+	measureBarVal = 8,		-- Place notes on starting measure bar 1/8
+	minTimeSpacing = 1/8,	-- default minimum time(s) between notes
 	errorMessages = {},
 	currentPlayheadSeconds = 0,
 	beginGroup = nil,
@@ -110,31 +110,31 @@ NotesObject = {
 	languageCode = "", 
 	hostVersion = "",
 	hostVersionNumber = 0,
-	ticksPerQuarter = 1,
-	blicksPerQuarter = SV.QUARTER,
-	saved_melodies = {}, -- Storage for generated melodies
-	keyNames = {},  -- {"C", "Db", "D" ...
-	note_names = {}, -- ["C"] = 60, ["C#"] = 61, ["Db"] = 61,
+	saved_melodies = {},	-- Storage for generated melodies
+	keyNames = {},			-- {"C", "Db", "D" ...
+	note_names = {},		-- ["C"] = 60, ["Db"] = 61,
 	allscalesActive = false, -- true to list all scales
 	scales = {},
 	styles = {},	
 	rhythms = {},
 	melodyLength = {},
 	octaveUpDown = {},
+	measureBar = {},
 	scalesList = {},
 	stylesList = {},
 	rhythmsList = {},
 	melodyLengthList = {},
 	octaveUpDownList = {},
-	controls = {}, -- controls panel
-	applyButtonValue = nil, -- button
-	statusTextValue = nil,   -- text panel
+	controls = {},				-- controls panel
+	applyButtonValue = nil, 	-- button apply
+	statusTextValue = nil,   	-- text panel
 	keyScaleChoice = {},
 	scaleChoice = {},
 	styleChoice = {},
 	rhythmChoice = {},
 	melodyLengthChoice = {},
 	octaveUpDownChoice = {},
+	measureBarChoice = {},
 	logs = {}
 }
 
@@ -158,14 +158,10 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-    self.project = SV:getProject()
 	self:getHostInformations()
 	
 	math.randomseed(os.time())
-    self.timeAxis = self.project:getTimeAxis()
-    self.editor =  SV:getMainEditor()
 	self.playBack = SV:getPlayback()
-	self.currentTrack = self.editor:getCurrentTrack()
 	
 	-- Get playhead first measure
 	self.currentSeconds = self:getPlayhead()
@@ -174,12 +170,12 @@ function NotesObject:new()
 	
 	-- Note names with values
 	self.note_names = {
-		["C"] = 60, ["C#"] = 61, ["Db"] = 61,
-		["D"] = 62, ["D#"] = 63, ["Eb"] = 63,
+		["C"] = 60, ["Db"] = 61, -- ["C#"] = 61, 
+		["D"] = 62, ["Eb"] = 63, -- ["D#"] = 63, 
 		["E"] = 64,
-		["F"] = 65, ["F#"] = 66, ["Gb"] = 66,
-		["G"] = 67, ["G#"] = 68, ["Ab"] = 68,
-		["A"] = 69, ["A#"] = 70, ["Bb"] = 70,
+		["F"] = 65, ["Gb"] = 66, -- ["F#"] = 66, 
+		["G"] = 67, ["Ab"] = 68, -- ["G#"] = 68, 
+		["A"] = 69, ["Bb"] = 70, -- ["A#"] = 70,
 		["B"] = 71
 	}
 	
@@ -188,6 +184,7 @@ function NotesObject:new()
 	self.rhythms = self:getRhythmsData()
 	self.melodyLength = self:getMelodyLengthData()
 	self.octaveUpDown = self:getOctaveUpDownData()
+	self.measureBar = self:getMeasureBarData()
 
 	self.controls = self:getControls()
 	
@@ -218,6 +215,26 @@ end
 -- Show message dialog
 function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
+end
+
+-- Get selected groups
+function NotesObject:getSelectedGroups()	
+	return SV:getArrangement():getSelection():getSelectedGroups()
+end
+
+-- Get current track
+function NotesObject:getCurrentTrack()
+	return SV:getMainEditor():getCurrentTrack()
+end
+
+-- Get timeAxis
+function NotesObject:getTimeAxis()
+	return self:getProject():getTimeAxis()
+end
+
+-- Get project
+function NotesObject:getProject()
+	return SV:getProject()
 end
 
 -- Add log into self.logs
@@ -271,7 +288,7 @@ function NotesObject:getControls()
 			defaultValue = 0, -- C
 			paramKey = "scaleKey"
 		},
-		scale = {
+		scaleType = {
 			value = SV:create("WidgetValue"),
 			defaultValue = 0, -- major
 			paramKey = "scale"
@@ -295,6 +312,11 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = 0, -- Octave down = 0
 			paramKey = "octaveUpDown"
+		},
+		measureBar = {
+			value = SV:create("WidgetValue"),
+			defaultValue = 0, -- measureBar = 8
+			paramKey = "measureBar"
 		}
 	}
 	return controls
@@ -317,20 +339,33 @@ function NotesObject:setControlsCallback()
 			-- do something may be
 				-- self:addLogsInPanel()
 				if control.paramKey == "style" then
-					-- Update scale from style scale_preference
+					-- Update scale type from style scale_preference
 					local styleChoice = self.stylesList[control.value:getValue() + 1]
 					local style = self.styles[control.value:getValue() + 1]
 					local scale_preference = style.val.scale_preference
-					local posScale = self:getPosScaleFromStyle(scale_preference)
-					self.controls.scale.value:setValue(posScale - 1)
+					local posScale = self:getPosScaleFromScaleName(scale_preference)
+					self.controls.scaleType.value:setValue(posScale - 1)
 				end
 			end
 		)
 	end
 end
 
--- Get position in scale array from style
-function NotesObject:getPosScaleFromStyle(style)
+-- Get key position in Keynames
+function NotesObject:getKeyPosInKeynames(keyNames, keyfound)
+	local posKeyInScale = -1
+	-- loop each scales
+	for key = 1, #keyNames do
+		if keyfound == keyNames[key] then
+			posKeyInScale = key
+			break
+		end
+	end
+	return posKeyInScale
+end
+
+-- Get position in scale array from scale name
+function NotesObject:getPosScaleFromScaleName(style)
 	local pos = 0
 	for i = 1, #self.scales do
 		if self.scales[i].name == style then
@@ -346,13 +381,14 @@ function NotesObject:setButtonApplyControlCallback()
 
 	-- Button create melody
 	self.applyButtonValue:setValueChangeCallback(function()
-			SV:getProject():newUndoRecord()
-			self.currentTrack = self.editor:getCurrentTrack()
+			self:getProject():newUndoRecord()
 			
-			self:createMelody(self.controls.scaleKey.value:getValue(), 
-				self.controls.scale.value:getValue(), self.controls.style.value:getValue(), 
+			self:createMelody(self.controls.scaleKey.value:getValue(),
+				self.controls.scaleType.value:getValue(), self.controls.style.value:getValue(), 
 				self.controls.rhythm.value:getValue(), self.controls.melodyLength.value:getValue(), 
-				self.controls.octaveUpDown.value:getValue())
+				self.controls.octaveUpDown.value:getValue(),
+				self.controls.measureBar.value:getValue()
+				)
 		end
 	)
 end
@@ -375,12 +411,12 @@ function NotesObject:getScalesData(allscalesActive)
 		{name = SV:T("lydian"),			val = {0,2,4,6,7,9,11}, active = false},
 		{name = SV:T("mixolydian"),		val	= {0,2,4,5,7,9,10}, active = false},
 		{name = SV:T("aeolian"),		val	= {0,2,3,5,7,8,10}, active = false},
-		{name = SV:T("blues_minor"),	val	= {0,3,5,6,7,10}, 	active = false},
+		{name = SV:T("blues minor"),	val	= {0,3,5,6,7,10}, 	active = false},
 		{name = SV:T("japanese"),		val	= {0,1,5,7,8}, 		active = false},
 		{name = SV:T("chinese"),		val	= {0,2,4,7,9}, 		active = false}, 
 		{name = SV:T("chinese 2"),		val	= {0,4,6,7,11}, 	active = false},
 		{name = SV:T("indian"),			val	= {0,1,3,4,7,8,10}, active = false},
-		{name = SV:T("hungarian_major"),val = {0,3,4,6,7,9,10}, active = false}
+		{name = SV:T("hungarian major"),val = {0,3,4,6,7,9,10}, active = false}
 	}
 	
 	-- loop to active scales
@@ -518,16 +554,34 @@ function NotesObject:getOctaveUpDownData()
 	return octaveUpDown
 end
 
+-- Get measure bar data
+function NotesObject:getMeasureBarData()
+	local measureBar = {}
+	
+	local measureBarReference = {
+		{name = SV:T("1/16"), val = 8 },
+		{name = SV:T("1/32"), val = 16 },
+		{name = SV:T("1/64"), val = 32 }
+	}
+	
+	-- loop into data
+	for i = 1, #measureBarReference do
+			table.insert(measureBar, measureBarReference[i])
+	end
+	
+	return measureBar
+end
+
 -- Get group reference in time position
 function NotesObject:getGroupRef(track, time)
 	local groupRefFound = nil
 	local numGroups = track:getNumGroups()
-	local blicksPos = self.timeAxis:getBlickFromSeconds(time)
+	local blicksPos = self:getTimeAxis():getBlickFromSeconds(time)
 	
 	-- All groups except the main group
 	for iGroup = 1, numGroups do
 		local groupRef = track:getGroupReference(iGroup)
-		local blickSeconds = self.timeAxis:getSecondsFromBlick(groupRef:getOnset())
+		local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
 		
 		-- Get group on timing pos
 		if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
@@ -542,10 +596,10 @@ end
 function NotesObject:getPlayhead()
 	-- Get playhead first measure
 	self.currentPlayheadSeconds = self.playBack:getPlayhead()
-	local currentBlick = self.timeAxis:getBlickFromSeconds(self.currentPlayheadSeconds)
+	local currentBlick = self:getTimeAxis():getBlickFromSeconds(self.currentPlayheadSeconds)
 	-- Get first measure
 	local measureBlick = self:getFirstMesure(currentBlick, 0)
-	local newPositionSeconds = self.timeAxis:getSecondsFromBlick(measureBlick)
+	local newPositionSeconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
 	return newPositionSeconds
 end
 
@@ -714,6 +768,18 @@ function NotesObject:get_octaveUpDown(octaveUpDown_name)
 	return octaveUpDown
 end
 
+-- Get measureBar name
+function NotesObject:get_measureBar(measureBar_name)
+	local measureBar = nil
+	for i, v in ipairs(self.measureBar) do
+		if v.name == measureBar_name then
+			measureBar = v
+			break
+		end
+	end
+	return measureBar
+end
+
 -- Get scale notes in MIDI format
 function NotesObject:get_scale_notes(root_note, scale_type, octaveUpDown)
     local root_midi = self.note_names[root_note]
@@ -739,7 +805,7 @@ function NotesObject:get_scale_notes(root_note, scale_type, octaveUpDown)
 end
 
 -- Calculate spacing between notes
-function NotesObject:calculate_spacing(style_config, rhythm_config, previous_duration, note_index)
+function NotesObject:calculate_spacing(style_config, rhythm_config)
     local base_spacing = style_config.base_spacing * rhythm_config.spacing_multiplier
     
     -- Add variation
@@ -780,22 +846,29 @@ function NotesObject:calculate_note_duration(base_duration, style_config, rhythm
 end
 
 -- Generate a melody with variable spacing
-function NotesObject:generate_melody(root_note, scale_type, style_name, rhythm_name, length, octaveUpDown)
+function NotesObject:generate_melody(root_note, scale_type, style_name, 
+										rhythm_name, length, octaveUpDown, measureBar)
     length = length or 16  -- Default melody length
+	self.measureBarVal = measureBar -- measure bar default 8 
+	self.minTimeSpacing = 1/self.measureBarVal
 	
     -- Validate inputs
     if not self.note_names[root_note] then
-        self:error("Invalid root note. Use: C, C#, D, D#, E, F, F#, G, G#, A, A#, B")
+        self:error("Invalid root note. Use: C, Db, D, Eb, E, F, Gb, G, Ab, A, Bb, B")
+		return nil
     end
     if not self:get_scale(scale_type) then
         self:error("Invalid scale. Use: major, minor, dorian, blues_major, etc...")
+		return nil
     end
 	
     if not self:get_style(style_name) then
         self:error("Invalid style. Use: edm, jazz, pop, ballad")
+		return nil
     end
     if not self:get_rhythm(rhythm_name) then
         self:error("Invalid rhythm. Use: fast, medium, slow")
+		return nil
     end
     
     local scale_notes = self:get_scale_notes(root_note, scale_type, octaveUpDown)
@@ -805,9 +878,11 @@ function NotesObject:generate_melody(root_note, scale_type, style_name, rhythm_n
     
     local note_events = {}
     local current_time = 0
+    local new_next_time = 0
     local current_note_index = math.random(1, #scale_notes)
 	local newCurrent_note_index = 0
-
+	-- local result = ""
+	
     for i = 1, length do
         -- Get base duration from rhythm pattern
         local duration_index = ((i - 1) % #rhythm_pattern) + 1
@@ -816,22 +891,42 @@ function NotesObject:generate_melody(root_note, scale_type, style_name, rhythm_n
         -- Calculate actual note duration with style modifications
         local note_duration = self:calculate_note_duration(base_duration, style_config, rhythm_config)
         
+		if new_next_time > 0 then
+			current_time = new_next_time
+		end
+		
         -- Create note event
         local midi_note = scale_notes[current_note_index]
-		-- result = result .. "midi_note: " .. midi_note .. "\r"
+		-- result = result .. "midi_note: " .. midi_note
+		-- result = result .. ", current_time: " .. current_time
+		-- result = result .. ", note_duration: " .. note_duration
+		-- result = result .. "\r"
         local velocity = 70 + math.random(20)  -- Random velocity 70-90
+		
+        -- Calculate spacing after this note
+        local spacing = self:calculate_spacing(style_config, rhythm_config)
+		-- result = result .. ", spacing: " .. spacing
+        if spacing < self.minTimeSpacing then
+			spacing = 0
+			-- result = result .. ", new: " .. spacing
+		end
+        -- Update current time (note duration + spacing)
+        local next_time = current_time + note_duration + spacing
+		-- result = result .. ", time 1: " .. next_time
+		
+		-- Place next note to next measure bar 1/8
+		new_next_time = self:getNextMeasurePos(next_time, self.measureBarVal)
+		-- result = result .. ", time 2: " .. new_next_time .. "\r"
+		
+		if new_next_time > next_time then
+			note_duration = note_duration + new_next_time - next_time
+		end
+
 		local note_event = NoteEvent:new(midi_note, current_time, note_duration, velocity, self)
 		
         table.insert(note_events, note_event)
         
-        -- Calculate spacing after this note
-        local spacing = self:calculate_spacing(style_config, rhythm_config, note_duration, i)
-        if spacing < self.minimumSpacing then
-			spacing = 0
-		end
-        -- Update current time (note duration + spacing)
-        current_time = current_time + note_duration + spacing
-        
+	
 		newCurrent_note_index = current_note_index
         -- Determine next note
         if math.random() < style_config.repetition_chance then
@@ -845,8 +940,8 @@ function NotesObject:generate_melody(root_note, scale_type, style_name, rhythm_n
             local step = math.random() < 0.5 and -1 or 1
             current_note_index = math.max(1, math.min(#scale_notes, current_note_index + step))
         end
-		-- result = result .. "new current_note_index: " .. current_note_index .. "\r"
     end
+	-- SV:setHostClipboard(result)
 	
     -- Create and save melody
     local melody = Melody:new(note_events, scale_type, style_name, rhythm_name, 
@@ -854,6 +949,18 @@ function NotesObject:generate_melody(root_note, scale_type, style_name, rhythm_n
     table.insert(self.saved_melodies, melody)
     
     return melody
+end
+
+-- Get next measure Position
+function NotesObject:getNextMeasurePos(current_time, measureBar)
+	local newtime = current_time						-- 2.2s
+	local current_time_Int = math.floor(current_time)	-- 2
+	local diff = current_time - current_time_Int		-- 2.2 - 2 = 0.2
+	if diff > 0 then
+		local measurePos = math.floor(diff * measureBar) + 1		-- (0.2 * 8) + 1 = 2.6
+		newtime =  current_time_Int + (measurePos * (1/measureBar))	-- 2 + (2.6 * (1/8)) = 2.325 next bar
+	end
+	return newtime
 end
 
 -- List all saved melodies
@@ -1003,7 +1110,7 @@ end
 -- Check lyrics "a" less than .1s for special effect
 function NotesObject:isLyricsEffect(note)
 	local result = false
-	local notelength = self.timeAxis:getSecondsFromBlick(note:getDuration())
+	local notelength = self:getTimeAxis():getSecondsFromBlick(note:getDuration())
 	-- ie: 0.0635
 	if notelength < 0.1 then
 		result = true
@@ -1034,29 +1141,29 @@ end
 function NotesObject:getFirstMesure(notePos, nextPos)
 	local measurePos = 0
 	local measureBlick = 0
-	local measureFirst = self.timeAxis:getMeasureAt(notePos) + nextPos
-	local checkExistingMeasureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
+	local measureFirst = self:getTimeAxis():getMeasureAt(notePos) + nextPos
+	local checkExistingMeasureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
 	
 	if checkExistingMeasureMark ~= nil then
 		if checkExistingMeasureMark.position == measureFirst then
 			measurePos = checkExistingMeasureMark.position
 			measureBlick = checkExistingMeasureMark.positionBlick
 		else 
-			self.timeAxis:addMeasureMark(measureFirst, 
+			self:getTimeAxis():addMeasureMark(measureFirst, 
 						checkExistingMeasureMark.numerator, 
 						checkExistingMeasureMark.denominator)
-			local measureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
+			local measureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
 			measurePos = measureMark.position
 			measureBlick = measureMark.positionBlick
-			self.timeAxis:removeMeasureMark(measureFirst)
+			self:getTimeAxis():removeMeasureMark(measureFirst)
 		end
 	else
 		-- Temporary measure mark addition
-		self.timeAxis:addMeasureMark(measureFirst, 4, 4)
-		local measureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
+		self:getTimeAxis():addMeasureMark(measureFirst, 4, 4)
+		local measureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
 		measurePos = measureMark.position
 		measureBlick = measureMark.positionBlick
-		self.timeAxis:removeMeasureMark(measureFirst)
+		self:getTimeAxis():removeMeasureMark(measureFirst)
 	end
 	return measureBlick
 end
@@ -1117,10 +1224,10 @@ function NotesObject:createGroup(startPosition, track, melody)
 		-- local melodyEvent = string.format("Note: %d, Start: %.3f, Duration: %.3f, End: %.3f", 
 							 -- event.midi_note, event.start_time, event.duration, event.end_time)
 		local note = SV:create("Note")
-		note:setOnset(self.timeAxis:getBlickFromSeconds(event.start_time * self.timeStretch))
+		note:setOnset(self:getTimeAxis():getBlickFromSeconds(event.start_time))
 		note:setLyrics("la")
 		note:setPitch(event.midi_note)
-		note:setDuration(self.timeAxis:getBlickFromSeconds(event.duration * self.timeStretch))
+		note:setDuration(self:getTimeAxis():getBlickFromSeconds(event.duration))
 		noteGroup:addNote(note)
 		if i == 1 then 
 			firstNote = note
@@ -1130,19 +1237,18 @@ function NotesObject:createGroup(startPosition, track, melody)
 	
 	-- Set group name with existing lyrics notes
 	noteGroup:setName("")
-	self.project:addNoteGroup(noteGroup)
+	self:getProject():addNoteGroup(noteGroup)
 	local resultLyrics = self:renameOneGroup(maxLengthResult, noteGroup)
 	
 	-- Create note group reference
 	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
 	
 	-- Define start & end group length
-	local startPositionBlicks = self.timeAxis:getBlickFromSeconds(startPosition)
+	local startPositionBlicks = self:getTimeAxis():getBlickFromSeconds(startPosition)
 	local endPositionBlicks = lastNote:getOnset() + lastNote:getDuration() - firstNote:getOnset()
 	-- New end position to next bar
 	local newEndPosition = self:getFirstMesure(endPositionBlicks, 1) - 10
 	newGrouptRef:setTimeOffset(startPositionBlicks)
-	-- newGrouptRef:setTimeRange(startPositionBlicks, endPositionBlicks) -- v2.1.1
 	newGrouptRef:setTimeRange(startPositionBlicks, newEndPosition) -- v2.1.1
 	
 	-- Add group reference in current track
@@ -1153,62 +1259,45 @@ end
 
 -- Generate group
 function NotesObject:generateGroup(root_note, scale_type, style_name, rhythm_name, 
-									melodyLength_name, octaveUpDown_name)
+									melodyLength_name, octaveUpDown_name, measureBar_name)
 	local newGrouptRef = nil
 	local length = self:get_melodyLength(melodyLength_name).val
 	local octaveUpDown = self:get_octaveUpDown(octaveUpDown_name).val
+	local measureBar = self:get_measureBar(measureBar_name).val
 	
-	-- self:show("root_note:" .. root_note 
-		-- .. ", scale_type:" .. scale_type
-		-- .. ", style_name:" .. style_name
-		-- .. ", rhythm_name:" .. rhythm_name
-		-- .. ", length:" .. length
-		-- .. ", octaveUpDown:" .. octaveUpDown)
-	
-	--[[
-		Data stucture
-		melody: id = counter, note_events = note_events, scale = scale, style = style, rhythm = rhythm,
-			root_note = root_note, total_duration = total_duration, created_at = os.date("%Y-%m-%d %H:%M:%S")
-		note_events: midi_note = midi_note, start_time = start_time, duration = duration, 
-			velocity = velocity or 80, end_time = start_time + duration
-	--]]
-	
-	-- generate_melody(root_note, scale_type, style_name, rhythm_name, length, octaveUpDown)
-	-- octaveUpDown = -1 or 0 or +1 octave
 	local melody = self:generate_melody(root_note, scale_type, style_name, rhythm_name, 
-					length, octaveUpDown)
-	-- local melody = self:generate_melody('C', 'major', 'pop', 'fast', 16, 0)
+		length, octaveUpDown, measureBar)
 	
 	if #self.errorMessages > 0 then
 		self:addTextPanel(self:displayErrors())
 		self:show("Error:" .. "\r" .. self:displayErrors())
 	else
 		self.currentSeconds = self.playBack:getPlayhead()
-		local checkGroup = self:getGroupRef(self.currentTrack, self.currentSeconds)
+		local checkGroup = self:getGroupRef(self:getCurrentTrack(), self.currentSeconds)
 		if checkGroup ~= nil then
-			self.currentSeconds = self:getNextEmptyPosition(self.currentTrack, checkGroup:getEnd())
+			self.currentSeconds = self:getNextEmptyPosition(self:getCurrentTrack(), checkGroup:getEnd())
 			self.playBack:seek(self.currentSeconds)
 		else
-			local newPositionBlicks = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
+			local newPositionBlicks = self:getTimeAxis():getBlickFromSeconds(self.currentSeconds)
 			measureBlick = self:getFirstMesure(newPositionBlicks, 0)
-			self.currentSeconds = self.timeAxis:getSecondsFromBlick(measureBlick)
+			self.currentSeconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
 			self.playBack:seek(self.currentSeconds)
 		end
 
-		newGrouptRef = self:createGroup(self.currentSeconds, self.currentTrack, melody)
+		newGrouptRef = self:createGroup(self.currentSeconds, self:getCurrentTrack(), melody)
 		
 		if newGrouptRef ~= nil then
 			self:addTextPanel(SV:T("Group created!"))
+			
 			self.currentPlayheadSeconds = self.playBack:getPlayhead()
 			-- Update currentSeconds to next position
 			self.beginGroup = newGrouptRef:getOnset()
 			self.endGroup = newGrouptRef:getEnd()
-			-- self.currentSeconds = self.timeAxis:getSecondsFromBlick(self.endGroup)
 			
 			-- playBack option
 			if self.controls.autoPlay.value:getValue() then
-				local startPosSeconds = self.timeAxis:getSecondsFromBlick(self.beginGroup)
-				local endPosSeconds = self.timeAxis:getSecondsFromBlick(self.endGroup)
+				local startPosSeconds = self:getTimeAxis():getSecondsFromBlick(self.beginGroup)
+				local endPosSeconds = self:getTimeAxis():getSecondsFromBlick(self.endGroup)
 				self.playBack:seek(startPosSeconds)
 				if self.controls.loopAutoPlay.value:getValue()then
 					self.playBack:loop(startPosSeconds, endPosSeconds)
@@ -1231,7 +1320,7 @@ end
 -- Get next empty position on track
 function NotesObject:getNextEmptyPosition(currentTrack, lastPositionBlicks)
 	local measureBlick = self:getFirstMesure(lastPositionBlicks, 1)
-	local seconds = self.timeAxis:getSecondsFromBlick(measureBlick)
+	local seconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
 	local checkGroup = self:getGroupRef(currentTrack, seconds)
 	
 	if checkGroup ~= nil then
@@ -1252,6 +1341,7 @@ function NotesObject:getComboLists()
 	self.rhythmsList = {}
 	self.melodyLengthList = {}
 	self.octaveUpDownList = {}
+	self.measureBarList = {}
 	
 	-- scales list
 	for key, v in ipairs(self.scales) do
@@ -1272,6 +1362,10 @@ function NotesObject:getComboLists()
 	-- octave up or down list and data
 	for key, v in ipairs(self.octaveUpDown) do
 		table.insert(self.octaveUpDownList, self.octaveUpDown[key].name)
+	end
+	-- measure bar list and data
+	for key, v in ipairs(self.measureBar) do
+		table.insert(self.measureBarList, self.measureBar[key].name)
 	end
 end
 
@@ -1312,6 +1406,7 @@ function NotesObject:getSection()
 					}
 				}
 			},
+			self.measureBarChoice,
 			{
 				type = "Container",
 				columns = {
@@ -1356,13 +1451,14 @@ function NotesObject:setComboChoices()
 			}
 		}
 	}
+	
 	self.scaleChoice = {
 		type = "Container",
 		columns = {
 			{
 				type = "ComboBox",
-				text = SV:T("Select a scale"),
-				value = self.controls.scale.value,
+				text = SV:T("Select a scale type"),
+				value = self.controls.scaleType.value,
 				choices = self.scalesList,
 				width = 1.0
 			}
@@ -1418,18 +1514,23 @@ function NotesObject:setComboChoices()
 			}
         }
     }
+	self.measureBarChoice = {
+        type = "Container",
+        columns = {
+			{
+				type = "ComboBox",
+				text = SV:T("Note position to measure bar"),
+				value = self.controls.measureBar.value,
+				choices = self.measureBarList,
+				width = 1.0
+			}
+        }
+    }
 	
 end
 
 -- Create a melody
-function NotesObject:createMelody(scaleKey, scale, style, rhythm, melodyLength, octaveUpDown)
-	-- self:show("scale:" .. scaleKey 
-	-- .. ", scale:" .. scale
-	-- .. ", style:" .. style
-	-- .. ",  rhythm:" .. rhythm
-	-- .. ", melodylength:" .. tostring(melodyLength)
-	-- .. ", octaveUpDown:" .. tostring(octaveUpDown))
-	
+function NotesObject:createMelody(scaleKey, scale, style, rhythm, melodyLength, octaveUpDown, measureBarChoice)
 	-- Combo box item start to 0 => +1 for data
 	local scaleKeyOutput = scaleKey + 1
 	local scaleOutput = scale + 1 
@@ -1437,6 +1538,7 @@ function NotesObject:createMelody(scaleKey, scale, style, rhythm, melodyLength, 
 	local rhythmsOutput = rhythm + 1
 	local melodyLengthOutput = melodyLength + 1
 	local octaveUpDownOutput = octaveUpDown + 1
+	local measureBarChoiceOutput = measureBarChoice + 1
 
 	-- Get keys values
 	local scaleKey = self.keyNames[scaleKeyOutput]
@@ -1445,11 +1547,16 @@ function NotesObject:createMelody(scaleKey, scale, style, rhythm, melodyLength, 
 	local rhythmChoice = self.rhythmsList[rhythmsOutput]
 	local melodylengthChoice = self.melodyLengthList[melodyLengthOutput]
 	local octaveUpDownChoice = self.octaveUpDownList[octaveUpDownOutput]
+	local measureBarChoice = self.measureBarList[measureBarChoiceOutput]
 	
 	-- Generate a melody in a new group
 	local newGrouptRef = self:generateGroup(scaleKey, scaleChoice, styleChoice, 
-						rhythmChoice, melodylengthChoice, octaveUpDownChoice)
+						rhythmChoice, melodylengthChoice, octaveUpDownChoice, measureBarChoice)
 	
+	if newGrouptRef ~= nil then
+		SV:getArrangement():getSelection():selectGroup(newGrouptRef)
+		SV:getMainEditor():getSelection():selectGroup(newGrouptRef)
+	end
 end
 
 -- Get panel section state
@@ -1463,10 +1570,7 @@ function NotesObject:getPanelSectionState()
 	
 	-- Get section data
 	local section = self:getSection()
-	
-	-- self:addLogs("section")
-	-- self:addLogsInPanel()
-	
+
 	return section
 end
 
