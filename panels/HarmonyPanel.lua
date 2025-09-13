@@ -13,6 +13,8 @@ Add only one track or multiple tracks depending on user selection.
 4/ Generate AI retakes for each new group harmony
 5/ Panel display introduced with Synthesizer V version 2.1.2b1
 
+Update: minor update
+
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2b1
 
@@ -24,7 +26,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -98,7 +100,8 @@ NotesObject = {
 	languageCode = "", 
 	hostVersion = "",
 	hostVersionNumber = 0,	
-	displayVersion = false,			-- display version & author
+	displayVersion = true,	-- display version
+	displayAuthor = false,	-- display author
 	playBack = nil,
 	allScalesActive = false,		-- true to list all scales
     scales = {},
@@ -198,10 +201,15 @@ function NotesObject:new()
 	self:getComboLists()
 
 	local infos = getClientInfo()
+	local infosToDisplay = ""
 	if self.displayVersion then
-		self:addTextPanel(SV:T("Version") .. ": " ..  infos.versionNumber 
-			.. " - " .. SV:T("author") .. ": " .. infos.author)
+		infosToDisplay = infosToDisplay .. SV:T("Version") .. ": " ..  infos.versionNumber
+		if self.displayAuthor then
+			infosToDisplay = infosToDisplay .. " - " .. SV:T("author") .. ": " .. infos.author
+		end
 	end
+	-- infosToDisplay = infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
+	self:addTextPanel(infosToDisplay)
 	self:addTextPanel(SV:T("Generate harmonies") .. "...")
 	
 	-- Double notes transposition list data

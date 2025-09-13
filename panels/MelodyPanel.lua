@@ -10,6 +10,8 @@ Melody Generator in Lua with Variable Spacing
 Generates melodies based on scale, style, and rhythm
 Includes variable spacing between notes based on rhythm and style
 
+Update: Added a ComboBox "Note fixed to measure bar 1/16 to 1/64.
+
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2b1
 
@@ -21,7 +23,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -57,7 +59,7 @@ function getArrayLanguageStrings()
 			{"chinese", "chinese"},
 			{"chinese 2", "chinese 2"},
 			{"indian", "indian"},
-			{"hungarian major", "hungarian major"},
+			{"hung'arian major", "hungarian major"},
 			{"Style pop", "Style pop"},
 			{"Style ballad", "Style ballad"},
 			{"Style edm", "Style edm"},
@@ -71,9 +73,9 @@ function getArrayLanguageStrings()
 			{"Octave down", "Octave down"},
 			{"Octave base", "Octave base"},
 			{"Octave up", "Octave up"},
-			{"1/16", "1/16"},
-			{"1/32", "1/32"},
-			{"1/64", "1/64"},
+			{"Note fixed: 1/16", "Note fixed: 1/16"},
+			{"Note fixed: 1/32", "Note fixed: 1/32"},
+			{"Note fixed: 1/64", "Note fixed: 1/64"},
 			{"Group created!", "Group created!"},
 			{"Error: Empty group, nothing created!", "Error: Empty group, nothing created!"},
 			{"Auto play melody", "Auto play melody"},
@@ -94,8 +96,10 @@ end
 NotesObject = {
 	playBack = nil,
 	playHeadPosition = nil,
-	displayVersion = false,  -- display version & author
+	displayVersion = true,	-- display version
+	displayAuthor = false,	-- display author
 	currentSeconds = 0,
+	defaultLyrics = "la",
 	octaveRange = 1,
 	measureBarVal = 8,		-- Place notes on starting measure bar 1/8
 	minTimeSpacing = 1/8,	-- default minimum time(s) between notes
@@ -110,6 +114,7 @@ NotesObject = {
 	languageCode = "", 
 	hostVersion = "",
 	hostVersionNumber = 0,
+	debug = false,
 	saved_melodies = {},	-- Storage for generated melodies
 	keyNames = {},			-- {"C", "Db", "D" ...
 	note_names = {},		-- ["C"] = 60, ["Db"] = 61,
@@ -160,7 +165,6 @@ function NotesObject:new()
 	
 	self:getHostInformations()
 	
-	math.randomseed(os.time())
 	self.playBack = SV:getPlayback()
 	
 	-- Get playhead first measure
@@ -202,11 +206,15 @@ function NotesObject:new()
 	self:getComboLists()
 	
 	local infos = getClientInfo()
+	local infosToDisplay = ""
 	if self.displayVersion then
-		self:addTextPanel(SV:T("Version") .. ": " ..  infos.versionNumber 
-			.. " - " .. SV:T("author") .. ": " .. infos.author)
-		-- self:addTextPanel(SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion)
+		infosToDisplay = infosToDisplay .. SV:T("Version") .. ": " ..  infos.versionNumber
+		if self.displayAuthor then
+			infosToDisplay = infosToDisplay .. " - " .. SV:T("author") .. ": " .. infos.author
+		end
 	end
+	-- infosToDisplay = infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
+	self:addTextPanel(infosToDisplay)
 	self:addTextPanel(SV:T("Generate melodies") .. "...")
 	
     return self
@@ -559,9 +567,9 @@ function NotesObject:getMeasureBarData()
 	local measureBar = {}
 	
 	local measureBarReference = {
-		{name = SV:T("1/16"), val = 8 },
-		{name = SV:T("1/32"), val = 16 },
-		{name = SV:T("1/64"), val = 32 }
+		{name = SV:T("Note fixed: 1/16"), val = 8 },
+		{name = SV:T("Note fixed: 1/32"), val = 16 },
+		{name = SV:T("Note fixed: 1/64"), val = 32 }
 	}
 	
 	-- loop into data
@@ -870,7 +878,9 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
         self:error("Invalid rhythm. Use: fast, medium, slow")
 		return nil
     end
-    
+	
+	math.randomseed(os.time())
+	
     local scale_notes = self:get_scale_notes(root_note, scale_type, octaveUpDown)
     local style_config = self:get_style(style_name).val
     local rhythm_config = self:get_rhythm(rhythm_name).val
@@ -881,7 +891,7 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
     local new_next_time = 0
     local current_note_index = math.random(1, #scale_notes)
 	local newCurrent_note_index = 0
-	-- local result = ""
+	local result = ""
 	
     for i = 1, length do
         -- Get base duration from rhythm pattern
@@ -897,26 +907,27 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
 		
         -- Create note event
         local midi_note = scale_notes[current_note_index]
-		-- result = result .. "midi_note: " .. midi_note
-		-- result = result .. ", current_time: " .. current_time
-		-- result = result .. ", note_duration: " .. note_duration
-		-- result = result .. "\r"
+		result = result .. "midi_note: " .. midi_note
+		result = result .. ", current_time: " .. current_time
+		result = result .. ", note_duration: " .. note_duration
+		result = result .. "\r"
         local velocity = 70 + math.random(20)  -- Random velocity 70-90
 		
         -- Calculate spacing after this note
         local spacing = self:calculate_spacing(style_config, rhythm_config)
 		-- result = result .. ", spacing: " .. spacing
+		
         if spacing < self.minTimeSpacing then
 			spacing = 0
-			-- result = result .. ", new: " .. spacing
+			result = result .. ", new: " .. spacing
 		end
         -- Update current time (note duration + spacing)
         local next_time = current_time + note_duration + spacing
-		-- result = result .. ", time 1: " .. next_time
+		result = result .. ", next_time: " .. next_time
 		
 		-- Place next note to next measure bar 1/8
 		new_next_time = self:getNextMeasurePos(next_time, self.measureBarVal)
-		-- result = result .. ", time 2: " .. new_next_time .. "\r"
+		result = result .. ", new_next_time: " .. new_next_time .. "\r"
 		
 		if new_next_time > next_time then
 			note_duration = note_duration + new_next_time - next_time
@@ -925,7 +936,6 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
 		local note_event = NoteEvent:new(midi_note, current_time, note_duration, velocity, self)
 		
         table.insert(note_events, note_event)
-        
 	
 		newCurrent_note_index = current_note_index
         -- Determine next note
@@ -941,7 +951,7 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
             current_note_index = math.max(1, math.min(#scale_notes, current_note_index + step))
         end
     end
-	-- SV:setHostClipboard(result)
+	if self.debug then SV:setHostClipboard(result) end
 	
     -- Create and save melody
     local melody = Melody:new(note_events, scale_type, style_name, rhythm_name, 
@@ -1221,11 +1231,9 @@ function NotesObject:createGroup(startPosition, track, melody)
 	
 	-- Loop into generated notes
 	for i, event in ipairs(melody.note_events) do
-		-- local melodyEvent = string.format("Note: %d, Start: %.3f, Duration: %.3f, End: %.3f", 
-							 -- event.midi_note, event.start_time, event.duration, event.end_time)
 		local note = SV:create("Note")
 		note:setOnset(self:getTimeAxis():getBlickFromSeconds(event.start_time))
-		note:setLyrics("la")
+		note:setLyrics(self.defaultLyrics)
 		note:setPitch(event.midi_note)
 		note:setDuration(self:getTimeAxis():getBlickFromSeconds(event.duration))
 		noteGroup:addNote(note)
