@@ -140,6 +140,8 @@ NotesObject = {
 	melodyLengthChoice = {},
 	octaveUpDownChoice = {},
 	measureBarChoice = {},
+	lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"},
+	infosToDisplay = "",
 	logs = {}
 }
 
@@ -206,15 +208,16 @@ function NotesObject:new()
 	self:getComboLists()
 	
 	local infos = getClientInfo()
-	local infosToDisplay = ""
+
+	self.infosToDisplay = ""
 	if self.displayVersion then
-		infosToDisplay = infosToDisplay .. SV:T("Version") .. ": " ..  infos.versionNumber
+		self.infosToDisplay = self.infosToDisplay .. SV:T("Version") .. ": " ..  infos.versionNumber
 		if self.displayAuthor then
-			infosToDisplay = infosToDisplay .. " - " .. SV:T("author") .. ": " .. infos.author
+			self.infosToDisplay = self.infosToDisplay .. " - " .. SV:T("author") .. ": " .. infos.author
 		end
 	end
-	-- infosToDisplay = infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
-	self:addTextPanel(infosToDisplay)
+	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
+	self:addTextPanel(self.infosToDisplay)
 	self:addTextPanel(SV:T("Generate melodies") .. "...")
 	
     return self
@@ -357,6 +360,13 @@ function NotesObject:setControlsCallback()
 			end
 		)
 	end
+end
+
+-- Display message
+function NotesObject:displayMessage(message)
+	self:clearTextPanel()
+	self:addTextPanel(self.infosToDisplay)
+	self:addTextPanel(message)
 end
 
 -- Get key position in Keynames
@@ -1129,19 +1139,15 @@ function NotesObject:isLyricsEffect(note)
 end
 
 -- Is lyrics is a text accepted
-function NotesObject:isTextAccepted(note)
-	local result = false
-	local lyrics = note:getLyrics()
+function NotesObject:isTextAccepted(lyrics)
+	local result = true
 	
 	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
-	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
-		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
-		result = true
-	end
-	
-	-- Specific for personal vocal effect
-	if lyrics == "a" and self:isLyricsEffect(note) then
-		result = false
+	for i, lyricsExcept in pairs(self.lyricsException) do
+		if lyrics == lyricsExcept then
+			result = false
+			break
+		end
 	end
 
 	return result
@@ -1295,8 +1301,8 @@ function NotesObject:generateGroup(root_note, scale_type, style_name, rhythm_nam
 		newGrouptRef = self:createGroup(self.currentSeconds, self:getCurrentTrack(), melody)
 		
 		if newGrouptRef ~= nil then
-			self:addTextPanel(SV:T("Group created!"))
-			
+			self:displayMessage(SV:T("Group created!"))
+						
 			self.currentPlayheadSeconds = self.playBack:getPlayhead()
 			-- Update currentSeconds to next position
 			self.beginGroup = newGrouptRef:getOnset()

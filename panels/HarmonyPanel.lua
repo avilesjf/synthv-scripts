@@ -152,6 +152,7 @@ NotesObject = {
 	colors = {},
 	currentColorPos = 0,
 	currentColor = "",
+	infosToDisplay = "",
 	logs = {}	
 }
 
@@ -201,15 +202,16 @@ function NotesObject:new()
 	self:getComboLists()
 
 	local infos = getClientInfo()
-	local infosToDisplay = ""
+
+	self.infosToDisplay = ""
 	if self.displayVersion then
-		infosToDisplay = infosToDisplay .. SV:T("Version") .. ": " ..  infos.versionNumber
+		self.infosToDisplay = self.infosToDisplay .. SV:T("Version") .. ": " ..  infos.versionNumber
 		if self.displayAuthor then
-			infosToDisplay = infosToDisplay .. " - " .. SV:T("author") .. ": " .. infos.author
+			self.infosToDisplay = self.infosToDisplay .. " - " .. SV:T("author") .. ": " .. infos.author
 		end
 	end
-	-- infosToDisplay = infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
-	self:addTextPanel(infosToDisplay)
+	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
+	self:addTextPanel(self.infosToDisplay)
 	self:addTextPanel(SV:T("Generate harmonies") .. "...")
 	
 	-- Double notes transposition list data
@@ -1159,6 +1161,13 @@ function NotesObject:setButtonApplyControlCallback()
 			end
 		end
 	)
+end
+
+-- Display message
+function NotesObject:displayMessage(message)
+	self:clearTextPanel()
+	self:addTextPanel(self.infosToDisplay)
+	self:addTextPanel(message)
 end
 	
 -- Get combo box data

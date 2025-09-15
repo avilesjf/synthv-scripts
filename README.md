@@ -25,6 +25,8 @@ or message me on the SynthV Forums (https://forum.synthesizerv.com/u/jfa/summary
 ## panel-scripts (>= 2.1.2b1)
 Harmony: Generates new tracks and transpose all notes in desired scale (with AI retakes).
 Melody:  Generates melodies based on scale, style, length and speed.
+Notes:   Create project notes saved inside project.
+Lyrics:  Get lyrics tracks into panel.
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
