@@ -53,7 +53,6 @@ NotesObject = {
 	playHeadPosition = nil,
 	displayVersion = true,	-- display version
 	displayAuthor = false,	-- display author
-	currentSeconds = 0,
 	defaultLyrics = "la",
 	errorMessages = {},
 	currentPlayheadSeconds = 0,
@@ -69,6 +68,7 @@ NotesObject = {
 	controls = {},					-- controls panel
 	clearButtonValue = nil, 		-- button Clear notes
 	loadButtonValue = nil, 			-- button load notes
+	showFormButtonValue = nil, 		-- button show form
 	applyButtonValue = nil, 		-- button apply save notes
 	statusTextValue = nil,   		-- text panel
 	projectNotesTextValue = nil,	-- project notes text panel
@@ -87,15 +87,13 @@ function NotesObject:new()
 	
 	self.playBack = SV:getPlayback()
 	
-	-- Get playhead first measure
-	self.currentSeconds = self:getPlayhead()
-	
 	self.controls = self:getControls()
 	
 	self:initializeControlsValues()
 	self:setControlsCallback()
 	
 	self.clearButtonValue = SV:create("WidgetValue")
+	self.showFormButtonValue = SV:create("WidgetValue")
 	self.loadButtonValue = SV:create("WidgetValue")
 	self.applyButtonValue = SV:create("WidgetValue")
 	
@@ -110,6 +108,7 @@ function NotesObject:new()
 	self:setButtonClearControlCallback()
 	self:setButtonLoadControlCallback()
 	self:setButtonApplyControlCallback()
+	self:setButtonShowFormControlCallback()
 	
 	local infos = getClientInfo()
 
@@ -274,6 +273,25 @@ function NotesObject:setButtonLoadControlCallback()
 	)
 end
 
+-- Set button show form
+function NotesObject:setButtonShowFormControlCallback()
+
+	-- Button Save notes
+	self.showFormButtonValue:setValueChangeCallback(function()
+			local title = SV:T("Project notes! Click OK button to save notes!")
+			
+			local userInput = self:showForm(title, self.projectNotes)
+			if userInput.status then
+				self.projectNotes = userInput.answers.notes
+				self.projectNotesTextValue:setValue(self.projectNotes)
+				self:setProjectUpdated()
+				self:saveProjectData()
+				self:displayMessage(SV:T("Notes saved!") .. "\r" .. SV:T("Remember to save this project!"))				
+			end
+		end
+	)
+end
+
 -- Set button Apply control callback
 function NotesObject:setButtonApplyControlCallback()
 
@@ -287,6 +305,28 @@ function NotesObject:setButtonApplyControlCallback()
 	)
 end
 
+-- Show custom dialog box
+function NotesObject:showForm(title, notes)
+	local form = {
+		title = SV:T(SCRIPT_TITLE),
+		message = title,
+		buttons = "OkCancel",
+		widgets = {
+			{
+				name = "notes", type = "TextArea", label = SV:T("Project notes:"),
+				height = 400,
+				default = notes
+			},
+			{
+				name = "separator", type = "TextArea", label = "", height = 0
+			}
+		}
+	}
+	self.dialogTitle = title
+	self.onResponse = function(response) self:dialogResponse(response) end
+	return SV:showCustomDialog(form)
+end
+
 -- Display message
 function NotesObject:displayMessage(message)
 	self:clearTextPanel()
@@ -294,68 +334,6 @@ function NotesObject:displayMessage(message)
 	self:addTextPanel(message)
 end
 	
--- Get group reference in time position
-function NotesObject:getGroupRef(track, time)
-	local groupRefFound = nil
-	local numGroups = track:getNumGroups()
-	local blicksPos = self:getTimeAxis():getBlickFromSeconds(time)
-	
-	-- All groups except the main group
-	for iGroup = 1, numGroups do
-		local groupRef = track:getGroupReference(iGroup)
-		local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
-		
-		-- Get group on timing pos
-		if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
-			groupRefFound = groupRef
-			break
-		end
-	end						
-	return groupRefFound
-end
-
--- Get playhead position in first nearest measure
-function NotesObject:getPlayhead()
-	-- Get playhead first measure
-	self.currentPlayheadSeconds = self.playBack:getPlayhead()
-	local currentBlick = self:getTimeAxis():getBlickFromSeconds(self.currentPlayheadSeconds)
-	-- Get first measure
-	local measureBlick = self:getFirstMesure(currentBlick, 0)
-	local newPositionSeconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
-	return newPositionSeconds
-end
-
--- Get first mesure after first note (or next position + n)
-function NotesObject:getFirstMesure(notePos, nextPos)
-	local measurePos = 0
-	local measureBlick = 0
-	local measureFirst = self:getTimeAxis():getMeasureAt(notePos) + nextPos
-	local checkExistingMeasureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
-	
-	if checkExistingMeasureMark ~= nil then
-		if checkExistingMeasureMark.position == measureFirst then
-			measurePos = checkExistingMeasureMark.position
-			measureBlick = checkExistingMeasureMark.positionBlick
-		else 
-			self:getTimeAxis():addMeasureMark(measureFirst, 
-						checkExistingMeasureMark.numerator, 
-						checkExistingMeasureMark.denominator)
-			local measureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
-			measurePos = measureMark.position
-			measureBlick = measureMark.positionBlick
-			self:getTimeAxis():removeMeasureMark(measureFirst)
-		end
-	else
-		-- Temporary measure mark addition
-		self:getTimeAxis():addMeasureMark(measureFirst, 4, 4)
-		local measureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
-		measurePos = measureMark.position
-		measureBlick = measureMark.positionBlick
-		self:getTimeAxis():removeMeasureMark(measureFirst)
-	end
-	return measureBlick
-end
-
 -- Display error messages
 function NotesObject:displayErrors()
 	local result = ""
@@ -427,7 +405,18 @@ function NotesObject:getSection()
 						value = self.projectNotesTextValue,
 						height = 300,
 						width = 1.0,
-						readOnly = true
+						readOnly = false
+					}
+				}
+			},
+			{	-- This to permit adding carriage return in notes
+				type = "Container",
+				columns = {
+					{
+						type = "Button",
+						text = SV:T("Input notes project"),
+						width = 1.0,
+						value = self.showFormButtonValue
 					}
 				}
 			},
@@ -475,6 +464,7 @@ function NotesObject:getPanelSectionState()
 
 	self.clearButtonValue:setEnabled(true)
 	self.loadButtonValue:setEnabled(true)
+	self.showFormButtonValue:setEnabled(true)
 	self.applyButtonValue:setEnabled(true)
 	self.projectNotesTextValue:setEnabled(true)
 	
