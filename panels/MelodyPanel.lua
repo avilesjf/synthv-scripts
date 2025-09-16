@@ -21,7 +21,7 @@ Notice: Works only with script panel
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Panels",
+		-- category = "_JFA_Panels",
 		author = "JFAVILES",
 		versionNumber = 2,
 		minEditorVersion = 131329,
