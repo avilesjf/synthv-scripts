@@ -748,11 +748,12 @@ function NotesObject:getPanelSectionState()
 	return section
 end
 
+-- Initialize main internal object	
+local notesObject = NotesObject:new()
+
 -- Get panel section state called by Synthesizer V internal system
 function getSidePanelSectionState()
 
-	-- Initialize main internal object
-	local notesObject = NotesObject:new()
 	local section = notesObject:getPanelSectionState()
 
 	return section

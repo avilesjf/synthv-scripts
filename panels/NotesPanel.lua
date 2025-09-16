@@ -51,7 +51,7 @@ end
 NotesObject = {
 	playBack = nil,
 	playHeadPosition = nil,
-	displayVersion = true,	-- display version
+	displayVersion = false,	-- display version
 	displayAuthor = false,	-- display author
 	defaultLyrics = "la",
 	errorMessages = {},
@@ -123,7 +123,7 @@ function NotesObject:new()
 	self:addTextPanel(self.infosToDisplay)
 	self:addTextPanel(SV:T("Project notes") .. "...")
 	
-	self:getProjectData()
+	-- self:getProjectData()
 	self:setProjectNotesTextPanel(self.projectNotes)
 	
     return self
@@ -269,6 +269,7 @@ function NotesObject:setButtonLoadControlCallback()
 			self:getProjectData()
 			self:setProjectNotesTextPanel(self.projectNotes)
 			self:displayMessage(SV:T("Notes loaded!"))
+			-- SV:refreshSidePanel()
 		end
 	)
 end
@@ -381,7 +382,7 @@ end
 
 -- Get section
 function NotesObject:getSection()
-
+	
 	-- Define CheckBox & button & textarea
 	local section = {
 		title = SV:T(SCRIPT_TITLE),
@@ -479,12 +480,12 @@ function NotesObject:getPanelSectionState()
 	return section
 end
 
+-- Initialize main internal object	
+local notesObject = NotesObject:new()
+
 -- Get panel section state called by Synthesizer V internal system
 function getSidePanelSectionState()
 
-	-- Initialize main internal object
-	local notesObject = NotesObject:new()
 	local section = notesObject:getPanelSectionState()
-
 	return section
 end
