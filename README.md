@@ -27,6 +27,7 @@ Harmony: Generates new tracks and transpose all notes in desired scale (with AI 
 Melody:  Generates melodies based on scale, style, length and speed.
 Notes:   Create project notes saved inside project.
 Lyrics:  Get lyrics tracks into panel.
+Playing: Show lyrics and time while playing.
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).

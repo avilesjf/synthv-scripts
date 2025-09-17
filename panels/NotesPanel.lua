@@ -39,8 +39,12 @@ function getArrayLanguageStrings()
 			{"Notes cleared!", "Notes cleared!"},
 			{"Remember to save this project!", "Remember to save this project!"},
 			{"Notes loaded!", "Notes loaded!"},
+			{"Project notes! Click OK button to save notes!", "Project notes! Click OK button to save notes!"},
+			{"Notes saved!", "Notes saved!"},
 			{"Notes created!", "Notes created!"},
+			{"Project notes:", "Project notes:"},
 			{"Load notes project", "Load notes project"},
+			{"Input notes project", "Input notes project"},
 			{"Save notes project", "Save notes project"},
 			{"Clear notes project", "Clear notes project"},
 		},
@@ -85,10 +89,7 @@ function NotesObject:new()
 	
 	self:getHostInformations()
 	
-	self.playBack = SV:getPlayback()
-	
-	self.controls = self:getControls()
-	
+	self.controls = self:getControls()	
 	self:initializeControlsValues()
 	self:setControlsCallback()
 	

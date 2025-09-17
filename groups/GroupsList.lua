@@ -81,6 +81,7 @@ NotesObject = {
 	groupsListChoice = {},
 	groupChoice = 0,
 	linkedGroup = true,
+	lyricsException = {},
 	traceLog = ""
 }
 
@@ -100,9 +101,11 @@ function NotesObject:new()
 	self.playBack = SV:getPlayback()
 	self.playBackCurrentSeconds = self.playBack:getPlayhead()
 	
+	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
+	
 	-- Get all groups
 	self.groups = self:getAllGroups()	
-	
+
     return self
 end
 
@@ -193,12 +196,16 @@ end
 
 -- Is lyrics is a text accepted
 function NotesObject:isTextAccepted(lyrics)
-	local result = false
-	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
-	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
-		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
-		result = true
-	end	
+	local result = true
+	
+	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
+	for i, lyricsExcept in pairs(self.lyricsException) do
+		if  lyrics == lyricsExcept then
+			result = false
+			break
+		end
+	end
+
 	return result
 end
 

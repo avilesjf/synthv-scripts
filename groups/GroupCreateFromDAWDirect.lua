@@ -94,7 +94,8 @@ NotesObject = {
 	currentSeconds = 0,
 	stopProcess = false,
 	stopProcessOK = false,
-	sepParam = "|"
+	sepParam = "|",
+	lyricsException = {}
 }
 
 -- Constructor method for the NotesObject class
@@ -119,6 +120,8 @@ function NotesObject:new()
 	self.initialTrackName = self.currentTrack:getName()
 	self.initialColorTrack = self.currentTrack:getDisplayColor()
 	self.trackTarget = self.currentTrack
+	
+	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
 
     return self
 end
@@ -183,7 +186,7 @@ function NotesObject:secondsToClock(timestamp)
 	  timestamp%60):gsub("%.",",")
 end
 
--- Get first mesure before fist note
+-- Get first mesure before first note
 function NotesObject:getFirstMesure(notePos)
 	local measurePos = 0
 	local measureBlick = 0
@@ -312,7 +315,7 @@ function NotesObject:renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 				local lyrics = note:getLyrics()
 				if string.len(lyrics) > 0 then
 				
-					-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+					-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
 					if self:isTextAccepted(timeAxis, note) then
 						-- Replace following note char '-'
 						if lyrics == "-" then lyrics = ".." end 
@@ -358,14 +361,27 @@ function NotesObject:isLyricsEffect(timeAxis, note)
 	return result
 end
 
+-- Is lyrics is a text accepted new
+function NotesObject:isTextAcceptedNew(lyrics)
+	local result = true
+	
+	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
+	for i, lyricsExcept in pairs(self.lyricsException) do
+		if  lyrics == lyricsExcept then
+			result = false
+			break
+		end
+	end
+
+	return result
+end
+
 -- Is lyrics is a text accepted
 function NotesObject:isTextAccepted(timeAxis, note)
 	local result = false
 	local lyrics = note:getLyrics()
 	
-	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
-	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
-		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
+	if self:isTextAcceptedNew(lyrics) then
 		result = true
 	end
 	

@@ -101,14 +101,28 @@ function isLyricsEffect(timeAxis, note)
 	return result
 end
 
+-- Is lyrics is a text accepted new
+function isTextAcceptedNew(lyrics)
+	local result = true
+	local lyricsException = {"+", "++", "-", "br", ".cl", ".pau", ".sil"}
+	
+	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
+	for i, lyricsExcept in pairs(lyricsException) do
+		if lyrics == lyricsExcept then
+			result = false
+			break
+		end
+	end
+
+	return result
+end
+
 -- Is lyrics is a text accepted
 function isTextAccepted(timeAxis, note)
 	local result = false
 	local lyrics = note:getLyrics()
 	
-	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
-	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
-		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
+	if isTextAcceptedNew(lyrics) then
 		result = true
 	end
 	
@@ -223,7 +237,7 @@ function getTrackLyrics(track, timeAxis, secondDecayInput)
 							firstSecNotePos = timeAxis:getSecondsFromBlick(notePos + TimeOffset)
 						end
 						
-						-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+						-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
 						if isTextAccepted(timeAxis, note) then
 							-- add space between lyrics if they are stored in each note
 							sepChar = addSpaceChar(previousLyrics)

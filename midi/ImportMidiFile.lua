@@ -865,7 +865,7 @@ groupsTools = {
 					local lyrics = note:getLyrics()
 					if string.len(lyrics) > 0 then
 					
-						-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+						-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
 						if groupsTools.isTextAccepted(InternalData.timeAxis, note) then
 							-- Replace following note char '-'
 							if lyrics == "-" then lyrics = ".." end 
@@ -900,19 +900,44 @@ groupsTools = {
 		return resultLyrics
 	end,
 
+	-- Check lyrics "a" less than .1s for special effect
+	isLyricsEffect = function (timeAxis, note)
+		local result = false
+		local notelength = timeAxis:getSecondsFromBlick(note:getDuration())
+		-- ie: 0.0635
+		if notelength < 0.1 then
+			result = true
+		end
+		return result
+	end,
+
+	-- Is lyrics is a text accepted new
+	isTextAcceptedNew = function (lyrics)
+		local result = true
+		local lyricsException = {"+", "++", "-", "br", ".cl", ".pau", ".sil"}
+		
+		-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
+		for i, lyricsExcept in pairs(lyricsException) do
+			if  lyrics == lyricsExcept then
+				result = false
+				break
+			end
+		end
+
+		return result
+	end,
+	
 	-- Is lyrics is a text accepted
 	isTextAccepted = function(timeAxis, note)
 		local result = false
 		local lyrics = note:getLyrics()
 		
-		-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
-		if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
-			and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
+		if groupsTools.isTextAcceptedNew(lyrics) then
 			result = true
 		end
 		
 		-- Specific for personal vocal effect
-		if lyrics == "a" and isLyricsEffect(timeAxis, note) then
+		if lyrics == "a" and groupsTools.isLyricsEffect(timeAxis, note) then
 			result = false
 		end
 

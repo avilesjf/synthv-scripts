@@ -34,10 +34,21 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"Unable to save notes:", "Unable to save notes:"},
-			{"Project notes:", "Project notes:"},
+			{"Version", "Version"},
+			{"author", "author"},
+			{"minEditorVersion", "minEditorVersion"},
+			{"Project notes", "Project notes"},
+			{"Notes cleared!", "Notes cleared!"},
+			{"Remember to save this project!", "Remember to save this project!"},
+			{"Notes loaded!", "Notes loaded!"},
 			{"Project notes! Click OK button to save notes!", "Project notes! Click OK button to save notes!"},
-			{"Unable to store notes in an unnamed .svp project!", "Unable to store notes in an unnamed .svp project!"},
+			{"Notes saved!", "Notes saved!"},
+			{"Notes created!", "Notes created!"},
+			{"Project notes:", "Project notes:"},
+			{"Load notes project", "Load notes project"},
+			{"Input notes project", "Input notes project"},
+			{"Save notes project", "Save notes project"},
+			{"Clear notes project", "Clear notes project"},
 		},
 	}
 end

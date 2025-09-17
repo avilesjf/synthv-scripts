@@ -51,6 +51,7 @@ function getArrayLanguageStrings()
 			{"Fixed", "Fixed"},
 			{"Version", "Version"},
 			{"author", "author"},
+			{"minEditorVersion", "minEditorVersion"},
 			{"Generate harmonies", "Generate harmonies"},
 			{"Select at least one group!", "Select at least one group!"},
 			{"major", "major"},
@@ -114,7 +115,6 @@ NotesObject = {
 	transpositionRefLabel = 1,		-- {Label = SV:T("1 note"), Position = 8, RefData = {"+7", "+6", "+5",...
 	transpositionRefPosition = 2,	-- Position = 8,
 	transpositionRefData = 3,		-- RefData = {"+7", "+6", "+5",...
-	transpositionDoubleNotesList = {},	-- {"+7", "+6", "+5",...
 	pitchSelected = "",				-- Selected: 0 or 1 or +3, +5 etc.
 	pitchSelectedLabel = SV:T("Selected") .. ": ",
 	pitchSelectedType = "pitch",
@@ -153,6 +153,9 @@ NotesObject = {
 	currentColorPos = 0,
 	currentColor = "",
 	infosToDisplay = "",
+	harmonyList = {},
+	displayMultiplePitchChoice = false,
+	transpositionSelected = 0,
 	logs = {}	
 }
 
@@ -162,7 +165,6 @@ function NotesObject:new()
     setmetatable(notesObject, self)
     self.__index = self
 	
-	self.playBack = SV:getPlayback()
 	self:getHostInformations()
 	self.keyScaleTypeTitleFound  = SV:T("Major")
 	self.trackNameHarmony = SV:T("Track H")
@@ -174,7 +176,7 @@ function NotesObject:new()
 					
 	self.transposition = {
 		{SV:T("1 note"),  8, {}},
-		{SV:T("2 notes"), 2, {"One note", "+1,+3", "+2,+5", "+2,+4", "+3,+5", "+3,+6", "-2,-5", "-3,-5"}},
+		{SV:T("2 notes"), 2, {"+1,+3", "+2,+5", "+2,+4", "+3,+5", "+3,+6", "-2,-5", "-3,-5"}},
 		{SV:T("3 notes"), 1, {"+2,+5,+7", "+1,+3,+5", "+2,+3,+5", "-2,-5,-7"}},
 		{SV:T("Octaves"), 4, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
 		{SV:T("Fixed"),  1, {"Fixed"}}
@@ -186,9 +188,11 @@ function NotesObject:new()
 	self.controls = self:getControls()
 	self:initializeControlsValues()
 	self.pitchSelected = "0"
+	self.harmonyList = self:getHarmonyList()
 	
 	-- SV:T("Selected") .. ": " .. pitchSelected
 	self.controls.transpositionSelected.value:setValue(self.pitchSelectedLabel .. self.pitchSelected)
+	self.transpositionSelected = 0
 	
 	self.applyButtonValue = SV:create("WidgetValue")
 	self.statusTextValue = SV:create("WidgetValue")
@@ -214,8 +218,6 @@ function NotesObject:new()
 	self:addTextPanel(self.infosToDisplay)
 	self:addTextPanel(SV:T("Generate harmonies") .. "...")
 	
-	-- Double notes transposition list data
-	self.transpositionDoubleNotesList = self.transposition[2][self.transpositionRefData]
 	self.defaultKeyFoundMessage = SV:T("Select at least one group!") .. "\r"
 	
 	-- Register arrangement selection callback
@@ -416,6 +418,15 @@ function NotesObject:cloneTrack()
 	return newTrack
 end
 
+-- Get harmony list
+function NotesObject:getHarmonyList()
+	local resultList = {}
+	for iList = 1, #self.transposition do
+		table.insert(resultList, self.transposition[iList][self.transpositionRefLabel])
+	end
+	return resultList
+end
+
 -- Get track list
 function NotesObject:getTracksList()
 	local list = {}
@@ -524,7 +535,6 @@ function NotesObject:duplicateNotes(groupsSelected)
 	
 	self.currentColor = self:getNewColor(self:getCurrentTrack())
 
-	-- transposition[harmonyChoice (1 note, 2 note)][self.transpositionRefData][pitchPosInput = +2,+5, -3,-7 etc. + 1]
 	local isFixed = (pitchTarget == "Fixed")
 	local numGroups = 0
 	
@@ -1062,15 +1072,20 @@ function NotesObject:getControls()
 			defaultValue = 0,
 			paramKey = "harmonyChoice"
 		},
+		multiplePitchChoice = {					-- ComboBox: Multiple notes for Harmony type
+			value = SV:create("WidgetValue"),
+			defaultValue = 0,
+			paramKey = "multiplePitchChoice"
+		},
 		trackChoice = {							-- ComboBox: Destination track
 			value = SV:create("WidgetValue"),
 			defaultValue = 0, 
 			paramKey = "trackChoice"
 		},
-		pitch = {								-- ComboBox: Pitch to select
+		pitch = {								-- Slider: Pitch value
 			value = SV:create("WidgetValue"),
 			defaultValue = 0, 
-			paramKey = "pitch"
+			paramKey = "pitchChoice"
 		},
 		transpositionSelected = {				-- TextArea: transposition selected
 			value = SV:create("WidgetValue"),
@@ -1100,7 +1115,7 @@ function NotesObject:setControlsCallback()
 		control.value:setValueChangeCallback(function()
 				-- self:addLogsInPanel()
 								
-				if control.paramKey == "pitch" then
+				if control.paramKey == "pitchChoice" then
 					self.pitchSelectedType = control.paramKey
 					self.pitchSelected = string.format("%i", self.controls.pitch.value:getValue())
 					
@@ -1110,20 +1125,41 @@ function NotesObject:setControlsCallback()
 					
 					-- Reset harmonyChoice value because user select "pitch" only "one note" for harmonyChoice
 					self.controls.harmonyChoice.value:setValue(0)
+					self.controls.multiplePitchChoice.value:setValue(0)
+					self.displayMultiplePitchChoice = false
+					SV:refreshSidePanel()
 				end
 				
 				if control.paramKey == "harmonyChoice" then
 					self.pitchSelectedType = control.paramKey
-					local transpositionSelected = self.controls.harmonyChoice.value:getValue() + 1
-					if transpositionSelected == 1 then
-						self.pitchSelected = 0
+					self.transpositionSelected = self.controls.harmonyChoice.value:getValue() + 1
+					-- {SV:T("1 note"),  8, {}},
+					if self.transpositionSelected == 1 then
+						self.pitchSelected = string.format("%i", self.controls.pitch.value:getValue())
 					else
-						self.pitchSelected = self.transpositionDoubleNotesList[transpositionSelected]
+						self.pitchSelected = self.transposition[self.transpositionSelected][self.transpositionRefData][1]
 					end
+
+					-- Reset simple transposition value because user select "harmonyChoice" double notes
+					self.controls.pitch.value:setValue(0)
 					
+					if self.pitchSelected == "Fixed" or self.transpositionSelected == 1 then
+						self.displayMultiplePitchChoice = false
+					else
+						-- Add new ComboBox for multiple pitch choice
+						self.displayMultiplePitchChoice = true
+					end
+					self.controls.multiplePitchChoice.value:setValue(0)
+					self.controls.transpositionSelected.value:setValue(self.pitchSelectedLabel .. self.pitchSelected)
+					SV:refreshSidePanel()
+				end
+				
+				if control.paramKey == "multiplePitchChoice" then
+					self.pitchSelectedType = control.paramKey
+					local transpositionSelected = self.controls.multiplePitchChoice.value:getValue() + 1
+					self.pitchSelected = self.transposition[self.transpositionSelected][self.transpositionRefData][transpositionSelected]
 					-- Display SV:T("Selected") .. ": " .. pitchSelected
-					self.controls.transpositionSelected.value:setValue(self.pitchSelectedLabel
-						.. self.pitchSelected)
+					self.controls.transpositionSelected.value:setValue(self.pitchSelectedLabel .. self.pitchSelected)
 					
 					-- Reset simple transposition value because user select "harmonyChoice" double notes
 					self.controls.pitch.value:setValue(0)
@@ -1340,12 +1376,32 @@ function NotesObject:getSectionContainer()
 					type = "ComboBox",
 					text = SV:T("Harmony type"),
 					value = self.controls.harmonyChoice.value,
-					choices = self.transpositionDoubleNotesList,
+					choices = self.harmonyList,
 					width = 1.0
 				}
 			}
 		}
-		
+	
+	
+	local multiplePitchChoice = {}
+	
+	if self.displayMultiplePitchChoice then
+		local transpositionList = self.transposition[self.transpositionSelected][self.transpositionRefData]
+		multiplePitchChoice = 
+			{
+				type = "Container",
+				columns = {
+					{
+						type = "ComboBox",
+						text = SV:T("Harmony type"),
+						value = self.controls.multiplePitchChoice.value,
+						choices = transpositionList,
+						width = 1.0
+					}
+				}
+			}
+	end
+	
 	local pitchChoice = 
 		{
 			type = "Container",
@@ -1372,6 +1428,7 @@ function NotesObject:getSectionContainer()
 			scaleKeyType,
 			pitchChoice,
 			harmonyChoice,
+			multiplePitchChoice,
 			transpositionSelected,
 			trackClone,
 			{

@@ -61,14 +61,28 @@ function isLyricsEffect(timeAxis, note)
 	return result
 end
 
+-- Is lyrics is a text accepted new
+function isTextAcceptedNew(lyrics)
+	local result = true
+	local lyricsException = {"+", "++", "-", "br", ".cl", ".pau", ".sil"}
+	
+	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
+	for i, lyricsExcept in pairs(lyricsException) do
+		if lyrics == lyricsExcept then
+			result = false
+			break
+		end
+	end
+
+	return result
+end
+
 -- Is lyrics is a text accepted
 function isTextAccepted(timeAxis, note)
 	local result = false
 	local lyrics = note:getLyrics()
 	
-	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
-	if lyrics ~= "+" and lyrics ~= "++" and lyrics ~= "-" and lyrics ~= "br" and lyrics ~= "'" 
-		and lyrics ~= ".cl" and lyrics ~= ".pau" and lyrics ~= ".sil"  then
+	if isTextAcceptedNew(lyrics) then
 		result = true
 	end
 	
@@ -98,7 +112,7 @@ function renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 				local lyrics = note:getLyrics()
 				if string.len(lyrics) > 0 then
 				
-					-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+					-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
 					if isTextAccepted(timeAxis, note) then
 						-- Replace following note char '-'
 						if lyrics == "-" then lyrics = ".." end 
@@ -130,7 +144,7 @@ function SecondsToClock(timestamp)
 	  timestamp%60):gsub("%.",",")
 end
 
--- Get first mesure before fist note
+-- Get first mesure before first note
 function getFirstMesure(notePos, timeAxis)
 	local measurePos = 0
 	local measureBlick = 0

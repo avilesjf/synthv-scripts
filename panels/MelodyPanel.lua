@@ -59,7 +59,7 @@ function getArrayLanguageStrings()
 			{"chinese", "chinese"},
 			{"chinese 2", "chinese 2"},
 			{"indian", "indian"},
-			{"hung'arian major", "hungarian major"},
+			{"hungarian major", "hungarian major"},
 			{"Style pop", "Style pop"},
 			{"Style ballad", "Style ballad"},
 			{"Style edm", "Style edm"},
@@ -166,8 +166,6 @@ function NotesObject:new()
     self.__index = self
 	
 	self:getHostInformations()
-	
-	self.playBack = SV:getPlayback()
 	
 	-- Get playhead first measure
 	self.currentSeconds = self:getPlayhead()
@@ -613,7 +611,7 @@ end
 -- Get playhead position in first nearest measure
 function NotesObject:getPlayhead()
 	-- Get playhead first measure
-	self.currentPlayheadSeconds = self.playBack:getPlayhead()
+	self.currentPlayheadSeconds = SV:getPlayback():getPlayhead()
 	local currentBlick = self:getTimeAxis():getBlickFromSeconds(self.currentPlayheadSeconds)
 	-- Get first measure
 	local measureBlick = self:getFirstMesure(currentBlick, 0)
@@ -1142,7 +1140,7 @@ end
 function NotesObject:isTextAccepted(lyrics)
 	local result = true
 	
-	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
+	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
 	for i, lyricsExcept in pairs(self.lyricsException) do
 		if lyrics == lyricsExcept then
 			result = false
@@ -1202,7 +1200,7 @@ function NotesObject:renameOneGroup(maxLengthResult, noteGroup)
 				local lyrics = note:getLyrics()
 				if string.len(lyrics) > 0 then
 				
-					-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+					-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
 					if self:isTextAccepted(note) then
 						-- Replace following note char '-'
 						if lyrics == "-" then lyrics = ".." end 
@@ -1286,16 +1284,16 @@ function NotesObject:generateGroup(root_note, scale_type, style_name, rhythm_nam
 		self:addTextPanel(self:displayErrors())
 		self:show("Error:" .. "\r" .. self:displayErrors())
 	else
-		self.currentSeconds = self.playBack:getPlayhead()
+		self.currentSeconds = SV:getPlayback():getPlayhead()
 		local checkGroup = self:getGroupRef(self:getCurrentTrack(), self.currentSeconds)
 		if checkGroup ~= nil then
 			self.currentSeconds = self:getNextEmptyPosition(self:getCurrentTrack(), checkGroup:getEnd())
-			self.playBack:seek(self.currentSeconds)
+			SV:getPlayback():seek(self.currentSeconds)
 		else
 			local newPositionBlicks = self:getTimeAxis():getBlickFromSeconds(self.currentSeconds)
 			measureBlick = self:getFirstMesure(newPositionBlicks, 0)
 			self.currentSeconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
-			self.playBack:seek(self.currentSeconds)
+			SV:getPlayback():seek(self.currentSeconds)
 		end
 
 		newGrouptRef = self:createGroup(self.currentSeconds, self:getCurrentTrack(), melody)
@@ -1303,7 +1301,7 @@ function NotesObject:generateGroup(root_note, scale_type, style_name, rhythm_nam
 		if newGrouptRef ~= nil then
 			self:displayMessage(SV:T("Group created!"))
 						
-			self.currentPlayheadSeconds = self.playBack:getPlayhead()
+			self.currentPlayheadSeconds = SV:getPlayback():getPlayhead()
 			-- Update currentSeconds to next position
 			self.beginGroup = newGrouptRef:getOnset()
 			self.endGroup = newGrouptRef:getEnd()
@@ -1312,14 +1310,14 @@ function NotesObject:generateGroup(root_note, scale_type, style_name, rhythm_nam
 			if self.controls.autoPlay.value:getValue() then
 				local startPosSeconds = self:getTimeAxis():getSecondsFromBlick(self.beginGroup)
 				local endPosSeconds = self:getTimeAxis():getSecondsFromBlick(self.endGroup)
-				self.playBack:seek(startPosSeconds)
+				SV:getPlayback():seek(startPosSeconds)
 				if self.controls.loopAutoPlay.value:getValue()then
-					self.playBack:loop(startPosSeconds, endPosSeconds)
+					SV:getPlayback():loop(startPosSeconds, endPosSeconds)
 				end
-				self.playBack:play()
+				SV:getPlayback():play()
 			else
-				if self.playBack:getStatus() == "playing" or self.playBack:getStatus() == "looping" then
-					self.playBack:stop()
+				if SV:getPlayback():getStatus() == "playing" or SV:getPlayback():getStatus() == "looping" then
+					SV:getPlayback():stop()
 				end
 			end
 		else

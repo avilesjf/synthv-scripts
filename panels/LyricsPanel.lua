@@ -71,7 +71,7 @@ NotesObject = {
 	statusTextValue = nil,   		-- text panel
 	lyricsTextValue = nil,			-- lyrics text panel
 	lyricsTrack = "",
-	lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"},
+	lyricsException = {},
 	infosToDisplay = "",
 	logs = {}
 }
@@ -84,10 +84,7 @@ function NotesObject:new()
 	
 	self:getHostInformations()
 	
-	self.playBack = SV:getPlayback()
-	
-	self.controls = self:getControls()
-	
+	self.controls = self:getControls()	
 	self:initializeControlsValues()
 	self:setControlsCallback()
 	
@@ -106,6 +103,8 @@ function NotesObject:new()
 	self:setButtonClearControlCallback()
 	self:setButtonApplyControlCallback()
 	self:setButtonclipBoardControlCallback()
+	
+	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
 	
 	local infos = getClientInfo()
 
@@ -446,7 +445,7 @@ function NotesObject:getTrackLyrics(track, timeAxis, secondDecayInput)
 							firstSecNotePos = timeAxis:getSecondsFromBlick(notePos + TimeOffset)
 						end
 						
-						-- Filter char '+' & '-' & 'br' & ' & .cl & .pau & .sil
+						-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
 						if self:isTextAccepted(lyrics) then
 							sepChar = self:addSpaceChar(previousLyrics)
 							
@@ -545,29 +544,9 @@ function NotesObject:secondsToClock(timestamp)
 	  timestamp%60):gsub("%.",",")
 end
 
--- simple trim string
+-- Simple trim string
 function NotesObject:simpleTrim(s)
   return string.gsub(s, '[ \t]+%f[\r\n%z]', '')
-end
-
--- Get group reference in time position
-function NotesObject:getGroupRef(track, time)
-	local groupRefFound = nil
-	local numGroups = track:getNumGroups()
-	local blicksPos = self:getTimeAxis():getBlickFromSeconds(time)
-	
-	-- All groups except the main group
-	for iGroup = 1, numGroups do
-		local groupRef = track:getGroupReference(iGroup)
-		local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
-		
-		-- Get group on timing pos
-		if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
-			groupRefFound = groupRef
-			break
-		end
-	end						
-	return groupRefFound
 end
 
 -- Display error messages
@@ -641,7 +620,7 @@ end
 function NotesObject:isTextAccepted(lyrics)
 	local result = true
 	
-	-- Filter char '+' & '++' & '-' & 'br' & ' & .cl & .pau & .sil
+	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
 	for i, lyricsExcept in pairs(self.lyricsException) do
 		if lyrics == lyricsExcept then
 			result = false
