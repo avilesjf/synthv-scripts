@@ -49,8 +49,8 @@ function getArrayLanguageStrings()
 			{"VocalModes:", "VocalModes:"},
 			{"Notes:", "Notes:"},
 			{"Library: ", "Library: "},
-			{"Track", "Track"},
 			{"groups:", "groups:"},
+			{"Track", "Track"},
 			{"Tracks: ", "Tracks: "},
 			{"Groups: ", "Groups: "},
 			{"Index: ", "Index: "},
@@ -58,6 +58,8 @@ function getArrayLanguageStrings()
 			{"bpm", "bpm"},
 			{"Voice: ", "Voice: "},
 			{"transposeSemitones: ", "transposeSemitones: "},
+			{"Group: ", "Group: "},
+			{"languageOverride: ", "languageOverride: "},
 			{"Filename: ", "Filename: "},
 			{"No filename", "No filename"},
 			{"Duration: ", "Duration: "},
@@ -93,6 +95,7 @@ NotesObject = {
 	clearButtonValue = nil, 		-- button Clear lyrics
 	applyButtonValue = nil, 		-- button apply get infos
 	clipBoardButtonValue = nil, 	-- button clipBoardButtonValue
+	tracksList = {},
 	projectInfos = "",
 	labelApply = "",
 	resultFiles = ""
@@ -364,7 +367,8 @@ function NotesObject:fileProcess(file)
 	local projectInfos = nil -- File, Libraries, TracksCount, TracksContent
 	local infos = ""
 	local jsonData = self:readAll(file)
-
+	local languageOverride = {}
+	
 	if jsonData ~= nil then
 		if #jsonData > 0 then
 			local meterInfos = ""
@@ -460,13 +464,6 @@ function NotesObject:fileProcess(file)
 						.. ",  " .. tostring(tracksArray[iTrack].mainRef.voice.vocalModeParams)
 						.. "\r"
 					
-					table.insert(tracksContent, {SV:T("Track") .. " " .. iTrack, 
-						{ track = tracksArray[iTrack].name, 
-						  voice = tracksArray[iTrack].mainRef.database.name,
-						  transposeSemitones = tracksArray[iTrack].mainRef.voice.transposeSemitones,
-						  language = tracksArray[iTrack].mainRef.database.language,
-						  version = tracksArray[iTrack].mainRef.database.version}})
-					
 					local groupsArray =	tracksArray[iTrack].groups
 					for iGroup = 1, #groupsArray do
 						groupsInfos = groupsInfos .. groupsArray[iGroup].groupID
@@ -487,8 +484,23 @@ function NotesObject:fileProcess(file)
 								.. ",  " .. groupsArray[iGroup].database.version
 							end
 							groupsInfos = groupsInfos .. "\r"
+							
+							local newLanguageOverride = groupsArray[iGroup].database.languageOverride
+							if #newLanguageOverride > 0 then
+								languageOverride = self:setLanguageOverride(iTrack, iGroup, newLanguageOverride, languageOverride)
+							end
 					end
 					tracksInfos = tracksInfos .. SV:T("groups:") .. "\r".. groupsInfos
+					
+					table.insert(tracksContent, {SV:T("Track") .. " " .. iTrack, 
+						{ track = tracksArray[iTrack].name, 
+						  voice = tracksArray[iTrack].mainRef.database.name,
+						  transposeSemitones = tracksArray[iTrack].mainRef.voice.transposeSemitones,
+						  language = tracksArray[iTrack].mainRef.database.language,
+						  languageOverride = tracksArray[iTrack].mainRef.database.languageOverride,
+						  version = tracksArray[iTrack].mainRef.database.version,
+						  groups = tracksArray[iTrack].groups}})
+						  
 				end
 				
 				infos = infos .. SV:T("Tracks: ") .. tracksInfos .. "\r"
@@ -511,11 +523,30 @@ function NotesObject:fileProcess(file)
 				libraries = libraryArray,
 				tracksCount = #tracksArray,
 				tracksContent = tracksContent,
+				languageOverride = languageOverride,
 				infos = infos
 			}
 		end
 	end
 	return projectInfos
+end
+
+-- Store result
+function NotesObject:setLanguageOverride(iTrack, iGroup, newLanguageOverride, languageOverride)
+	local result = languageOverride
+	local languageFound = false
+	
+	for i, languageOver in ipairs(languageOverride) do
+		if iTrack == languageOver.track and iGroup == languageOver.group 
+			and languageOver.languageOverride == newLanguageOverride then
+			languageFound = true
+			break
+		end
+	end
+	if not languageFound then
+		table.insert(languageOverride, {track = iTrack, group = iGroup, languageOverride = newLanguageOverride})
+	end
+	return result
 end
 
 -- Store result
@@ -559,8 +590,33 @@ function NotesObject:storeResult(projectInfos)
 				result = result .. ", " .. SV:T("transposeSemitones: ") .. projectInfos.tracksContent[iTrack][2].transposeSemitones
 			end
 			result = result .. " (" .. projectInfos.tracksContent[iTrack][2].language
+			if #projectInfos.tracksContent[iTrack][2].languageOverride > 0 then
+				result = result .. ", " .. projectInfos.tracksContent[iTrack][2].languageOverride
+			end
 			result = result .. ", " .. projectInfos.tracksContent[iTrack][2].version .. ")"
 			.. "\r"
+			
+			for i, languageOver in ipairs(projectInfos.languageOverride) do
+				if iTrack == languageOver.track then
+					result = result .."   " .. SV:T("Group: ") .. languageOver.group
+						.. ", " .. SV:T("languageOverride: ") .. languageOver.languageOverride
+						.. "\r"
+				end
+			end
+		end
+		
+		local voiceTitle = SV:T("Voices list:")
+		result = result .. string.rep("-", #voiceTitle) .. "\r"
+		result = result .. voiceTitle .. "\r"
+		
+		for iTrack = 1, #projectInfos.tracksContent do
+			result = result .. projectInfos.tracksContent[iTrack][1] .. ": "
+			result = result .. projectInfos.tracksContent[iTrack][2].track  .. ", "
+			result = result .. SV:T("Voice: ") .. projectInfos.tracksContent[iTrack][2].voice 
+			if #self.tracksList > 0 then
+				result = result .. ", " .. SV:T("Notes: ") .. self.tracksList[iTrack].notes
+			end
+			result = result .. "\r"
 		end
 	end
 
@@ -590,7 +646,8 @@ function NotesObject:getProjectInfos()
 	local durationLabel = SV:T("Duration: ") .. string.format("%0.2f", self.projectDuration) .. SV:T("s")
 	local groupCount = SV:T("Groups: ") .. self:getProject():getNumNoteGroupsInLibrary()
 	local trackCount = SV:T("Tracks: ") .. self:getProject():getNumTracks()
-	local tracksInfos = self:getTracksList()
+	local tracksInfos, tracksList = self:getTracksList()
+	self.tracksList = tracksList
 
 	infos = filename .. "\r"
 		.. durationLabel .. "\r"
@@ -615,6 +672,7 @@ end
 -- Get track list
 function NotesObject:getTracksList()
 	local list = ""
+	local listTable = {}
 
 	local formatCount = "%1d"
 	local iTracks = self.getProject():getNumTracks()
@@ -638,12 +696,14 @@ function NotesObject:getTracksList()
 			formatNotes = formatCount .. " " .. SV:T("note")
 		end
 		
+		table.insert(listTable, {track = iTrack, groups = numGroups, notes = numNotes})
+		
 		list = list .. track:getName() .. ": " 
 			.. string.format(formatGroup, numGroups)
 			.. ", " .. string.format(formatNotes, numNotes)
 			.. "\r"
 	end
-	return list
+	return list, listTable
 end
 
 -- Get section
