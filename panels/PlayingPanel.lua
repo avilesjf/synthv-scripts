@@ -56,28 +56,17 @@ NotesObject = {
 	displayGroupName = false,		-- display group name and time
 	timeDecay = 0.4,				-- timeDecay to display lyrics before time (similar karaoke)
 	errorMessages = {},
-	groupsCount = nil,
-	secondDecay = 0,
-	selection = nil,
-	selectedNotes = nil,
-	groupFromNote = nil,
-	timeBegin = nil,
-	timeEnd = nil,
-	lyrics = "",
-	currentGroupRef = nil,
-	groupNotesMain = nil,
-	parametersFoundCount = 0,
-	parametersRemovedCount = 0,
-	pasteAsyncAction = true,
-	currentCopyPasteAction = 1,
-	lastDialogResponse = "",
-	parametersFound = nil,
-	navigate = nil,
-	playBackStatus = SV:T("stopped"),
+	hostinfo = nil,
+	osType = "",
+	osName = "",
+	hostName = "",
+	languageCode = "", 
+	hostVersion = "",
+	hostVersionNumber = 0,
+	playBackStatus = "",
 	currentSeconds = 0,
 	noteInfo = nil,
 	projectDuration = 0,
-	groups = {},
 	applyButtonValue = nil, 		-- button apply get lyrics
 	keyNames = {},
 	lyricsException = {},
@@ -97,7 +86,6 @@ function NotesObject:new()
 	
 	self:getHostInformations()
 	
-	self.navigate = SV:getMainEditor():getNavigation()
 	self.currentSeconds = 	SV:getPlayback():getPlayhead()
 	self.projectDuration = 	self:getProjectDuration()
 	
@@ -106,9 +94,7 @@ function NotesObject:new()
 	self:initializeControlsValues()
 	self:setControlsCallback()
 	
-	self.clearButtonValue = SV:create("WidgetValue")
 	self.applyButtonValue = SV:create("WidgetValue")
-	self.clipBoardButtonValue = SV:create("WidgetValue")
 	
 	self.statusTextValue = SV:create("WidgetValue")
 	self.statusTextValue:setValue("")

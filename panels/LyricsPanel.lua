@@ -705,7 +705,8 @@ function NotesObject:getSection()
 						value = self.clearButtonValue
 					}
 				}
-			}		}
+			}		
+		}
 	}
 	return section
 end

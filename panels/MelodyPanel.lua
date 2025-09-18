@@ -140,7 +140,7 @@ NotesObject = {
 	melodyLengthChoice = {},
 	octaveUpDownChoice = {},
 	measureBarChoice = {},
-	lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"},
+	lyricsException = {},
 	infosToDisplay = "",
 	logs = {}
 }
@@ -171,6 +171,7 @@ function NotesObject:new()
 	self.currentSeconds = self:getPlayhead()
 	
 	self.keyNames = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
+	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
 	
 	-- Note names with values
 	self.note_names = {
