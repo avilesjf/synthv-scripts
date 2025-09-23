@@ -231,7 +231,8 @@ function NotesObject:registerArrangementSelectionCallback()
 	
 	-- Register selection callback to load parameters when selection changes
 	SV:getArrangement():getSelection():registerSelectionCallback(function(selectionType, isSelected)
-
+		self.groupsSelected = self:getSelectedGroups()
+		
 		if #self.groupsSelected > 0 then
 			local keepUserScale = false
 			local keysInfos = self:getGroupKeyScale(keepUserScale)
