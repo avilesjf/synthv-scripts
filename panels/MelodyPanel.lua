@@ -1101,7 +1101,7 @@ function NotesObject:getObjectProperties(obj, level)
 	
 	for k, v in pairs(obj) do
 		if obj[k] ~= nil then
-			result = result .. "(" .. level .. ") " .. k .. "=" .. tostring(v)
+			result = result .. "(level: " .. level .. ") " .. k .. "=" .. tostring(v) .. "\r"
 			if type(v) == "table" then
 				-- result = result .. ", size:" .. #v .. ": "
 				if level < maxLevel then
@@ -1478,7 +1478,6 @@ function NotesObject:setComboChoices()
 		}
 	}
 
-	
 	self.styleChoice = {
         type = "Container",
         columns = {

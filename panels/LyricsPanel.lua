@@ -54,7 +54,7 @@ NotesObject = {
 	playHeadPosition = nil,
 	displayVersion = true,			-- display version
 	displayAuthor = false,			-- display author
-	displayGroupName = false,		-- display group name and time
+	isGroupNameDisplayed = false,	-- is group name and time displayed
 	errorMessages = {},
 	hostinfo = nil,
 	osType = "",
@@ -117,7 +117,7 @@ function NotesObject:new()
 	end
 	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
 	self:addTextPanel(self.infosToDisplay)
-	
+
     return self
 end
 
@@ -296,7 +296,7 @@ function NotesObject:getLyrics()
 	local result = ""
 	local lyricsToStore = ""
 	
-	self.displayGroupName = self.controls.groupName.value:getValue()
+	self.isGroupNameDisplayed = self.controls.groupName.value:getValue()
 	
 	lyricsToStore = lyricsToStore .. SV:T("Project: ") 
 		.. self:getFileNameOnly(self:getProject():getFileName()) .. "\r"
@@ -362,7 +362,7 @@ function NotesObject:getLyrics()
 				nextGroupLines = ""
 			end
 			
-			if self.displayGroupName then
+			if self.isGroupNameDisplayed then
 				lyricsToStore = lyricsToStore .. nextGroupLines
 					.. "[Group " .. "(" .. string.format("%02d", lyricsTable[iGroups].groupIndex) .. "): "
 					.. self:secondsToClock(lyricsTable[iGroups].timeSecondBegin) .. " - "
@@ -580,7 +580,7 @@ function NotesObject:getObjectProperties(obj, level)
 	
 	for k, v in pairs(obj) do
 		if obj[k] ~= nil then
-			result = result .. "(" .. level .. ") " .. k .. "=" .. tostring(v)
+			result = result .. "(level: " .. level .. ") " .. k .. "=" .. tostring(v) .. "\r"
 			if type(v) == "table" then
 				-- result = result .. ", size:" .. #v .. ": "
 				if level < maxLevel then

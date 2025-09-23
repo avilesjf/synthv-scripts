@@ -231,9 +231,7 @@ function NotesObject:registerArrangementSelectionCallback()
 	
 	-- Register selection callback to load parameters when selection changes
 	SV:getArrangement():getSelection():registerSelectionCallback(function(selectionType, isSelected)
-		
-		self.groupsSelected = self:getSelectedGroups()
-		
+
 		if #self.groupsSelected > 0 then
 			local keepUserScale = false
 			local keysInfos = self:getGroupKeyScale(keepUserScale)
@@ -317,7 +315,7 @@ function NotesObject:getObjectProperties(obj, level)
 	
 	for k, v in pairs(obj) do
 		if obj[k] ~= nil then
-			result = result .. "(" .. level .. ") " .. k .. "=" .. tostring(v) .. "\r"
+			result = result .. "(level: " .. level .. ") " .. k .. "=" .. tostring(v) .. "\r"
 			if type(v) == "table" then
 				-- result = result .. ", size:" .. #v .. ": "
 				if level < maxLevel then
