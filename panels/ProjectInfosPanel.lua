@@ -11,6 +11,8 @@ Track, voice, group count, note count.
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2b1
 
+Update: Add voice name for each group
+
 2025 - JF AVILES
 --]]
 
@@ -19,7 +21,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -58,8 +60,11 @@ function getArrayLanguageStrings()
 			{"bpm", "bpm"},
 			{"Voice: ", "Voice: "},
 			{"transposeSemitones: ", "transposeSemitones: "},
-			{"Group: ", "Group: "},
-			{"languageOverride: ", "languageOverride: "},
+			{"Group", "Group"},
+			{"language", "language"},
+			{"languageOverride", "languageOverride"},
+			{"Voices list:", "Voices list:"},
+			{"Notes: ", "Notes: "},
 			{"Filename: ", "Filename: "},
 			{"No filename", "No filename"},
 			{"Duration: ", "Duration: "},
@@ -367,6 +372,8 @@ function NotesObject:fileProcess(file)
 	local projectInfos = nil -- File, Libraries, TracksCount, TracksContent
 	local infos = ""
 	local jsonData = self:readAll(file)
+	local groupsInTrack = {}
+	local language = {}
 	local languageOverride = {}
 	
 	if jsonData ~= nil then
@@ -375,6 +382,7 @@ function NotesObject:fileProcess(file)
 			local tempoInfos = ""
 			local libraryInfos = ""
 			local tracksInfos = ""
+			local groupsLibrary = {}
 			infos = infos .. SV:T("File: ") .. file .. "\r"
 			
 			local js = json.parse(jsonData)
@@ -401,7 +409,10 @@ function NotesObject:fileProcess(file)
 				for iLibrary = 1, #libraryArray do
 					libraryInfos = libraryInfos .. libraryArray[iLibrary].name 
 						.. ", " .. libraryArray[iLibrary].uuid .. "\r"
-						
+					
+					table.insert(groupsLibrary, {indice = iLibrary, groupId = libraryArray[iLibrary].uuid, 
+									groupName = libraryArray[iLibrary].name})
+					
 					local parameters = tostring(libraryArray[iLibrary].parameters)
 					-- parameters.pitchDelta.mode
 					-- parameters.pitchDelta.points
@@ -473,22 +484,33 @@ function NotesObject:fileProcess(file)
 							.. ",  " .. tostring(groupsArray[iGroup].pitchOffset)
 							.. ",  " .. tostring(groupsArray[iGroup].isInstrumental)
 							
-							if groupsArray[iGroup].database ~= nil then
-								groupsInfos = groupsInfos 
-								.. ",  " .. groupsArray[iGroup].database.name
-								.. ",  " .. groupsArray[iGroup].database.language
-								.. ",  " .. groupsArray[iGroup].database.phoneset
-								.. ",  " .. groupsArray[iGroup].database.languageOverride
-								.. ",  " .. groupsArray[iGroup].database.phonesetOverride
-								.. ",  " .. groupsArray[iGroup].database.backendType
-								.. ",  " .. groupsArray[iGroup].database.version
-							end
-							groupsInfos = groupsInfos .. "\r"
-							
-							local newLanguageOverride = groupsArray[iGroup].database.languageOverride
-							if #newLanguageOverride > 0 then
-								languageOverride = self:setLanguageOverride(iTrack, iGroup, newLanguageOverride, languageOverride)
-							end
+						if groupsArray[iGroup].database ~= nil then
+							groupsInfos = groupsInfos 
+							.. ",  " .. groupsArray[iGroup].database.name
+							.. ",  " .. groupsArray[iGroup].database.language
+							.. ",  " .. groupsArray[iGroup].database.phoneset
+							.. ",  " .. groupsArray[iGroup].database.languageOverride
+							.. ",  " .. groupsArray[iGroup].database.phonesetOverride
+							.. ",  " .. groupsArray[iGroup].database.backendType
+							.. ",  " .. groupsArray[iGroup].database.version
+						end
+						groupsInfos = groupsInfos .. "\r"
+						
+						voiceName = tracksArray[iTrack].mainRef.database.name
+						local newLanguage = groupsArray[iGroup].database.language  or ""
+						local newLanguageOverride = groupsArray[iGroup].database.languageOverride  or ""
+						local voiceName = tracksArray[iTrack].mainRef.database.name
+						local groupId = groupsArray[iGroup].groupID
+						local groupName = ""
+						
+						-- Get group info from Library node
+						local isGroupFound, groupLibraryFound = self:getGroupFromGroupId(groupsLibrary, groupId)
+						
+						if isGroupFound then
+							groupName = groupLibraryFound.groupName
+						end
+						groupsInTrack = self:setGroupsInTrack(groupsInTrack, iTrack, iGroup, voiceName, groupName, groupId, newLanguage, newLanguageOverride)
+						
 					end
 					tracksInfos = tracksInfos .. SV:T("groups:") .. "\r".. groupsInfos
 					
@@ -523,7 +545,7 @@ function NotesObject:fileProcess(file)
 				libraries = libraryArray,
 				tracksCount = #tracksArray,
 				tracksContent = tracksContent,
-				languageOverride = languageOverride,
+				groupsInTrack = groupsInTrack,
 				infos = infos
 			}
 		end
@@ -531,22 +553,36 @@ function NotesObject:fileProcess(file)
 	return projectInfos
 end
 
--- Store result
-function NotesObject:setLanguageOverride(iTrack, iGroup, newLanguageOverride, languageOverride)
-	local result = languageOverride
-	local languageFound = false
+-- Set language of a group
+function NotesObject:setGroupsInTrack(groupsInTrack, iTrack, iGroup, voiceName, groupName, groupId, language, languageOverride)
+	local result = groupsInTrack
+	local groupFound = false
 	
-	for i, languageOver in ipairs(languageOverride) do
-		if iTrack == languageOver.track and iGroup == languageOver.group 
-			and languageOver.languageOverride == newLanguageOverride then
-			languageFound = true
+	for i, group in ipairs(groupsInTrack) do
+		if iTrack == group.track and iGroup == group.group then
+			groupFound = true
 			break
 		end
 	end
-	if not languageFound then
-		table.insert(languageOverride, {track = iTrack, group = iGroup, languageOverride = newLanguageOverride})
+	if not groupFound then
+		table.insert(groupsInTrack, {track = iTrack, group = iGroup, voiceName = voiceName, groupName = groupName, groupId = groupId,
+		language = language, languageOverride = languageOverride})
 	end
 	return result
+end
+
+-- get group from groupId
+function NotesObject:getGroupFromGroupId(groupLibrary, groupId)
+	local groupFound = {}
+	local found = false
+	for _, group in ipairs(groupLibrary) do
+		if group.groupId == groupId then
+			groupFound = group
+			found = true
+			break
+		end
+	end
+	return found, groupFound
 end
 
 -- Store result
@@ -582,6 +618,7 @@ function NotesObject:storeResult(projectInfos)
 	if #projectInfos.tracksContent > 0 then
 		for iTrack = 1, #projectInfos.tracksContent do
 			local transposeSemitones = projectInfos.tracksContent[iTrack][2].transposeSemitones
+			-- Track
 			result = result .. projectInfos.tracksContent[iTrack][1] .. ": "
 			result = result .. projectInfos.tracksContent[iTrack][2].track  .. ", "
 			result = result .. SV:T("Voice: ") .. projectInfos.tracksContent[iTrack][2].voice
@@ -589,18 +626,32 @@ function NotesObject:storeResult(projectInfos)
 				transposeSemitonesResult = transposeSemitonesResult .. transposeSemitones .. "|"
 				result = result .. ", " .. SV:T("transposeSemitones: ") .. projectInfos.tracksContent[iTrack][2].transposeSemitones
 			end
-			result = result .. " (" .. projectInfos.tracksContent[iTrack][2].language
-			if #projectInfos.tracksContent[iTrack][2].languageOverride > 0 then
-				result = result .. ", " .. projectInfos.tracksContent[iTrack][2].languageOverride
+			local languageTrack = projectInfos.tracksContent[iTrack][2].language
+			result = result .. " (" .. languageTrack
+
+			local languageOverrideTrack = projectInfos.tracksContent[iTrack][2].languageOverride
+			if #languageOverrideTrack > 0 and languageOverrideTrack ~= languageTrack then
+				result = result .. ", " .. languageOverrideTrack
 			end
 			result = result .. ", " .. projectInfos.tracksContent[iTrack][2].version .. ")"
 			.. "\r"
 			
-			for i, languageOver in ipairs(projectInfos.languageOverride) do
-				if iTrack == languageOver.track then
-					result = result .."   " .. SV:T("Group: ") .. languageOver.group
-						.. ", " .. SV:T("languageOverride: ") .. languageOver.languageOverride
-						.. "\r"
+			if #projectInfos.groupsInTrack > 0 then
+				for iGroup, group in ipairs(projectInfos.groupsInTrack) do
+					if iTrack == group.track then
+						local language = group.language
+						local languageOverride = group.languageOverride
+						
+						result = result .."   " .. SV:T("Group") .. " " .. group.group .. " (" .. group.voiceName .. ")"
+						if #language > 0 then
+							result = result .. ": " .. SV:T("language") .. "        " .. ": " .. language
+						end
+						if #languageOverride > 0 then
+							result = result .. ": " .. SV:T("languageOverride") .. ": " .. languageOverride
+						end
+						result = result .. " \"" .. group.groupName .. "\"" 
+						result = result .. "\r"
+					end
 				end
 			end
 		end
@@ -619,6 +670,7 @@ function NotesObject:storeResult(projectInfos)
 			result = result .. "\r"
 		end
 	end
+	-- result = result .. projectInfos.infos  .. "\r"
 
 	self.resultFiles = self.resultFiles .. result
 	
