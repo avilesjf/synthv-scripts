@@ -7,7 +7,9 @@ Synthesizer V Studio Pro Script
 lua file name: LyricsPanel.lua
 
 Notice: Works only with script panel 
-		introduced with Synthesizer V version >= 2.1.2b1
+		introduced with Synthesizer V version >= 2.1.2
+
+Update: Minor updates
 
 2025 - JF AVILES
 --]]
@@ -17,7 +19,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -40,9 +42,10 @@ function getArrayLanguageStrings()
 			{"Lyrics copied: ", "Lyrics copied: "},
 			{"Lyrics are empty!", "Lyrics are empty!"},
 			{"Project: ", "Project: "},
+			{"Display lyrics:", "Display lyrics:"},
 			{"Display lyrics", "Display lyrics"},
 			{"Display group name and time", "Display group name and time"},
-			{"Copy to clipboard", "Copy to clipboard"},
+			{"Clipboard", "Clipboard"},
 			{"Clear lyrics", "Clear lyrics"},
 		},
 	}
@@ -639,6 +642,10 @@ function NotesObject:getSection()
 		title = SV:T(SCRIPT_TITLE),
 		rows = {
 			{
+				type = "Label",
+				text = SV:T("Display lyrics:"),
+			},
+			{
 				type = "Container",
 				columns = {
 					{
@@ -689,23 +696,18 @@ function NotesObject:getSection()
 				columns = {
 					{
 						type = "Button",
-						text = SV:T("Copy to clipboard"),
-						width = 1.0,
+						text = SV:T("Clipboard"),
+						width = 0.5,
 						value = self.clipBoardButtonValue
-					}
-				}
-			},
-			{
-				type = "Container",
-				columns = {
+					},
 					{
 						type = "Button",
 						text = SV:T("Clear lyrics"),
-						width = 1.0,
+						width = 0.5,
 						value = self.clearButtonValue
 					}
 				}
-			}		
+			}
 		}
 	}
 	return section

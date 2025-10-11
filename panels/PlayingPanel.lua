@@ -6,10 +6,12 @@ Synthesizer V Studio Pro Script
  
 lua file name: PlayingPanel.lua
 Show lyrics when lyrics are set to a full phrase (with + or - for subsequent notes)
-Similar karaoke display.
+(Similar karaoke display).
 
 Notice: Works only with script panel 
-		introduced with Synthesizer V version >= 2.1.2b1
+		introduced with Synthesizer V version >= 2.1.2
+
+Update: Minor updates and automatic following displaying notes scrolling inside editor view
 
 2025 - JF AVILES
 --]]
@@ -19,7 +21,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -34,7 +36,6 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"stopped", "stopped"},
 			{"Play", "Play"},
 			{"Version", "Version"},
 			{"author", "author"},
@@ -43,6 +44,7 @@ function getArrayLanguageStrings()
 			{"Time", "Time"},
 			{"Group", "Group"},
 			{"Lyrics display: decay", "Lyrics display: decay"},
+			{"Auto scale views", "Auto scale views"},
 		},
 	}
 end
@@ -53,8 +55,8 @@ NotesObject = {
 	playHeadPosition = nil,
 	displayVersion = true,			-- display version
 	displayAuthor = false,			-- display author
-	displayGroupName = false,		-- display group name and time
 	timeDecay = 0.4,				-- timeDecay to display lyrics before time (similar karaoke)
+	autoZoomScales = true,			-- force zoom scale in views
 	errorMessages = {},
 	hostinfo = nil,
 	osType = "",
@@ -71,7 +73,16 @@ NotesObject = {
 	keyNames = {},
 	lyricsException = {},
 	lyrics = "",
-	labelApply = ""
+	labelApply = "",
+	verticalRange = {},
+	currentNote = 0,
+	previousNote = 0,
+    isPageTurning = false,
+	targetPositionLeft = 0,
+	isPageTurningVertical = false,
+	targetPositionVertical = 0,
+	navigEditor = nil,
+	navigArrangement = nil
 }
 
 -- Constructor method for the NotesObject class
@@ -107,6 +118,7 @@ function NotesObject:new()
 	self:setButtonApplyControlCallback()
 	
 	self.controls.timeDecay.value:setValue(self.timeDecay)
+	self.controls.autoScales.value:setValue(self.autoZoomScales)
 	
 	local infos = getClientInfo()
 
@@ -126,11 +138,6 @@ end
 -- Show message dialog
 function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
-end
-
--- Get selected groups
-function NotesObject:getSelectedGroups()	
-	return SV:getArrangement():getSelection():getSelectedGroups()
 end
 
 -- Get current track
@@ -210,6 +217,11 @@ function NotesObject:getControls()
 			defaultValue = 0, 
 			paramKey = "timeDecay"
 		},
+		autoScales = {								-- Slider: time decay for lyrics display (karaoke)
+			value = SV:create("WidgetValue"),
+			defaultValue = self.autoZoomScales, 
+			paramKey = "autoScales"
+		},
 	}
 	return controls
 end
@@ -232,6 +244,9 @@ function NotesObject:setControlsCallback()
 				if control.paramKey == "timeDecay" then
 					self.timeDecay = self.controls.timeDecay.value:getValue()					
 				end
+				if control.paramKey == "autoScales" then
+					self.autoZoomScales = self.controls.autoScales.value:getValue()
+				end
 			end
 		)
 	end
@@ -242,19 +257,27 @@ function NotesObject:setButtonApplyControlCallback()
 
 	-- Button copy lyrics to clipboard
 	self.applyButtonValue:setValueChangeCallback(function()
+			self.lyrics = ""
+			self.navigEditor = SV:getMainEditor():getNavigation()
+			self.navigArrangement = SV:getArrangement():getNavigation()
+			if self.autoZoomScales then
+				local scaleEditor = self:getScaleEditor()
+				self.navigEditor:setTimeScale(scaleEditor)
+
+				local scaleArrangement = self:getScaleArrangement()
+				self.navigArrangement:setTimeScale(scaleArrangement)
+			end
+			
 			if SV:getPlayback():getStatus() == "stopped" then
 				SV:getPlayback():play()
 				self.labelApply = SV:T("Stop")
-				SV:refreshSidePanel()
-				SV:setTimeout(1, function() self:setGroupNoteInfos() end)
+				SV:setTimeout(5, function() self:setGroupNoteInfos() end)
+				SV:setTimeout(10, function() self:setEditorViewPos() end)
 			else
-				self.labelApply = SV:T("Stop")
-				if SV:getPlayback():getStatus() == "playing" or SV:getPlayback():getStatus() == "looping"  then
-					self.currentSeconds = SV:getPlayback():getPlayhead()
-					SV:getPlayback():stop()
-					SV:getPlayback():seek(self.currentSeconds)
-					self.labelApply = SV:T("Play")
-				end
+				self.currentSeconds = SV:getPlayback():getPlayhead()
+				SV:getPlayback():stop()
+				SV:getPlayback():seek(self.currentSeconds)
+				self.labelApply = SV:T("Play")
 			end
 			SV:refreshSidePanel()
 		end
@@ -344,24 +367,111 @@ end
 function NotesObject:setGroupNoteInfos()
 	self.playBackStatus = SV:getPlayback():getStatus()
 	self.currentSeconds = SV:getPlayback():getPlayhead()
-	
+
 	local newInfo = self:secondsToClock(self.currentSeconds)
 	
 	local infos = self:setGroupNotes(newInfo)
-	self:setlyricsTrackTextPanel(infos)			-- Display infos on panel
+	self:setlyricsTrackTextPanel(infos)	-- Display infos on panel
 	
 	-- Recursive loop 
 	if SV:getPlayback():getStatus() == "playing" or SV:getPlayback():getStatus() == "looping"  then
-		SV:setTimeout(100, function() self:setGroupNoteInfos() end)
+		SV:setTimeout(50, function() self:setGroupNoteInfos() end)		
 	else
-		-- On ending song, restart to begin (automate looping song)
-		if self.currentSeconds > self:getTimeAxis():getSecondsFromBlick(self.projectDuration) then
-			-- Loop playing the song
-			SV:setTimeout(300, function() self:playfromStart() end)
-			-- Recursive loop to display infos again
-			SV:setTimeout(301, function() self:setGroupNoteInfos() end)
+		self.labelApply = SV:T("Play")
+		SV:refreshSidePanel()
+	end
+end
+
+-- Set editor view pos
+function NotesObject:setEditorViewPos()
+    local margin = SV.QUARTER * 5	
+
+	-- Horizontal range
+	local viewRange = self.navigEditor:getTimeViewRange()
+	local position = self:getTimeAxis():getBlickFromSeconds(SV:getPlayback():getPlayhead())
+	
+	local realTimeFollowingDisplayActive = false
+	
+	-- Real time following scroll display
+	if realTimeFollowingDisplayActive then
+		-- Position left=1.5, 1 , right=0.5, Take care of [0:2] range
+		local multiplier = 0.9
+		local newTime = position + ((viewRange[2] - viewRange[1])/2) * multiplier
+
+		self.navigEditor:setTimeRight(position+((viewRange[2]-viewRange[1])/2)*multiplier)
+	else
+		-- Scroll on right margin only
+		if (self.isPageTurning and viewRange[1] < self.targetPositionLeft - margin) then
+			-- self.navigEditor:setTimeLeft(viewRange[1] * 1 + self.targetPositionLeft * 0.004)
+			self.navigEditor:setTimeLeft(viewRange[1] * 1 + self.targetPositionLeft * 0.004)
+		else
+			if (position > viewRange[2] - margin) then
+				self.isPageTurning = true
+				self.targetPositionLeft = viewRange[2]
+			else
+				self.isPageTurning = false
+			end
 		end
 	end
+
+	if self.currentNote > 0 then
+		-- self.verticalRange = self.navigEditor:getValueViewRange()
+		local diffNotes = math.abs(self.targetPositionVertical - self.currentNote)
+		
+		if self.isPageTurningVertical and diffNotes > 5 then
+			if self.targetPositionVertical >= self.currentNote then
+				self.isPageTurningVertical = false
+				self.targetPositionVertical = self.currentNote
+			else
+				self.targetPositionVertical = self.targetPositionVertical + 1
+			end
+		else
+			if (self.targetPositionVertical <= self.currentNote) then
+				self.isPageTurningVertical = true
+				if self.targetPositionVertical == 0 then
+					self.targetPositionVertical = self.currentNote
+				end
+			else
+				self.isPageTurningVertical = false
+				self.targetPositionVertical = self.currentNote
+			end
+		end 
+		self.navigEditor:setValueCenter(self.targetPositionVertical + 2) -- +2 to display phoneme above notes
+	end
+	
+	if SV:getPlayback():getStatus() == "playing" or SV:getPlayback():getStatus() == "looping"  then
+		SV:setTimeout(20, function() self:setEditorViewPos() end)
+	end
+end
+
+-- Get scale Arrangement zoom display
+function NotesObject:getScaleArrangement()
+	local scaleArrangement = self.navigArrangement:getTimePxPerUnit()
+	-- scaleArrangement: 0.0000001417
+	-- max 1417 min 47 0.0000000047
+	-- self:displayMessage("scaleArrangement: " .. string.format("%03.10f", scaleArrangement))
+	
+	-- If view=1417/6= 236 =>  0.0000000236
+	local minZoom = 1417	-- 0.0000001417
+	local factor = 6		-- 6
+	local zoom = scaleArrangement * 100000000	-- 0.0000001417 to 1417
+	zoom = (minZoom / factor) / 10000000000 -- 1417 to 0.0000001417
+	return zoom
+end
+
+-- Get scale editor zoom display
+function NotesObject:getScaleEditor()
+	local scaleEditor = self.navigEditor:getTimePxPerUnit()
+	-- scaleEditor: 0.0000007086
+	-- max 7086 min 142
+	-- self:displayMessage("scaleEditor: " .. string.format("%03.10f", scaleEditor))
+	
+	-- If view=7086/6=1181 =>  0.0000001181
+	local minZoom = 7086	-- 0.0000007086
+	local factor = 6		-- 6
+	local zoom = scaleEditor * 100000000	-- 0.0000001181 to 1181
+	zoom = (minZoom / factor) / 10000000000 -- 1181 to 0.0000001181
+	return zoom
 end
 
 -- Play again from at beginning song
@@ -395,6 +505,7 @@ end
 function NotesObject:setGroupNotes(infoTime)
 	local infoNote = ""
 	local lyrics = ""
+	local note = nil
 	local groupName = ""	
 	local positionBlick = self:getTimeAxis():getBlickFromSeconds(SV:getPlayback():getPlayhead() + self.timeDecay)
 	local isGroupNotesExists = self:getCurrentTrack():getNumGroups() > 1
@@ -410,9 +521,16 @@ function NotesObject:setGroupNotes(infoTime)
 			groupName = self:simpleTrim(group:getName())
 		end
 		
-		infoNote, lyrics = self:getCurrentNoteInfo(group, positionBlick, timeOffset)
+		infoNote, lyrics, note = self:getCurrentNoteInfo(group, positionBlick, timeOffset)		
 		infoNote = self:simpleTrim(infoNote)
 		lyrics = self:simpleTrim(lyrics)
+		if note ~= nil then
+			-- if new note
+			if self.currentNote ~= note:getPitch() then
+				self.previousNote = self.currentNote
+				self.currentNote = note:getPitch()
+			end
+		end
 
 		if #infoNote > 0 then
 			if #lyrics > 0 then
@@ -436,6 +554,7 @@ function NotesObject:setGroupNotes(infoTime)
 		result = result .. SV:T("Time") .. ": " .. infoTime .. "\r"
 	end
 	result = result .. self.lyrics .. "\r"
+	
 	return result
 end
 
@@ -443,22 +562,23 @@ end
 function NotesObject:getCurrentNoteInfo(group, position, timeOffset)
 	local infoNote = ""
 	local lyrics = ""
+	local note = nil
 	for iNote = 1, group:getNumNotes() do
-		local note = group:getNote(iNote)
+		note = group:getNote(iNote)
 		if note ~= nil then
 			if (timeOffset + note:getOnset()) <= position 
-				and (note:getEnd() + timeOffset) >= position then
-				
-				infoNote, lyrics = self:getNoteContent(note)
+				and (note:getEnd() + timeOffset) >= position then		
+				infoNote, lyrics, note = self:getNoteContent(note)
 				break
 			end
 		end
 	end
-	return infoNote, lyrics
+	return infoNote, lyrics, note
 end
 
 -- Get the note content information
 function NotesObject:getNoteContent(note)
+	
 	local infoNote = "Note: " .. self:getKeyNote(note:getPitch()) .. " (" .. string.format("%03d", note:getPitch()) .. ")"
 	local lyrics = ""
 	if note:getLyrics() ~= nil and string.len(note:getLyrics()) > 0 then
@@ -467,7 +587,7 @@ function NotesObject:getNoteContent(note)
 	if note:getPhonemes() ~= nil and string.len(note:getPhonemes()) > 0 then
 		lyrics = lyrics .. " (" .. note:getPhonemes() .. ")"
 	end						
-	return infoNote, lyrics
+	return infoNote, lyrics, note
 end
 
 -- Get section
@@ -492,6 +612,18 @@ function NotesObject:getSection()
 				}
 			}
 		}
+	
+	local autoScalesChoice = {
+				type = "Container",
+				columns = {
+					{
+					type = "CheckBox",
+					text = SV:T("Auto scale views"),
+					value = self.controls.autoScales.value,
+					width = 1.0
+					}
+				}
+			}
 
 	-- Define CheckBox & button & textarea
 	local section = {
@@ -510,6 +642,7 @@ function NotesObject:getSection()
 					}
 				}
 			},
+			autoScalesChoice,
 			{
 				type = "Container",
 				columns = {

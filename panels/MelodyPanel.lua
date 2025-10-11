@@ -11,9 +11,10 @@ Generates melodies based on scale, style, and rhythm
 Includes variable spacing between notes based on rhythm and style
 
 Update: Added a ComboBox "Note fixed to measure bar 1/16 to 1/64.
-
+		Minor updates
+		
 Notice: Works only with script panel 
-		introduced with Synthesizer V version >= 2.1.2b1
+		introduced with Synthesizer V version >= 2.1.2
 
 2025 - JF AVILES
 --]]
@@ -23,7 +24,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -78,6 +79,7 @@ function getArrayLanguageStrings()
 			{"Note fixed: 1/64", "Note fixed: 1/64"},
 			{"Group created!", "Group created!"},
 			{"Error: Empty group, nothing created!", "Error: Empty group, nothing created!"},
+			{"Select a key scale:", "Select a key scale:"},
 			{"Auto play melody", "Auto play melody"},
 			{"Loop into melody", "Loop into melody"},
 			{"Apply", "Apply"},
@@ -134,11 +136,8 @@ NotesObject = {
 	applyButtonValue = nil, 	-- button apply
 	statusTextValue = nil,   	-- text panel
 	keyScaleChoice = {},
-	scaleChoice = {},
 	styleChoice = {},
-	rhythmChoice = {},
 	melodyLengthChoice = {},
-	octaveUpDownChoice = {},
 	measureBarChoice = {},
 	lyricsException = {},
 	infosToDisplay = "",
@@ -1391,12 +1390,13 @@ function NotesObject:getSection()
 	local section = {
 		title = SV:T(SCRIPT_TITLE),
 		rows = {
+			{
+				type = "Label",
+				text = SV:T("Select a key scale:"),
+			},
 			self.keyScaleChoice,
-			self.scaleChoice,
 			self.styleChoice,
-			self.rhythmChoice,
 			self.melodyLengthChoice,
-			self.octaveUpDownChoice,
 			{
 				type = "Container",
 				columns = {
@@ -1460,24 +1460,18 @@ function NotesObject:setComboChoices()
 				text = SV:T("Select a key scale"),
 				value = self.controls.scaleKey.value,
 				choices = self.keyNames,
-				width = 1.0
-			}
-		}
-	}
-	
-	self.scaleChoice = {
-		type = "Container",
-		columns = {
+				width = 0.3
+			},
 			{
 				type = "ComboBox",
 				text = SV:T("Select a scale type"),
 				value = self.controls.scaleType.value,
 				choices = self.scalesList,
-				width = 1.0
+				width = 0.7
 			}
 		}
 	}
-
+	
 	self.styleChoice = {
         type = "Container",
         columns = {
@@ -1486,22 +1480,18 @@ function NotesObject:setComboChoices()
 				text = SV:T("Select a style"),
 				value = self.controls.style.value,
 				choices = self.stylesList,
-				width = 1.0
-			}
-        }
-    }
-	self.rhythmChoice = {
-        type = "Container",
-        columns = {
+				width = 0.4
+			},
 			{
 				type = "ComboBox",
 				text = SV:T("Select a rhythm"),
 				value = self.controls.rhythm.value,
 				choices = self.rhythmsList,
-				width = 1.0
+				width = 0.6
 			}
         }
     }
+	
 	self.melodyLengthChoice = {
         type = "Container",
         columns = {
@@ -1510,22 +1500,18 @@ function NotesObject:setComboChoices()
 				text = SV:T("Select melody length"),
 				value = self.controls.melodyLength.value,
 				choices = self.melodyLengthList,
-				width = 1.0
-			}
-        }
-    }
-	self.octaveUpDownChoice = {
-        type = "Container",
-        columns = {
+				width = 0.5
+			},
 			{
 				type = "ComboBox",
 				text = SV:T("Select octave (down:-1, base:0, up:+1)"),
 				value = self.controls.octaveUpDown.value,
 				choices = self.octaveUpDownList,
-				width = 1.0
+				width = 0.5
 			}
         }
     }
+
 	self.measureBarChoice = {
         type = "Container",
         columns = {

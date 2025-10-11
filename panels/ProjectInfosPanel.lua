@@ -9,9 +9,10 @@ Show information on the project
 Track, voice, group count, note count.
 
 Notice: Works only with script panel 
-		introduced with Synthesizer V version >= 2.1.2b1
+		introduced with Synthesizer V version >= 2.1.2
 
 Update: Add voice name for each group
+		Minor update
 
 2025 - JF AVILES
 --]]
@@ -21,7 +22,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -74,8 +75,9 @@ function getArrayLanguageStrings()
 			{"notes", "notes"},
 			{"group", "group"},
 			{"note", "note"},
-			{"Copy to clipboard", "Copy to clipboard"},
-			{"Clear infos", "Clear infos"},
+			{"Display project information:", "Display project information:"},
+			{"Clipboard", "Clipboard"},
+			{"Clear", "Clear"},
 		},
 	}
 end
@@ -86,7 +88,6 @@ NotesObject = {
 	playHeadPosition = nil,
 	displayVersion = true,			-- display version
 	displayAuthor = false,			-- display author
-	displayGroupName = false,		-- display group name and time
 	errorMessages = {},
 	hostinfo = nil,
 	osType = "",
@@ -766,6 +767,10 @@ function NotesObject:getSection()
 		title = SV:T(SCRIPT_TITLE),
 		rows = {
 			{
+				type = "Label",
+				text = SV:T("Display project information:"),
+			},
+			{
 				type = "Container",
 				columns = {
 					{
@@ -805,23 +810,18 @@ function NotesObject:getSection()
 				columns = {
 					{
 						type = "Button",
-						text = SV:T("Copy to clipboard"),
-						width = 1.0,
+						text = SV:T("Clipboard"),
+						width = 0.5,
 						value = self.clipBoardButtonValue
-					}
-				}
-			},
-			{
-				type = "Container",
-				columns = {
+					},
 					{
 						type = "Button",
-						text = SV:T("Clear infos"),
-						width = 1.0,
+						text = SV:T("Clear"),
+						width = 0.5,
 						value = self.clearButtonValue
 					}
 				}
-			}		
+			}
 		}
 	}
 	return section

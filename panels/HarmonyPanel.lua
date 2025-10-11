@@ -11,12 +11,12 @@ Add only one track or multiple tracks depending on user selection.
 2/ Display current key scale found in selected group(s)
 3/ Use current track to duplicate new track (to keep track voice)
 4/ Generate AI retakes for each new group harmony
-5/ Panel display introduced with Synthesizer V version 2.1.2b1
+5/ Panel display introduced with Synthesizer V version 2.1.2
 
-Update: minor update
+Update: Minor updates
 
 Notice: Works only with script panel 
-		introduced with Synthesizer V version >= 2.1.2b1
+		introduced with Synthesizer V version >= 2.1.2
 
 2025 - JF AVILES
 --]]
@@ -26,7 +26,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -87,6 +87,7 @@ function getArrayLanguageStrings()
 			{"Get current voice for new tracks", "Get current voice for new tracks"},
 			{"Harmony type", "Harmony type"},
 			{"Transpose (-7 to +7)", "Transpose (-7 to +7)"},
+			{"Select a group:", "Select a group:"},
 			{"Apply", "Apply"},
 		},
 	}
@@ -103,7 +104,6 @@ NotesObject = {
 	hostVersionNumber = 0,	
 	displayVersion = true,	-- display version
 	displayAuthor = false,	-- display author
-	playBack = nil,
 	allScalesActive = false,		-- true to list all scales
     scales = {},
 	errorMessages = {},
@@ -142,7 +142,6 @@ NotesObject = {
 	newDurationRetakes = true,	-- AI retakes
 	newPitchRetakes = true,		-- AI retakes
 	newTimbreRetakes = true,	-- AI retakes
-	DEBUG = false,
 	defaultKeyFoundMessage = "",
 	groupsSelected = {},
 	scalesList = {},
@@ -1295,7 +1294,7 @@ function NotesObject:getSectionContainer()
 
 	self.controls.scaleKeyFound.value:setValue(self.defaultKeyFoundMessage)
 
-	local scaleKeyFound =  
+	local scaleKeyFound =
 		{
 			type = "Container",
 			columns = {
@@ -1309,7 +1308,7 @@ function NotesObject:getSectionContainer()
 			}
 		}
 
-	local scaleKeyChoice = 
+	local scaleKeyChoice =
 		{
 			type = "Container",
 			columns = {
@@ -1318,24 +1317,24 @@ function NotesObject:getSectionContainer()
 					text = SV:T("Select a key scale"),
 					value = self.controls.scaleKeyChoice.value,
 					choices = self.keyScaleChoice,
-					width = 1.0
-				}
-			}
-		}
-
-	local scaleKeyType =   
-		{
-			type = "Container",
-			columns = {
+					width = 0.3
+				},
 				{
 					type = "ComboBox",
 					text = SV:T("Key scale type"),
 					value = self.controls.scaleKeyType.value,
 					choices = self.scalesList,
-					width = 1.0
+					width = 0.7
 				}
 			}
 		}
+
+	-- local scaleKeyType =   
+		-- {
+			-- type = "Container",
+			-- columns = {
+			-- }
+		-- }
 
 	self.controls.isTrackClone.value:setValue(self.isCurrentVoiceTrack)
 	local trackClone = 
@@ -1422,9 +1421,13 @@ function NotesObject:getSectionContainer()
 	local section = {
 		title = SV:T(SCRIPT_TITLE),
 		rows = {
+			{
+				type = "Label",
+				text = SV:T("Select a group:"),
+			},
 			scaleKeyFound,
 			scaleKeyChoice,
-			scaleKeyType,
+			-- scaleKeyType,
 			pitchChoice,
 			harmonyChoice,
 			multiplePitchChoice,

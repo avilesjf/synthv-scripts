@@ -7,7 +7,9 @@ Synthesizer V Studio Pro Script
 lua file name: NotesPanel.lua
 
 Notice: Works only with script panel 
-		introduced with Synthesizer V version >= 2.1.2b1
+		introduced with Synthesizer V version >= 2.1.2
+
+Update: Minor updates
 
 2025 - JF AVILES
 --]]
@@ -17,7 +19,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -44,8 +46,8 @@ function getArrayLanguageStrings()
 			{"Notes created!", "Notes created!"},
 			{"Project notes:", "Project notes:"},
 			{"Load notes project", "Load notes project"},
-			{"Input notes project", "Input notes project"},
-			{"Save notes project", "Save notes project"},
+			{"Input notes", "Input notes"},
+			{"Save notes", "Save notes"},
 			{"Clear notes project", "Clear notes project"},
 		},
 	}
@@ -57,9 +59,7 @@ NotesObject = {
 	playHeadPosition = nil,
 	displayVersion = false,	-- display version
 	displayAuthor = false,	-- display author
-	defaultLyrics = "la",
 	errorMessages = {},
-	currentPlayheadSeconds = 0,
 	hostinfo = nil,
 	osType = "",
 	osName = "",
@@ -68,7 +68,6 @@ NotesObject = {
 	hostVersion = "",
 	hostVersionNumber = 0,
 	debug = false,
-	saved_melodies = {},			-- Storage for generated melodies
 	controls = {},					-- controls panel
 	clearButtonValue = nil, 		-- button Clear notes
 	loadButtonValue = nil, 			-- button load notes
@@ -416,19 +415,14 @@ function NotesObject:getSection()
 				columns = {
 					{
 						type = "Button",
-						text = SV:T("Input notes project"),
-						width = 1.0,
+						text = SV:T("Input notes"),
+						width = 0.5,
 						value = self.showFormButtonValue
-					}
-				}
-			},
-			{
-				type = "Container",
-				columns = {
+					},
 					{
 						type = "Button",
-						text = SV:T("Save notes project"),
-						width = 1.0,
+						text = SV:T("Save notes"),
+						width = 0.5,
 						value = self.applyButtonValue
 					}
 				}
