@@ -103,6 +103,7 @@ NotesObject = {
 	currentSeconds = 0,
 	defaultLyrics = "la",
 	octaveRange = 1,
+	quarterDivider = 4,
 	measureBarVal = 8,		-- Place notes on starting measure bar 1/8
 	minTimeSpacing = 1/8,	-- default minimum time(s) between notes
 	errorMessages = {},
@@ -866,7 +867,15 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
 										rhythm_name, length, octaveUpDown, measureBar)
     length = length or 16  -- Default melody length
 	self.measureBarVal = measureBar -- measure bar default 8 
+	
+	self.currentSeconds = SV:getPlayback():getPlayhead()
+	local BPM = self:getProjectTempo(self.currentSeconds)
+	local BPM_ratio = BPM / 60								-- 120 / 60 = 2
+	self.measureBarVal = BPM_ratio * self.quarterDivider	-- 2 * 4 = 8 bars
 	self.minTimeSpacing = 1/self.measureBarVal
+	-- 1/16 120 = 2x60 120/60 = 2   * 4 = 8
+	-- 1/16 90 = 90/60 = 1.5  = 1.5 * 4 = 6
+	-- 1/16 60 = 60/60 = 1    = 1   * 4 = 4
 	
     -- Validate inputs
     if not self.note_names[root_note] then
@@ -979,6 +988,20 @@ function NotesObject:getNextMeasurePos(current_time, measureBar)
 		newtime =  current_time_Int + (measurePos * (1/measureBar))	-- 2 + (2.6 * (1/8)) = 2.325 next bar
 	end
 	return newtime
+end
+
+-- Get current project tempo
+function NotesObject:getProjectTempo(seconds)
+	local blicks = self:getTimeAxis():getBlickFromSeconds(seconds)
+	local tempoActive = 120
+	local tempoMarks = self:getTimeAxis():getAllTempoMarks()
+	for iTempo = 1, #tempoMarks do
+		local tempoMark = tempoMarks[iTempo]
+		if tempoMark ~= nil and blicks > tempoMark.position then
+			tempoActive = tempoMark.bpm
+		end
+	end
+	return math.floor(tempoActive)
 end
 
 -- List all saved melodies
