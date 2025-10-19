@@ -173,8 +173,11 @@ function renameOneGroup(timeAxis, maxLengthResult, noteGroup)
 end
 
 
-function main()
+function main(notEndProcess)
 
-  RenameGroup()
-  SV:finish()
+	RenameGroup()
+	if notEndProcess == nil then
+		-- End of script
+		SV:finish()
+	end
 end

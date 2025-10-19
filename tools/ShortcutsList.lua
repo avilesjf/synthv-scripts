@@ -984,14 +984,16 @@ function NotesObject:trim(s)
 end
 
 -- Main function
-function main()
+function main(notEndProcess)
 	local notesObject = NotesObject:new()
 	if notesObject.isPathLoaded then
 		notesObject:start()
 	else
 		notesObject:show(SV:T("Error during reading host information!"))
 	end
-	SV:finish()
+	if notEndProcess == nil then
+		SV:finish()
+	end
 end
 
 -- Github: Cluain simple xmlParser

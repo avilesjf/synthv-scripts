@@ -247,7 +247,7 @@ function getNotesProperties(noteGroup)
 end
 
 -- Main process
-function main()
+function main(notEndProcess)
 	-- Get phonemes of the current group of notes
 	local result = getGroup()
 	
@@ -255,5 +255,8 @@ function main()
 	SV:setHostClipboard(result)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), result)
  
-	SV:finish()
+	if notEndProcess == nil then
+		-- End of script
+		SV:finish()
+	end
 end

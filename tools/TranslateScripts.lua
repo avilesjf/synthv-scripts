@@ -59,7 +59,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Tools",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -68,7 +68,8 @@ end
 NotesObject = {
 	project = nil,
 	scriptFile = "Utilities/RandomizeParameters.lua",
-	askForScriptFile = true, -- if true a dialog box is displayed
+	isCommandActived = false,  -- if command prompt is activated (windows only)
+	askForScriptFile = true,  -- if true a dialog box is displayed
 	isMultipleScript = false, -- if true askForScriptFile is not more used
 	isFilterSubfolder = false,
 	filterSubfolder = "Utilities", -- filter for multiple subfolders scan
@@ -422,6 +423,31 @@ function NotesObject:fileProcess(file, languageCode)
 	return languageSourceCode
 end
 
+-- Select file
+function NotesObject:selectFile()
+	local result = ""
+	local osType = SV:getHostInfo().osType
+	local tempClipBoard = SV:getHostClipboard()
+	if osType == 'macOS' then
+		-- TODO
+		local command = [[osascript -e 'tell application "System Events" to activate' \
+			-e 'do shell script "echo " & todo & " | pbcopy"' ]]
+		os.execute(command)
+	elseif osType == 'Windows' then
+		-- local psCommand = [[Add-Type -AssemblyName PresentationFramework;$u8 = [System.Text.Encoding]::UTF8;$out = [Console]::OpenStandardOutput();$ofd = New-Object -TypeName Microsoft.Win32.OpenFileDialog;$ofd.Multiselect = $false;If ($ofd.ShowDialog() -eq $true) {ForEach ($filename in $ofd.FileNames) {$u8filename = $u8.GetBytes("$filename`n");$out.Write($u8filename, 0, $u8filename.Length)}}]]
+		-- local psCommand = [[Add-Type -AssemblyName PresentationFramework;$u8 = [System.Text.Encoding]::UTF8;$ofd = New-Object -TypeName Microsoft.Win32.OpenFileDialog;$ofd.Multiselect = $false;If ($ofd.ShowDialog() -eq $true) {ForEach ($filename in $ofd.FileNames) {$u8filename = $u8filename + $filename}; Set-Clipboard -Value $u8filename}]]
+		-- local psCommand = [[Add-Type -AssemblyName PresentationFramework;$u8 = [System.Text.Encoding]::UTF8;$out = [Console]::OpenStandardOutput();$ofd2 = "ERROR`n".ToCharArray() -as [byte[]];$ofd1 = $false;If ($ofd1 -eq $true) {$out.Write($ofd1, 0, $ofd1.Length)}else{$out.Write($ofd2, 0, $ofd2.Length)}]]
+		local psCommand = [[Add-Type -AssemblyName PresentationFramework;$u8 = [System.Text.Encoding]::UTF8;$ofd2 = 'ERROR';$ofd = New-Object -TypeName Microsoft.Win32.OpenFileDialog;$ofd.Multiselect = $false;If ($ofd.ShowDialog() -eq $true) {Set-Clipboard -Value $ofd.FileNames}else{Set-Clipboard -Value $ofd2}]]
+		local command = 'powershell -WindowStyle Hidden -Command "' .. psCommand .. '"'
+		os.execute(command)
+	else
+		SV:showMessageBox("Error", "Unsupported OS. Please use macOS or Windows.")
+	end
+	result = SV:getHostClipboard()
+	SV:setHostClipboard(tempClipBoard)	
+	return result
+end
+
 -- Start project notes processing
 function NotesObject:start()
 	local result = false
@@ -478,24 +504,34 @@ function NotesObject:start()
 			self:show(SV:T("No file found!"))
 		end
 	else
-		if self.askForScriptFile then
-			local filename = self:getScriptFile()
-			if #filename == 0 then
+		if self.isCommandActived then
+			local filename = self:selectFile()
+			if string.find(filename, "ERROR") ~= nil then
+				self:show(SV:T("No file found!"))
 				return result
+			else
+				self.scriptFile = filename
 			end
-			
-			filename = self:getCleanFilename(filename)
-			self.scriptFile = filename
 		else
-			local filename = self:getFilePath()
-			if #filename == 0 then
-				return result
+			if self.askForScriptFile then
+				local filename = self:getScriptFile()
+				if #filename == 0 then
+					return result
+				end
+				
+				filename = self:getCleanFilename(filename)
+				self.scriptFile = filename
+			else
+				local filename = self:getFilePath()
+				if #filename == 0 then
+					return result
+				end
+				
+				filename = self:getCleanFilename(filename)
+				self.scriptFile = filename
 			end
-			
-			filename = self:getCleanFilename(filename)
-			self.scriptFile = filename
 		end
-
+		
 		-- if process not ok
 		if not self:isFileExists(self.scriptFile) then
 			self:show(self.scriptFile .. " " .. SV:T("not found!"))
@@ -515,10 +551,13 @@ function NotesObject:start()
 end
 
 -- Main process
-function main()
+function main(notEndProcess)
 	local notesObject = NotesObject:new()
+	
 	notesObject:start()
 	
-	-- End of script
-	SV:finish()
+	if notEndProcess == nil then
+		-- End of script
+		SV:finish()
+	end
 end

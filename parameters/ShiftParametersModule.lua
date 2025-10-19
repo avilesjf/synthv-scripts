@@ -408,6 +408,7 @@ function MainObject:addPointsToCurrentNoteLimits(newPoints, addedPoints)
 			firstNotePosition = notePosition:getOnset()
 			lastNotePosition = notePosition:getEnd()
 		end
+		-- Seems to be useless with the option 'Auto insert anchor points' but on moving left or right on next notes this is required
 		self:addEndPoint(lastNotePosition, lastNewPointPosition, groupEnd, groupNewEnd)
 		self:addBeginPoint(firstNotePosition, firstNewPointPosition, groupNewBegin, groupBegin)
 	end

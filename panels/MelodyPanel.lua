@@ -11,7 +11,7 @@ Generates melodies based on scale, style, and rhythm
 Includes variable spacing between notes based on rhythm and style
 
 Update: Added a ComboBox "Note fixed to measure bar 1/16 to 1/64.
-		Minor updates
+		Improve notes position fixed on timed bar measures related to BPM
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -24,7 +24,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -106,6 +106,7 @@ NotesObject = {
 	quarterDivider = 4,
 	measureBarVal = 8,		-- Place notes on starting measure bar 1/8
 	minTimeSpacing = 1/8,	-- default minimum time(s) between notes
+	BPM = 120,				-- Beat per minute
 	errorMessages = {},
 	currentPlayheadSeconds = 0,
 	beginGroup = nil,
@@ -125,6 +126,7 @@ NotesObject = {
 	scales = {},
 	styles = {},	
 	rhythms = {},
+	melodyNotesLength = 0,
 	melodyLength = {},
 	octaveUpDown = {},
 	measureBar = {},
@@ -576,7 +578,7 @@ function NotesObject:getMeasureBarData()
 	local measureBar = {}
 	
 	local measureBarReference = {
-		{name = SV:T("Note fixed: 1/16"), val = 8 },
+		{name = SV:T("Note fixed: 1/16"), val = 8 }, -- 8 in 1s (16 in 2s)
 		{name = SV:T("Note fixed: 1/32"), val = 16 },
 		{name = SV:T("Note fixed: 1/64"), val = 32 }
 	}
@@ -865,17 +867,21 @@ end
 -- Generate a melody with variable spacing
 function NotesObject:generate_melody(root_note, scale_type, style_name, 
 										rhythm_name, length, octaveUpDown, measureBar)
-    length = length or 16  -- Default melody length
-	self.measureBarVal = measureBar -- measure bar default 8 
+    self.melodyNotesLength = length or 16  -- Default melody length
+	self.measureBarVal = measureBar -- measure bar default 8 for 1/16
 	
 	self.currentSeconds = SV:getPlayback():getPlayhead()
-	local BPM = self:getProjectTempo(self.currentSeconds)
-	local BPM_ratio = BPM / 60								-- 120 / 60 = 2
-	self.measureBarVal = BPM_ratio * self.quarterDivider	-- 2 * 4 = 8 bars
-	self.minTimeSpacing = 1/self.measureBarVal
-	-- 1/16 120 = 2x60 120/60 = 2   * 4 = 8
-	-- 1/16 90 = 90/60 = 1.5  = 1.5 * 4 = 6
-	-- 1/16 60 = 60/60 = 1    = 1   * 4 = 4
+	self.BPM = self:getProjectTempo(self.currentSeconds)
+	
+	-- 120/120 = 1, 120/90 = 1.333, 120/60 = 2
+	local BPM_ratio = 120 / self.BPM
+	-- 120 1/8 = 0.125  94 1.27/8=0.160   90 1.333/8=0.1666 60 2/8 = 0.25
+	local measureBarTime = BPM_ratio / self.measureBarVal
+	self.minTimeSpacing = measureBarTime
+	-- self:addLogs("BPM_ratio: " .. BPM_ratio 
+				-- .. ", measureBarVal:" .. self.measureBarVal 
+				-- .. ", BPM: " .. self.BPM
+				-- .. ", measureBarTime: " .. measureBarTime)
 	
     -- Validate inputs
     if not self.note_names[root_note] then
@@ -909,8 +915,132 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
     local current_note_index = math.random(1, #scale_notes)
 	local newCurrent_note_index = 0
 	local result = ""
+	local iCurrentNote = 1
+
+    for i = 1, self.melodyNotesLength do
+		iCurrentNote = i
+        -- Get base duration from rhythm pattern
+        local duration_index = ((i - 1) % #rhythm_pattern) + 1
+        local base_duration = rhythm_pattern[duration_index]
+        
+        -- Calculate actual note duration with style modifications
+        local note_duration = self:calculate_note_duration(base_duration, style_config, rhythm_config)
+        
+		if new_next_time > 0 then
+			current_time = new_next_time
+		end
+		
+        -- Create note event
+        local midi_note = scale_notes[current_note_index]
+		result = result .. "midi_note: " .. midi_note
+		result = result .. ", current_time: " .. current_time
+		result = result .. ", note_duration: " .. note_duration
+		result = result .. "\r"
+        local velocity = 70 + math.random(20)  -- Random velocity 70-90
+		
+        -- Calculate spacing after this note
+        local spacing = self:calculate_spacing(style_config, rhythm_config)
+		-- result = result .. ", spacing: " .. spacing
+		
+        if spacing < self.minTimeSpacing then
+			spacing = 0
+			result = result .. ", new: " .. spacing
+		end
+		
+        -- Update current time (note duration + spacing)
+        local next_time = current_time + note_duration + spacing
+		result = result .. ", next_time: " .. next_time
+		
+		-- Place next note to next measure bar 1/16
+		new_next_time = self:getNextMeasurePos(next_time, measureBarTime)
+		result = result .. ", new_next_time: " .. new_next_time .. "\r"
+		
+		-- Force duration to join notes (without space)
+		if new_next_time > next_time then
+			note_duration = note_duration + new_next_time - next_time
+		end
+		local note_event = NoteEvent:new(midi_note, current_time, note_duration, velocity, self)
+		
+        table.insert(note_events, note_event) -- Add note
 	
-    for i = 1, length do
+		newCurrent_note_index = current_note_index
+        -- Determine next note
+        if math.random() < style_config.repetition_chance then
+            -- Repeat current note (do nothing)
+        elseif math.random() < style_config.jump_probability then
+            -- Make a jump
+            local jump_size = math.random(-5, 5)
+            current_note_index = math.max(1, math.min(#scale_notes, current_note_index + jump_size))
+        else
+            -- Step movement
+            local step = math.random() < 0.5 and -1 or 1
+            current_note_index = math.max(1, math.min(#scale_notes, current_note_index + step))
+        end
+    end
+
+	if self.debug then SV:setHostClipboard(result) end
+	
+    -- Create and save melody
+    local melody = Melody:new(note_events, scale_type, style_name, rhythm_name, 
+								root_note, current_time, self)
+    table.insert(self.saved_melodies, melody)
+    
+    return melody
+end
+
+-- Generate a melody with variable spacing
+function NotesObject:generate_melody1(root_note, scale_type, style_name, 
+										rhythm_name, length, octaveUpDown, measureBar)
+	self.melodyNotesLength = length or 16  -- Default melody length
+	self.measureBarVal = measureBar -- measure bar default 8 for 1/16
+	
+	self.currentSeconds = SV:getPlayback():getPlayhead()
+	self.BPM = self:getProjectTempo(self.currentSeconds)
+	
+	-- 120/120 = 1, 120/90 = 1.333, 120/60 = 2
+	local BPM_ratio = 120 / self.BPM
+	-- 120 1/8 = 0.125  94 1.27/8=0.160   90 1.333/8=0.1666 60 2/8 = 0.25
+	local measureBarTime = BPM_ratio / self.measureBarVal
+	self.minTimeSpacing = measureBarTime
+	-- self:addLogs("BPM_ratio: " .. BPM_ratio 
+				-- .. ", measureBarVal:" .. self.measureBarVal 
+				-- .. ", BPM: " .. self.BPM
+				-- .. ", measureBarTime: " .. measureBarTime)
+
+    -- Validate inputs
+    if not self.note_names[root_note] then
+        self:error("Invalid root note. Use: C, Db, D, Eb, E, F, Gb, G, Ab, A, Bb, B")
+		return nil
+    end
+    if not self:get_scale(scale_type) then
+        self:error("Invalid scale. Use: major, minor, dorian, blues_major, etc...")
+		return nil
+    end
+	
+    if not self:get_style(style_name) then
+        self:error("Invalid style. Use: edm, jazz, pop, ballad")
+		return nil
+    end
+    if not self:get_rhythm(rhythm_name) then
+        self:error("Invalid rhythm. Use: fast, medium, slow")
+		return nil
+    end
+	
+	math.randomseed(os.time())
+	
+    local scale_notes = self:get_scale_notes(root_note, scale_type, octaveUpDown)
+    local style_config = self:get_style(style_name).val
+    local rhythm_config = self:get_rhythm(rhythm_name).val
+    local rhythm_pattern = rhythm_config.durations
+    
+    local note_events = {}
+    local current_time = 0
+    local new_next_time = 0
+    local current_note_index = math.random(1, #scale_notes)
+	local newCurrent_note_index = 0
+	local result = ""
+	
+    for i = 1, self.melodyNotesLength do
         -- Get base duration from rhythm pattern
         local duration_index = ((i - 1) % #rhythm_pattern) + 1
         local base_duration = rhythm_pattern[duration_index]
@@ -979,13 +1109,18 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
 end
 
 -- Get next measure Position
-function NotesObject:getNextMeasurePos(current_time, measureBar)
-	local newtime = current_time						-- 2.2s
-	local current_time_Int = math.floor(current_time)	-- 2
-	local diff = current_time - current_time_Int		-- 2.2 - 2 = 0.2
-	if diff > 0 then
-		local measurePos = math.floor(diff * measureBar) + 1		-- (0.2 * 8) + 1 = 2.6
-		newtime =  current_time_Int + (measurePos * (1/measureBar))	-- 2 + (2.6 * (1/8)) = 2.325 next bar
+function NotesObject:getNextMeasurePos(current_time, timeMeasureBar)
+	local newtime =  current_time
+	local current_time_Int = math.floor(current_time)
+	
+	local new_next_time = current_time_Int
+	local maxTime = self.melodyNotesLength * 10
+	for i = 1, maxTime do
+		if current_time <= new_next_time then
+			newtime = new_next_time
+			break
+		end
+		new_next_time = timeMeasureBar * (i + current_time_Int)
 	end
 	return newtime
 end

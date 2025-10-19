@@ -206,8 +206,8 @@ function NotesObject:getGroupRef(track, time)
 	local numGroups = track:getNumGroups()
 	local blicksPos = self.timeAxis:getBlickFromSeconds(time)
 	
-	-- All groups except the main group
-	for iGroup = 2, numGroups do
+	-- All groups 
+	for iGroup = 1, numGroups do
 		local groupRef = track:getGroupReference(iGroup)
 		if not groupRef:isInstrumental() then
 			local blickSeconds = self:secondsToClock(self.timeAxis:getSecondsFromBlick(groupRef:getOnset()))

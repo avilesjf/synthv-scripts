@@ -427,8 +427,7 @@ function NotesObject:endProcess()
 	SV:finish()
 end
 
-function main()
-
+function main(notEndProcess)
 	local notesObject = NotesObject:new()
 	-- Because of group main: NumGroups = 1
 	if #notesObject.groups < 1 then
@@ -436,6 +435,8 @@ function main()
 	else
 		notesObject:start()
 	end
-	notesObject:endProcess()
+	if notEndProcess == nil then
+		notesObject:endProcess()
+	end
 	
 end

@@ -100,7 +100,8 @@ function NotesObject:getObjectProperties(obj)
 	end
 	return result
 end
--- Get first mesure before fist note
+
+-- Get first mesure before first note
 function NotesObject:getFirstMesure(notePos)
 	local measurePos = 0
 	local measureBlick = 0

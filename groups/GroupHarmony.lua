@@ -281,7 +281,7 @@ function NotesObject:getHarmonyList()
 	return resultList
 end
 
---- Get track list
+-- Get track list
 function NotesObject:getTracksList()
 	local list = {}
 	local formatCount = "%3d"

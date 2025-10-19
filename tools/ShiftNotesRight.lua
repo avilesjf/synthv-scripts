@@ -72,7 +72,7 @@ end
 
 -- Start processing
 function NotesObject:start()	
-	SV:showMessageBox(SV:T(SCRIPT_TITLE), "#self.selectedNotes: " .. #self.selectedNotes )
+	
 	-- Notes selected
 	if #self.selectedNotes > 0 then
 		-- For each selected notes
