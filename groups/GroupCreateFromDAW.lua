@@ -20,6 +20,8 @@ A/ If you want to STOP this script without the required drag&drop DAW (multiple 
 	C- STOP this script by running this script again! 
 		(hidden group used for this feature)
 
+Update: Minor updates
+
 2025 - JF AVILES
 --]]
 
@@ -51,7 +53,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 4,
+		versionNumber = 5,
 		minEditorVersion = 65540
 	}
 end
@@ -175,12 +177,12 @@ end
 
 -- Get current project tempo
 function NotesObject:getProjectTempo(seconds)
-	local blicks = self.timeAxis:getBlickFromSeconds(seconds)
 	local tempoActive = 120
+	local blicks = self.timeAxis:getBlickFromSeconds(seconds)
 	local tempoMarks = self.timeAxis:getAllTempoMarks()
 	for iTempo = 1, #tempoMarks do
 		local tempoMark = tempoMarks[iTempo]
-		if tempoMark ~= nil and blicks > tempoMark.position then
+		if tempoMark ~= nil and blicks >= tempoMark.position then
 			tempoActive = tempoMark.bpm
 		end
 	end
