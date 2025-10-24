@@ -14,6 +14,7 @@ Add only one track or multiple tracks depending on user selection.
 5/ Panel display introduced with Synthesizer V version 2.1.2
 
 Update: Minor updates
+		Add negative harmony option
 
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -26,7 +27,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -109,6 +110,7 @@ NotesObject = {
 	errorMessages = {},
 	keyNames = {},					-- {"C", "Db", "D", ...
 	currentKeyNames = {},			-- {"C", "Db", "D", ...
+	posKeyInScale = 0,
 	keysInScale = {},
 	relativeKeys = {},				-- {{"C","Am"},{"Db","Bbm"},{"D","Bm"},
 	transposition = {},
@@ -132,6 +134,9 @@ NotesObject = {
 	keyScaleTypeValuesFound = {0,2,4,5,7,9,11,12}, -- default major
 	trackNameHarmony = "",
 	isTrackClone = false,
+	isFixed = false,
+	isNegativeHarmony = false,
+	firstNegativeNote = 0,
 	newTrackRef = nil,
 	tracks = {},
 	trackListChoice = {},
@@ -155,6 +160,7 @@ NotesObject = {
 	harmonyList = {},
 	displayMultiplePitchChoice = false,
 	transpositionSelected = 0,
+	result = "",
 	logs = {}	
 }
 
@@ -178,7 +184,8 @@ function NotesObject:new()
 		{SV:T("2 notes"), 2, {"+1,+3", "+2,+5", "+2,+4", "+3,+5", "+3,+6", "-2,-5", "-3,-5"}},
 		{SV:T("3 notes"), 1, {"+2,+5,+7", "+1,+3,+5", "+2,+3,+5", "-2,-5,-7"}},
 		{SV:T("Octaves"), 4, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
-		{SV:T("Fixed"),  1, {"Fixed"}}
+		{SV:T("Fixed"),  1, {"Fixed"}},
+		{SV:T("Negative"),  1, {"Negative"}}
 	}
 	
 	self.colors = self:getColors()
@@ -313,15 +320,17 @@ function NotesObject:getObjectProperties(obj, level)
 	local maxLevel = 3
 	level = level + 1
 	
-	for k, v in pairs(obj) do
-		if obj[k] ~= nil then
-			result = result .. "(level: " .. level .. ") " .. k .. "=" .. tostring(v) .. "\r"
-			if type(v) == "table" then
-				-- result = result .. ", size:" .. #v .. ": "
-				if level < maxLevel then
-					result = result .. self:getObjectProperties(v, level) .. "\r"
-				else
-					result = result .. "\r"
+	if obj ~= nil then
+		for k, v in pairs(obj) do
+			if obj[k] ~= nil then
+				result = result .. "(level: " .. level .. ") " .. k .. "=" .. tostring(v) .. "\r"
+				if type(v) == "table" then
+					-- result = result .. ", size:" .. #v .. ": "
+					if level < maxLevel then
+						result = result .. self:getObjectProperties(v, level) .. "\r"
+					else
+						result = result .. "\r"
+					end
 				end
 			end
 		end
@@ -530,31 +539,32 @@ end
 function NotesObject:duplicateNotes(groupsSelected)
 	local trackChoice = 0
 	local pitchTarget = self.pitchSelected
+	local numGroups = 0
 	
 	self.currentColor = self:getNewColor(self:getCurrentTrack())
 
-	local isFixed = (pitchTarget == "Fixed")
-	local numGroups = 0
+	self.isFixed = (pitchTarget == "Fixed")
+	self.isNegativeHarmony = (pitchTarget == "Negative")
 	
 	local pitchTargets = self:split(pitchTarget, ",")
 	if #pitchTargets > 1 then
 		isMultipleTracks = true -- force for "build your own"
 	end
 	
-	local posKeyInScale = self:getKeyPosInKeynames(self.keyNames, self.keyScaleFound) -1
+	self.posKeyInScale = self:getKeyPosInKeynames(self.keyNames, self.keyScaleFound) -1
 	self.currentKeyNames = self:copyTable(self.keyNames)
 	
 	-- Rotate table content, start note to new key
-	self:shiftTable(self.currentKeyNames, posKeyInScale)
+	self:shiftTable(self.currentKeyNames, self.posKeyInScale)
 	self.keysInScale = self:getKeysInScale(self.currentKeyNames, self.keyScaleFound)
 	
 	if string.len(self.keyScaleFound) == 0 then
 		self:show(SV:T("Error: No scale key found!"))
 		return -1
 	end
-	if posKeyInScale < 0 then
+	if self.posKeyInScale < 0 then
 		self:show(SV:T("Error: Position into scale error!"))
-		return posKeyInScale
+		return self.posKeyInScale
 	end
 	local formatCount = "%3d"
 	local iTracks = self:getProject():getNumTracks()
@@ -567,7 +577,7 @@ function NotesObject:duplicateNotes(groupsSelected)
 	if not isMultipleTracks then
 		local track = nil
 		
-		local newGroupRefs = self:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
+		local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale)
 		-- New track
 		if #self.trackListChoice == trackChoice or trackChoice == 0 then
 			if self.isTrackClone then
@@ -591,8 +601,9 @@ function NotesObject:duplicateNotes(groupsSelected)
 			local track = nil
 			
 			pitchTarget = self:trim(pitchTargets[iTrack])
-			isFixed = (pitchTarget == "Fixed")
-			local newGroupRefs = self:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
+			self.isFixed = (pitchTarget == "Fixed")
+			self.isNegativeHarmony = (pitchTarget == "Negative")
+			local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale)
 			if self.isTrackClone then
 				track = self:cloneTrack()
 			else
@@ -650,9 +661,11 @@ function NotesObject:deleteClonedTrack()
 end
 
 -- Loop into groups to duplicate & transpose notes
-function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
+function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, keyScalePosFound)
 	local newGroupRefs = {}
-
+	self.firstNegativeNote = 0
+	self.result = ""
+	
 	for _, refGroup in pairs(groupsSelected) do
 		-- local groupName = refGroup:getTarget():getName()
 		local noteGroup = refGroup:getTarget()
@@ -672,7 +685,7 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 			for iNote = 1, selectedNotes do
 				local note = newNoteGroup:getNote(iNote)
 				local notePitch = self:getNewPitch(isFixed, firstNotePitch, 
-					note:getPitch(), tonumber(pitchTarget), posKeyInScale)
+					note:getPitch(), tonumber(pitchTarget), keyScalePosFound)
 				note:setPitch(notePitch)
 			end
 			self:getProject():addNoteGroup(newNoteGroup)
@@ -701,7 +714,8 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 			table.insert(newGroupRefs, newGrouptRef)
 		end
 	end
-	
+	SV:setHostClipboard(self.result)
+
 	return newGroupRefs
 end
 
@@ -829,34 +843,107 @@ function NotesObject:addNotes(notes, refGroup)
 end
 
 -- Get new pitch in key scale
-function NotesObject:getNewPitch(isFixed, firstNotePitch, notePitch, pitchTarget, posKeyInScale)
+function NotesObject:getNewPitch(isFixed, firstNotePitch, notePitch, pitchTarget, keyScalePosFound)
 	if isFixed then 
 		-- Fix all notes from the first note found
 		notePitch = firstNotePitch
 	else
-		notePitch = self:getNextKeyInScale(self.keyScaleFound, notePitch, pitchTarget)
+		notePitch = self:getNextKeyInScale(self.keyScaleFound, notePitch, pitchTarget, keyScalePosFound)
 	end
 	return notePitch
 end
 
--- Get next valid key in scale
-function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget)
-	local octave = 0
+-- Calculate scale reflexion axe
+function NotesObject:getScaleAxis(scale)
+    local first = scale[1]
+    local fifth = scale[5] or (first + 7) % 12
+    
+    -- Axe in midway between tonic & fifth
+    local axis = (first + fifth) / 2
+    
+    return axis
+end
 
-	-- Octave -1
-	if pitchTarget < 0 then
-		pitchTarget = 7 + pitchTarget
-		octave = -12
+-- Get scale from tonic
+function NotesObject:getScaleFromTonic(tonicValue, scalePattern)
+    local scale = {}
+    for i, interval in ipairs(scalePattern) do
+        local noteValue = tonicValue + interval
+		noteValue = noteValue % 12
+        scale[i] = noteValue
+    end
+    
+    return scale
+end
+
+-- Get closest note in range
+function NotesObject:getClosestNote(firstNegativeNote, notePitchNew)
+	local diffMain = {}
+	local range = {24, 12, 0, -12, -24}
+	local bFirst = true
+	local minValue = 0
+	local diff = 0
+	local gap = 0
+	
+	-- Create range with gap values
+	for i, val in ipairs(range) do
+		diff = math.abs(firstNegativeNote - (notePitchNew + val))
+		if bFirst then
+			minValue = diff
+			gap = val
+		else
+			minValue = math.min(minValue, diff)
+			if minValue == diff then
+				gap = val
+			end
+		end
+		bFirst = false
 	end
 	
-	local noteKey = self:getKeyFromPitch(notePitch)
-	local posKeyInScaleKey = self:getKeyPosInKeynames(self.keysInScale, noteKey)
-	local posTarget = ((posKeyInScaleKey + pitchTarget - 1) % 7) + 1
-	local nextKey = self.keysInScale[posTarget]
+	return notePitchNew + gap
+end
+
+-- Get next valid key in scale
+function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, keyScalePosFound)
+	local notePitchNew = notePitch 
 	
-	local gapDegree = self:getShiftDegrees(pitchTarget, posKeyInScaleKey)
-	local notePitchNew = notePitch + gapDegree + octave
-	
+	-- NOT negative harmony
+	if not self.isNegativeHarmony then
+		local octave = 0
+		-- Octave -1
+		if pitchTarget < 0 then
+			pitchTarget = 7 + pitchTarget
+			octave = -12
+		end
+		local noteKey = self:getKeyFromPitch(notePitch)
+		local posKeyInScaleKey = self:getKeyPosInKeynames(self.keysInScale, noteKey)
+		local posTarget = ((posKeyInScaleKey + pitchTarget - 1) % 7) + 1
+		local nextKey = self.keysInScale[posTarget]
+		
+		local gapDegree = self:getShiftDegrees(pitchTarget, posKeyInScaleKey)
+		notePitchNew = notePitch + gapDegree + octave
+	else
+		-- Negative Harmony
+		local scaleFromTonic = self:getScaleFromTonic(keyScalePosFound, self.keyScaleTypeValuesFound)
+        
+		-- Calculate reflexion axe
+		local axis = self:getScaleAxis(scaleFromTonic)
+        -- Octave
+        local pitchPos = notePitch % 12
+
+		-- Calculate reflexion around axe
+        local reflected = 2 * axis - pitchPos
+        reflected = math.floor(reflected + 0.5)
+		reflected = reflected % 12
+
+		local notePitchNewTemp = notePitch - (notePitch % 12) + reflected
+		
+		if self.firstNegativeNote == 0 then
+			self.firstNegativeNote = notePitchNewTemp
+		end
+		notePitchNew = self:getClosestNote(self.firstNegativeNote, notePitchNewTemp)
+		
+	end
 	return notePitchNew
 end
 
@@ -1141,7 +1228,8 @@ function NotesObject:setControlsCallback()
 					-- Reset simple transposition value because user select "harmonyChoice" double notes
 					self.controls.pitch.value:setValue(0)
 					
-					if self.pitchSelected == "Fixed" or self.transpositionSelected == 1 then
+					if self.pitchSelected == "Fixed" or self.transpositionSelected == 1 
+						or self.pitchSelected == "Negative" then
 						self.displayMultiplePitchChoice = false
 					else
 						-- Add new ComboBox for multiple pitch choice
@@ -1290,7 +1378,7 @@ function NotesObject:getSectionContainer()
 	-- ComboBox: Harmony type					harmonyChoice
 	-- CheckBox: use current track as source	isTrackClone
 	-- button:   apply							applyButtonValue
-	-- TextArea: status text 						statusTextValue
+	-- TextArea: status text 					statusTextValue
 
 	self.controls.scaleKeyFound.value:setValue(self.defaultKeyFoundMessage)
 
@@ -1329,13 +1417,6 @@ function NotesObject:getSectionContainer()
 			}
 		}
 
-	-- local scaleKeyType =   
-		-- {
-			-- type = "Container",
-			-- columns = {
-			-- }
-		-- }
-
 	self.controls.isTrackClone.value:setValue(self.isCurrentVoiceTrack)
 	local trackClone = 
 		{
@@ -1349,8 +1430,6 @@ function NotesObject:getSectionContainer()
 				}
 			}
 		}
-
-	self.controls.isTrackClone.value:setValue(self.isCurrentVoiceTrack)
 		
 	local transpositionSelected =  
 		{
@@ -1427,7 +1506,6 @@ function NotesObject:getSectionContainer()
 			},
 			scaleKeyFound,
 			scaleKeyChoice,
-			-- scaleKeyType,
 			pitchChoice,
 			harmonyChoice,
 			multiplePitchChoice,
