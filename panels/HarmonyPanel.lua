@@ -7,15 +7,17 @@ lua file name: HarmonyPanel.lua
 Copy selected groups to a new track and transpose all included notes
 Add only one track or multiple tracks depending on user selection.
 
-1/ Transpose all notes in current key scale -7 to +7 (C, D to B)
+1/ Transpose all notes in current key scale -7 to +7 (C, D.. to B)
 2/ Display current key scale found in selected group(s)
 3/ Use current track to duplicate new track (to keep track voice)
 4/ Generate AI retakes for each new group harmony
 5/ Panel display introduced with Synthesizer V version 2.1.2
 
 Update: Minor updates
-		Add negative harmony option
-
+		4 - Add negative harmony option
+		5 - Major update: Prior use user scale choice (ComboBox) than scale found (or not)
+			and update outer scale checkbox is added
+		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
 
@@ -27,7 +29,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 4,
+		versionNumber = 5,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -50,6 +52,7 @@ function getArrayLanguageStrings()
 			{"3 notes", "3 notes"},
 			{"Octaves", "Octaves"},
 			{"Fixed", "Fixed"},
+			{"Negative", "Negative"},
 			{"Version", "Version"},
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
@@ -86,6 +89,7 @@ function getArrayLanguageStrings()
 			{"Select a key scale", "Select a key scale"},
 			{"Key scale type", "Key scale type"},
 			{"Get current voice for new tracks", "Get current voice for new tracks"},
+			{"Update notes outer scale", "Update notes outer scale"},
 			{"Harmony type", "Harmony type"},
 			{"Transpose (-7 to +7)", "Transpose (-7 to +7)"},
 			{"Select a group:", "Select a group:"},
@@ -106,6 +110,7 @@ NotesObject = {
 	displayVersion = true,	-- display version
 	displayAuthor = false,	-- display author
 	allScalesActive = false,		-- true to list all scales
+	isUpdateNotesOuterScale = true, -- Update notes outer scale
     scales = {},
 	errorMessages = {},
 	keyNames = {},					-- {"C", "Db", "D", ...
@@ -125,13 +130,12 @@ NotesObject = {
 	posKeyInScaleForm = 0,
 	SEP_KEYS = "/",
 	keyScaleChoice = {},
-	relativeMinorScalekeysChoice = {},
-	relativeMinorScalekeys = "",
-	keyScaleFound = "",
-	keyScaleTypeFound  = 1,		-- for Major scale
-	keyScaleTypeTitleFound  = "",
-	keyScaleTypeValuesMajor = {0,2,4,5,7,9,11,12}, -- major
-	keyScaleTypeValuesFound = {0,2,4,5,7,9,11,12}, -- default major
+	-- relativeMinorScalekeysChoice = {},
+	-- relativeMinorScalekeys = "",
+	keyScaleSelected = "",
+	keyScaleTypeSelected  = 1,		
+	keyScaleTypeTitleSelected  = "",
+	keyScaleTypeValuesSelected = {0,2,4,5,7,9,11}, -- default major
 	trackNameHarmony = "",
 	isTrackClone = false,
 	isFixed = false,
@@ -160,7 +164,8 @@ NotesObject = {
 	harmonyList = {},
 	displayMultiplePitchChoice = false,
 	transpositionSelected = 0,
-	result = "",
+	debug = false,
+	resultDebug = "",
 	logs = {}	
 }
 
@@ -171,7 +176,7 @@ function NotesObject:new()
     self.__index = self
 	
 	self:getHostInformations()
-	self.keyScaleTypeTitleFound  = SV:T("Major")
+	self.keyScaleTypeSelected  = 0 -- SV:T("Major")
 	self.trackNameHarmony = SV:T("Track H")
 	
 	self.keyNames = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
@@ -191,8 +196,10 @@ function NotesObject:new()
 	self.colors = self:getColors()
 	self.scales = self:getScalesData(self.allScalesActive) -- Init activated scales or all	
 	self.keyScaleChoice = self.keyNames
+	
 	self.controls = self:getControls()
 	self:initializeControlsValues()
+	
 	self.pitchSelected = "0"
 	self.harmonyList = self:getHarmonyList()
 	
@@ -240,8 +247,8 @@ function NotesObject:registerArrangementSelectionCallback()
 		self.groupsSelected = self:getSelectedGroups()
 		
 		if #self.groupsSelected > 0 then
-			local keepUserScale = false
-			local keysInfos = self:getGroupKeyScale(keepUserScale)
+			local keysInfos = self:getGroupKeyScale()
+			
 			if #keysInfos.keyScaleFound <= 0 then
 				-- No comon key scale found
 				self.controls.scaleKeyFound.value:setValue(keysInfos.scaleKeyResult)
@@ -262,24 +269,24 @@ function NotesObject:getScalesData(allscalesActive)
 	
 	local scalesReference = {
 		-- KeyScale type, Intervals
-		{name = SV:T("major"), 			val = {0,2,4,5,7,9,11,12},	active = true},
-		{name = SV:T("natural minor"),	val = {0,2,3,5,7,8,10,12},	active = true},
-		{name = SV:T("blues major"),	val = {0,2,3,4,7,9,12},		active = true},
-		{name = SV:T("dorian"),			val = {0,2,3,5,7,9,10,12},	active = true},
-		{name = SV:T("phrygian"),		val = {0,1,3,5,7,8,10,12},	active = true},
-		{name = SV:T("melodic minor"),	val = {0,2,3,5,7,9,11,12},	active = false},
-		{name = SV:T("harmonic minor"),	val = {0,2,3,5,7,8,11,12},	active = false},
-		{name = SV:T("ionian"),			val = {0,2,4,5,7,9,11,12},	active = false},
-		{name = SV:T("locrian"),		val	= {0,1,3,5,6,8,10,12},	active = false},
-		{name = SV:T("lydian"),			val = {0,2,4,6,7,9,11,12},	active = false},
-		{name = SV:T("mixolydian"),		val	= {0,2,4,5,7,9,10,12},	active = false},
-		{name = SV:T("aeolian"),		val	= {0,2,3,5,7,8,10,12},	active = false},
-		{name = SV:T("blues_minor"),	val	= {0,3,5,6,7,10,12},	active = false},
-		{name = SV:T("japanese"),		val	= {0,1,5,7,8,12}, 		active = false},
-		{name = SV:T("chinese"),		val	= {0,2,4,7,9,12}, 		active = false}, 
-		{name = SV:T("chinese 2"),		val	= {0,4,6,7,11,12}, 		active = false},
-		{name = SV:T("indian"),			val	= {0,1,3,4,7,8,10,12},	active = false},
-		{name = SV:T("hungarian_major"),val = {0,3,4,6,7,9,10,12},	active = false}
+		{name = SV:T("major"), 			val = {0,2,4,5,7,9,11},	active = true},
+		{name = SV:T("natural minor"),	val = {0,2,3,5,7,8,10},	active = true},
+		{name = SV:T("blues major"),	val = {0,2,3,4,7,9},	active = true},
+		{name = SV:T("dorian"),			val = {0,2,3,5,7,9,10},	active = true},
+		{name = SV:T("phrygian"),		val = {0,1,3,5,7,8,10},	active = true},
+		{name = SV:T("melodic minor"),	val = {0,2,3,5,7,9,11},	active = false},
+		{name = SV:T("harmonic minor"),	val = {0,2,3,5,7,8,11},	active = false},
+		{name = SV:T("ionian"),			val = {0,2,4,5,7,9,11},	active = false},
+		{name = SV:T("locrian"),		val	= {0,1,3,5,6,8,10},	active = false},
+		{name = SV:T("lydian"),			val = {0,2,4,6,7,9,11},	active = false},
+		{name = SV:T("mixolydian"),		val	= {0,2,4,5,7,9,10},	active = false},
+		{name = SV:T("aeolian"),		val	= {0,2,3,5,7,8,10},	active = false},
+		{name = SV:T("blues_minor"),	val	= {0,3,5,6,7,10},	active = false},
+		{name = SV:T("japanese"),		val	= {0,1,5,7,8}, 		active = false},
+		{name = SV:T("chinese"),		val	= {0,2,4,7,9}, 		active = false}, 
+		{name = SV:T("chinese 2"),		val	= {0,4,6,7,11}, 	active = false},
+		{name = SV:T("indian"),			val	= {0,1,3,4,7,8,10},	active = false},
+		{name = SV:T("hungarian_major"),val = {0,3,4,6,7,9,10},	active = false}
 	}
 	
 	-- loop to active scales
@@ -358,8 +365,25 @@ function NotesObject:getProject()
 	return SV:getProject()
 end
 
+-- Get scale selected
+function NotesObject:getScaleSelected()
+	
+	self.keyScaleSelected	= self:getkeyScaleChoiceFromPos(self.posKeyInScaleForm)
+	self.posKeyInScale		= self:getKeyPosInKeynames(self.keyNames, self.keyScaleSelected) -- C = 1	
+
+	self.keyScaleTypeSelected		= self.controls.scaleKeyType.value:getValue() + 1
+	self.keyScaleTypeTitleSelected 	= self.scales[self.keyScaleTypeSelected].name
+	self.keyScaleTypeValuesSelected	= self.scales[self.keyScaleTypeSelected].val
+
+	self.currentKeyNames = self:copyTable(self.keyNames)
+	
+	-- Rotate table content, start note to new key
+	self:shiftTable(self.currentKeyNames, self.posKeyInScale - 1) -- C = 1 - 1 = 0
+	self.keysInScale = self:getKeysInScale(self.currentKeyNames)
+end
+
 -- Get group key scale 
-function NotesObject:getGroupKeyScale(keepUserScale)
+function NotesObject:getGroupKeyScale()
 	local scaleKeyResult = "" -- To display key scale found in TextArea
 	local keyScaleFound = ""
 	local keyFoundDisplay = ""
@@ -369,40 +393,28 @@ function NotesObject:getGroupKeyScale(keepUserScale)
 	if self:getCurrentTrack() ~= nil then
 		trackName = self:getCurrentTrack():getName() .. " - "
 	end
-	scaleKeyResult = scaleKeyResult  .. trackName .. SV:T("Groups") .. " (" .. #self.groupsSelected .. ")" .. "\r"
+	scaleKeyResult = scaleKeyResult  .. trackName .. SV:T("Groups") 
+						.. " (" .. #self.groupsSelected .. ")" .. "\r"	
 	
-	local keysInfosNew = self:getKeysInfos() -- in major key scale
-	keyScaleFound = keysInfosNew.keyScaleFound
-	keyFoundDisplay = keysInfosNew.keyFoundDisplay
-	keyScaleFoundTrack = keysInfosNew.keyScaleFoundTrack
+	local keysInfosNew = self:getKeysInfos() -- check key scale in notes
+	
+	keyScaleFound		= keysInfosNew.keyScaleFound
+	keyFoundDisplay		= keysInfosNew.keyFoundDisplay
+	keyScaleFoundTrack	= keysInfosNew.keyScaleFoundTrack
 	
 	if #keyScaleFound > 0 then
-		self.keyScaleFound = self:getkeyScaleChoiceFromPos(self.posKeyInScaleForm)
-		
-		-- Keep user selection
-		if not keepUserScale then
-			self.controls.scaleKeyChoice.value:setValue(self.posKeyInScaleForm)
-			self.controls.scaleKeyType.value:setValue(0) -- major default
-		else
-			self.keyScaleTypeFound  = self.controls.scaleKeyType.value:getValue() + 1
-		end			
-
-		self.keyScaleTypeTitleFound  	= self.scales[self.keyScaleTypeFound].name
-		self.keyScaleTypeValuesFound	= self.scales[self.keyScaleTypeFound].val
-
 		scaleKeyResult = scaleKeyResult  .. keyFoundDisplay .. "\r"
 	else
 		scaleKeyResult = scaleKeyResult  .. SV:T("No common scale key found!") .. "\r"
 	end
-	
 	-- Display key scale found in TextArea
 	self.controls.scaleKeyFound.value:setValue(scaleKeyResult)
 	
 	local keysInfos = { 
-		keyScaleFound = keyScaleFound,
-		keyFoundDisplay = keyFoundDisplay, 
-		keyScaleFoundTrack = keyScaleFoundTrack,
-		scaleKeyResult = scaleKeyResult
+		keyScaleFound		= keyScaleFound,
+		keyFoundDisplay		= keyFoundDisplay, 
+		keyScaleFoundTrack	= keyScaleFoundTrack,
+		scaleKeyResult		= scaleKeyResult
 	}
 
 	return keysInfos
@@ -455,9 +467,9 @@ end
 -- Get scale from title
 function NotesObject:getScaleFromTitle(scaleSearch)
 	local scale = {}
-	for iScale = 1, #self.scales do
-		if scaleSearch == self.scales[iScale][1] then
-			scale = self.scales[iScale]
+	for key, scale in ipairs(self.scales) do
+		if scaleSearch == scale.name then
+			scale = self.scales[key]
 		end
 	end
 	return scale
@@ -474,15 +486,15 @@ function NotesObject:getKeyScaleChoice(keyScaleFound)
 	return choice
 end
 
--- get relative minor scale Keys
-function NotesObject:getRelativeMinorScaleKeys(keyScaleFound)
-	local keys = self:getKeyScaleChoice(keyScaleFound)
-	local relativeMinor = {}
-	for iKey = 1, #keys do
-		table.insert(relativeMinor, self:getKeyMajToMinor(keys[iKey]))
-	end
-	return relativeMinor
-end
+-- -- get relative minor scale Keys
+-- function NotesObject:getRelativeMinorScaleKeys(keyScaleFound)
+	-- local keys = self:getKeyScaleChoice(keyScaleFound)
+	-- local relativeMinor = {}
+	-- for iKey = 1, #keys do
+		-- table.insert(relativeMinor, self:getKeyMajToMinor(keys[iKey]))
+	-- end
+	-- return relativeMinor
+-- end
 
 -- Get keys data infos
 function NotesObject:getKeysInfos()
@@ -492,36 +504,33 @@ function NotesObject:getKeysInfos()
 
 	-- Check groups selected
 	if #self.groupsSelected > 0 then
+		
 		-- Group selected
-		keyScaleFound = self:getScale(self.groupsSelected)
+		keyScaleFound = self:getScaleGroup(self.groupsSelected)
 		
 		-- Track notes to check
 		keyScaleFoundTrack = self:getScaleTrack(self.groupsSelected)
+		
 		keyFoundDisplay = keyScaleFound
 		
 		self.isOnlyOneKeyFound = false
 		self.isTrackKeyFound = false
-		self.posKeyInScaleForm = 0
+
 		if string.find(keyScaleFound, self.SEP_KEYS) == nil then
 			self.isOnlyOneKeyFound = true
-			keyScaleFoundMajor = self:split(keyScaleFound, "(")[1]
-			self.posKeyInScaleForm = self:getKeyPosInKeynames(self.keyNames, keyScaleFoundMajor) -1
 		end
 		self.relativeMinorkeyScaleChoice = {}
 		if keyScaleFound == "" then
 			keyFoundDisplay = SV:T("No scale key found!")
 		else
-			-- self.keyScaleChoice = self:getKeyScaleChoice(keyScaleFound)
-			self.relativeMinorScaleKeysChoice = self:getRelativeMinorScaleKeys(keyScaleFound)
-			self.relativeMinorScalekeys = SV:T("Relative minor keys: ") 
-				.. table.concat(self.relativeMinorScaleKeysChoice, "/")
+			-- self.relativeMinorScaleKeysChoice = self:getRelativeMinorScaleKeys(keyScaleFound)
+			-- self.relativeMinorScalekeys = SV:T("Relative minor keys: ") 
+				-- .. table.concat(self.relativeMinorScaleKeysChoice, "/")
 			
 			if #keyScaleFoundTrack > 0 then
 				if keyScaleFound ~= keyScaleFoundTrack then
 					keyFoundDisplay = keyScaleFound .. "\r" .. SV:T("Track: ") .. keyScaleFoundTrack
-					keyScaleFoundMajor = self:split(keyScaleFoundTrack, "(")[1]
 					self.isTrackKeyFound = true
-					self.posKeyInScaleForm = self:getKeyPosInKeynames(self.keyNames, keyScaleFoundMajor) -1
 				end
 			end
 		end
@@ -538,11 +547,10 @@ end
 -- Duplicate and transpose notes
 function NotesObject:duplicateNotes(groupsSelected)
 	local trackChoice = 0
-	local pitchTarget = self.pitchSelected
 	local numGroups = 0
-	
-	self.currentColor = self:getNewColor(self:getCurrentTrack())
+	local pitchTarget = self.pitchSelected
 
+	self.currentColor = self:getNewColor(self:getCurrentTrack())
 	self.isFixed = (pitchTarget == "Fixed")
 	self.isNegativeHarmony = (pitchTarget == "Negative")
 	
@@ -550,15 +558,8 @@ function NotesObject:duplicateNotes(groupsSelected)
 	if #pitchTargets > 1 then
 		isMultipleTracks = true -- force for "build your own"
 	end
-	
-	self.posKeyInScale = self:getKeyPosInKeynames(self.keyNames, self.keyScaleFound) -1
-	self.currentKeyNames = self:copyTable(self.keyNames)
-	
-	-- Rotate table content, start note to new key
-	self:shiftTable(self.currentKeyNames, self.posKeyInScale)
-	self.keysInScale = self:getKeysInScale(self.currentKeyNames, self.keyScaleFound)
-	
-	if string.len(self.keyScaleFound) == 0 then
+
+	if string.len(self.keyScaleSelected) == 0 then
 		self:show(SV:T("Error: No scale key found!"))
 		return -1
 	end
@@ -566,6 +567,7 @@ function NotesObject:duplicateNotes(groupsSelected)
 		self:show(SV:T("Error: Position into scale error!"))
 		return self.posKeyInScale
 	end
+	
 	local formatCount = "%3d"
 	local iTracks = self:getProject():getNumTracks()
 	
@@ -661,10 +663,9 @@ function NotesObject:deleteClonedTrack()
 end
 
 -- Loop into groups to duplicate & transpose notes
-function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, keyScalePosFound)
+function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
 	local newGroupRefs = {}
 	self.firstNegativeNote = 0
-	self.result = ""
 	
 	for _, refGroup in pairs(groupsSelected) do
 		-- local groupName = refGroup:getTarget():getName()
@@ -684,8 +685,9 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, keyScalePos
 			local firstNotePitch = firstNote:getPitch()
 			for iNote = 1, selectedNotes do
 				local note = newNoteGroup:getNote(iNote)
-				local notePitch = self:getNewPitch(isFixed, firstNotePitch, 
-					note:getPitch(), tonumber(pitchTarget), keyScalePosFound)
+				-- Get new pitch
+				local notePitch = self:getNewPitch(isFixed, firstNotePitch, note:getPitch(), 
+													tonumber(pitchTarget), posKeyInScale)
 				note:setPitch(notePitch)
 			end
 			self:getProject():addNoteGroup(newNoteGroup)
@@ -714,7 +716,6 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, keyScalePos
 			table.insert(newGroupRefs, newGrouptRef)
 		end
 	end
-	SV:setHostClipboard(self.result)
 
 	return newGroupRefs
 end
@@ -749,11 +750,10 @@ end
 
 -- Scale tools
 -- Pitch note is in scale
-function NotesObject:isInScale(pitch, scale)
-	local usekey = self.keyScaleTypeValuesMajor
+function NotesObject:isInScale(pitch, keyScaleTypeValues, posKeyInScale)
 	local inScale = false
-	for key = 1, #usekey do
-		if pitch % 12 == (usekey[key] + scale) % 12 then
+	for key = 1, #keyScaleTypeValues do
+		if pitch % 12 == (keyScaleTypeValues[key] + posKeyInScale) % 12 then
 			inScale = true
 			break
 		end
@@ -762,11 +762,11 @@ function NotesObject:isInScale(pitch, scale)
 end
 
 -- Key note is in scale
-function NotesObject:isKeyInScale(keyPos)
-	local usekey = self.keyScaleTypeValuesMajor
+function NotesObject:isKeyInScale(keyPos, keyScaleTypeValues)
 	local inScale = false
-	for key = 1, #usekey do
-		if usekey[key] == keyPos then
+	-- 0,2,4,5,7,9,11
+	for key = 1, #keyScaleTypeValues do
+		if keyScaleTypeValues[key] == keyPos then
 			inScale = true
 			break
 		end
@@ -774,19 +774,36 @@ function NotesObject:isKeyInScale(keyPos)
 	return inScale
 end
 
--- GetScale in current track
-function NotesObject:getScaleTrack(groupsSelected)
-	return self:getScale(groupsSelected,  "track")
+-- Get next note in scale
+function NotesObject:getNextNoteInScale(keyPos, keyScaleTypeValues)
+	local nextNote = keyScaleTypeValues[1]
+	for key = 1, #keyScaleTypeValues do
+		if keyScaleTypeValues[key] > keyPos then
+			nextNote = keyScaleTypeValues[key]
+			break
+		end
+	end
+	return nextNote
 end
 
--- GetScale
+-- GetScale in current track
+function NotesObject:getScaleTrack(groupsSelected)
+	return self:getScale(groupsSelected, "track")
+end
+
+-- GetScale in current group
+function NotesObject:getScaleGroup(groupsSelected)
+	return self:getScale(groupsSelected, "group")
+end
+
+-- Get Scale
 function NotesObject:getScale(groupsSelected, paramTrack)
 	local groupOrTrackNotes = "None"
 	local scaleFound = ""
 	local notes = {}
 	local sep = ""
 	local trackinfos = ""
-	
+
 	if paramTrack == "track" then
 		-- Use current track
 		groupOrTrackNotes = "Track"
@@ -794,11 +811,13 @@ function NotesObject:getScale(groupsSelected, paramTrack)
 		local numGroups = self:getCurrentTrack():getNumGroups()
 		local refGroupTrack = nil
 		trackinfos = SV:T("Groups") .. " (" .. numGroups .. ")"
+		
 		for grp = 1, numGroups do
 			refGroupTrack = self:getCurrentTrack():getGroupReference(grp)
 			self:addNotes(notes, refGroupTrack)
 		end
 	else
+		-- paramTrack == "group"
 		-- Groups selected
 		if #groupsSelected > 0 then
 			groupOrTrackNotes = SV:T("Groups") .. " (" .. #groupsSelected .. ")"
@@ -810,20 +829,30 @@ function NotesObject:getScale(groupsSelected, paramTrack)
 		end
 	end
 	
+	local oldScaleFoundItem = ""
 	-- loop each scales
 	for key = 1, #self.keyNames do
 		local isInScale = false
-		local posKeyInScale = key - 1
+		local scaleFoundItem = ""
+		for j, keyScaleTypeValues in ipairs(self.scales) do
 		
-		-- Loop on pitch notes
-		isInScale = self:loopNotes(notes, posKeyInScale, self.keyNames, key)
-		if isInScale then
-			-- scale found
-			scaleFound = scaleFound .. sep .. self.keyNames[key] 
-				.. "(" .. self:getKeyMajToMinor(self.keyNames[key]) .. ")"
-			sep = self.SEP_KEYS
+			-- Loop on pitch notes
+			isInScale = self:loopNotes(notes, keyScaleTypeValues.val, key - 1)
+			if isInScale then
+				-- scale found
+				scaleFoundItem = scaleFoundItem .. sep .. self.keyNames[key] .. " " .. keyScaleTypeValues.name
+				-- if keyScaleTypeValues.name == "major" then
+					-- scaleFoundItem = scaleFoundItem .. " (" .. self:getKeyMajToMinor(self.keyNames[key]) .. ")"
+				-- end
+				sep = self.SEP_KEYS
+			end
 		end
-	end		
+		if oldScaleFoundItem ~= scaleFoundItem then
+			scaleFound = scaleFound .. scaleFoundItem
+		end
+		oldScaleFoundItem = scaleFoundItem
+	end
+
 	return scaleFound
 end
 
@@ -843,12 +872,12 @@ function NotesObject:addNotes(notes, refGroup)
 end
 
 -- Get new pitch in key scale
-function NotesObject:getNewPitch(isFixed, firstNotePitch, notePitch, pitchTarget, keyScalePosFound)
+function NotesObject:getNewPitch(isFixed, firstNotePitch, notePitch, pitchTarget, posKeyInScale)
 	if isFixed then 
 		-- Fix all notes from the first note found
 		notePitch = firstNotePitch
 	else
-		notePitch = self:getNextKeyInScale(self.keyScaleFound, notePitch, pitchTarget, keyScalePosFound)
+		notePitch = self:getNextKeyInScale(self.keyScaleSelected, notePitch, pitchTarget, posKeyInScale)
 	end
 	return notePitch
 end
@@ -904,7 +933,7 @@ function NotesObject:getClosestNote(firstNegativeNote, notePitchNew)
 end
 
 -- Get next valid key in scale
-function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, keyScalePosFound)
+function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, posKeyInScale)
 	local notePitchNew = notePitch 
 	
 	-- NOT negative harmony
@@ -915,16 +944,12 @@ function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, ke
 			pitchTarget = 7 + pitchTarget
 			octave = -12
 		end
-		local noteKey = self:getKeyFromPitch(notePitch)
-		local posKeyInScaleKey = self:getKeyPosInKeynames(self.keysInScale, noteKey)
-		local posTarget = ((posKeyInScaleKey + pitchTarget - 1) % 7) + 1
-		local nextKey = self.keysInScale[posTarget]
-		
-		local gapDegree = self:getShiftDegrees(pitchTarget, posKeyInScaleKey)
+			
+		local gapDegree = self:getShiftDegrees(pitchTarget, notePitch)
 		notePitchNew = notePitch + gapDegree + octave
 	else
 		-- Negative Harmony
-		local scaleFromTonic = self:getScaleFromTonic(keyScalePosFound, self.keyScaleTypeValuesFound)
+		local scaleFromTonic = self:getScaleFromTonic(posKeyInScale)
         
 		-- Calculate reflexion axe
 		local axis = self:getScaleAxis(scaleFromTonic)
@@ -948,30 +973,60 @@ function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, ke
 end
 
 -- Get shifted degrees
-function NotesObject:getShiftDegrees(pitchTarget, posKeyInScaleKey)
+function NotesObject:getShiftDegrees(pitchTarget, notePitch)
 	local shift = 0
-	if pitchTarget > 0 then
+	local newNotePitch = notePitch
 
+	-- Update notes outer scales
+	if self.isUpdateNotesOuterScale then
+	
+		-- Is in scale
+		if not self:isInScale(notePitch, self.keyScaleTypeValuesSelected, self.posKeyInScale -1) then
+			local keypos = notePitch % 12 -- Get note
+			-- Get next note in scale
+			local newKeypos = self:getNextNoteInScale(keypos, self.keyScaleTypeValuesSelected)
+			local updateNote = newKeypos - keypos
+			-- Update to pitch
+			newNotePitch = notePitch + updateNote
+			-- shift to scale degree
+			shift = shift + updateNote
+		end
+	end
+	
+	if pitchTarget > 0 then
+		local keyScaleTypeGaps = self:getKeyScaleTypeToGap(self.keyScaleTypeValuesSelected)
+
+		-- shift in scale degree
+		local noteKey = self:getKeyFromPitch(newNotePitch)
+		local posKeyInScaleKey = self:getKeyPosInKeynames(self.keysInScale, noteKey) -- key pos in degrees (1 to 7)
+		
 		for key = 1, pitchTarget do
-			
 			-- Add all gaps to get shifting note
-			local dec = (posKeyInScaleKey + key - 2) % 7 + 1
+			local dec = (posKeyInScaleKey + key - 2) % (#self.keyScaleTypeValuesSelected) + 1
 			-- {0,2,4,5,7,9,11} => {2, 2, 1, 2, 2, 2, 1}
-			--                        {2, 1, 2, 2, 1, 2, 2} "Natural Minor" 
-			local keyScaleTypeGaps = self:getKeyScaleTypeToGap(self.keyScaleTypeValuesFound)
+			--                     {2, 1, 2, 2, 1, 2, 2} "Natural Minor" 
 			shift = shift + keyScaleTypeGaps[dec]
 		end
 	end
+	
 	return shift
 end
 
 -- Get key scale type to gap values
-function NotesObject:getKeyScaleTypeToGap(keyScaleTypeValuesFound)
+function NotesObject:getKeyScaleTypeToGap(keyScaleTypeValues)
 	-- {0,2,4,5,7,9,11} => {2, 2, 1, 2, 2, 2, 1}
 	local keyScaleGaps = {}
-		for iKey = 1, #keyScaleTypeValuesFound -1 do
-			table.insert(keyScaleGaps, keyScaleTypeValuesFound[iKey + 1] - keyScaleTypeValuesFound[iKey])
+	
+	for iKey = 1, #keyScaleTypeValues do
+		local diff = 0
+		if iKey + 1 > #keyScaleTypeValues then
+			diff = 12 - keyScaleTypeValues[iKey]
+		else
+			diff = keyScaleTypeValues[iKey + 1] - keyScaleTypeValues[iKey]
 		end
+		-- 0 + 1 => 2 - 0 = 2
+		table.insert(keyScaleGaps, diff)
+	end
 	return keyScaleGaps
 end
 
@@ -982,13 +1037,13 @@ function NotesObject:getKeyFromPitch(notePitch)
 end
 
 -- loop for each notes
-function NotesObject:loopNotes(notes, posKeyInScale, keyNames, key)
+function NotesObject:loopNotes(notes, keyScaleTypeValues, posKeyInScale)
 	local isInScale = false
 	-- loop all notes
 	for note = 1, #notes do
 		local notePitch = notes[note]
 		if notePitch ~= nil then
-			isInScale = self:isInScale(notePitch, posKeyInScale)
+			isInScale = self:isInScale(notePitch, keyScaleTypeValues, posKeyInScale)
 			if not isInScale then
 				break
 			end
@@ -999,7 +1054,7 @@ end
 
 -- Get key position in Keynames
 function NotesObject:getKeyPosInKeynames(keyNames, keyfound)
-	local posKeyInScale = -1
+	local posKeyInScale = 1
 	-- loop each scales
 	for key = 1, #keyNames do
 		if keyfound == keyNames[key] then
@@ -1022,10 +1077,10 @@ function NotesObject:getkeyScaleChoiceFromPos(scaleKeyPosInput)
 end
 
 -- Get keys in scale
-function NotesObject:getKeysInScale(currentKeyNames, keyScaleFound)
+function NotesObject:getKeysInScale(currentKeyNames)
 	local keysInScale = {}
 	for key = 1, #currentKeyNames do
-		if self:isKeyInScale(key-1) then
+		if self:isKeyInScale(key - 1, self.keyScaleTypeValuesSelected) then
 			table.insert(keysInScale, currentKeyNames[key])
 		end
 	end
@@ -1132,9 +1187,10 @@ function NotesObject:getControls()
 	-- ComboBox: Key scale type					scaleKeyType
 	-- Slider:   Pitch transposition			pitch
 	-- ComboBox: Harmony type					harmonyChoice
+	-- CheckBox: Update notes outer scale		isUpdateNotesOuterScale
 	-- CheckBox: use current track as source	isTrackClone
 	-- button:   apply							applyButtonValue
-	-- TextArea: status text 						statusTextValue
+	-- TextArea: status text 					statusTextValue
 	
 	local controls = {
 		scaleKeyFound = {						-- TextArea: Key found
@@ -1176,6 +1232,11 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = 0, 
 			paramKey = "transpositionSelected"
+		},
+		isUpdateNotesOuterScale = {				-- CheckBox: Update notes outer scale
+			value = SV:create("WidgetValue"),
+			defaultValue = true,
+			paramKey = "isUpdateNotesOuterScale"
 		},
 		isTrackClone = {						-- CheckBox: Use current track as source
 			value = SV:create("WidgetValue"),
@@ -1250,6 +1311,9 @@ function NotesObject:setControlsCallback()
 					-- Reset simple transposition value because user select "harmonyChoice" double notes
 					self.controls.pitch.value:setValue(0)
 				end
+				if control.paramKey == "scaleKeyType" then
+					self.keyScaleTypeSelected = self.controls.scaleKeyType.value:getValue() + 1
+				end
 			end
 		)
 	end
@@ -1261,21 +1325,25 @@ function NotesObject:setButtonApplyControlCallback()
 	-- Button create harmony
 	self.applyButtonValue:setValueChangeCallback(function()
 			self:getProject():newUndoRecord()
+			self.resultDebug = ""
 
 			self.groupsSelected = self:getSelectedGroups()
 			
 			if #self.groupsSelected > 0 then
+				self.posKeyInScaleForm = self.controls.scaleKeyChoice.value:getValue()
+
 				self.isTrackClone = self.controls.isTrackClone.value:getValue()
+				self.isUpdateNotesOuterScale = self.controls.isUpdateNotesOuterScale.value:getValue()
 				
-				local keepUserScale = true -- Keep user key scale selection
-				local keysInfos = self:getGroupKeyScale(keepUserScale)
-				if #keysInfos.keyScaleFound > 0 then		
-					-- Duplicate note groups & create tracks
-					local numGroups = self:duplicateNotes(self.groupsSelected)
-				else
-					-- No key scale found
-					self.controls.scaleKeyFound.value:setValue(keysInfos.scaleKeyResult)
-				end
+				local keysInfos = self:getGroupKeyScale()
+				
+				-- Get user selected scale
+				self:getScaleSelected()
+				
+				-- Duplicate note groups & create tracks
+				local numGroups = self:duplicateNotes(self.groupsSelected)
+				
+				if self.debug then SV:setHostClipboard(self.resultDebug) end
 			else
 				-- No group selected
 				self.controls.scaleKeyFound.value:setValue(self.defaultKeyFoundMessage)
@@ -1297,8 +1365,8 @@ function NotesObject:getComboLists()
 	self.scalesList = {}
 	
 	-- scales list
-	for key, v in ipairs(self.scales) do
-		table.insert(self.scalesList, self.scales[key].name)
+	for key, scale in ipairs(self.scales) do
+		table.insert(self.scalesList, scale.name)
 	end
 end
 
@@ -1361,16 +1429,7 @@ function NotesObject:getSectionContainer()
 	local pitchMinValue = -7
 	local pitchMaxValue = 7
 	local pitchInterval = 1
-	local defaultKeyPos = 0
 
-	if self.isOnlyOneKeyFound then
-		defaultKeyPos = self.posKeyInScaleForm
-	else
-		if self.isTrackKeyFound then
-			defaultKeyPos = self.posKeyInScaleForm
-		end
-	end
-	
 	-- TextArea: Key found 						scaleKeys
 	-- ComboBox: Select a key scale				scaleKeyChoice
 	-- ComboBox: Key scale type					scaleKeyType
@@ -1379,7 +1438,7 @@ function NotesObject:getSectionContainer()
 	-- CheckBox: use current track as source	isTrackClone
 	-- button:   apply							applyButtonValue
 	-- TextArea: status text 					statusTextValue
-
+	
 	self.controls.scaleKeyFound.value:setValue(self.defaultKeyFoundMessage)
 
 	local scaleKeyFound =
@@ -1389,7 +1448,7 @@ function NotesObject:getSectionContainer()
 				{
 					type = "TextArea",
 					value = self.controls.scaleKeyFound.value,
-					height = 60,
+					height = 80,
 					width = 1.0,
 					readOnly = true
 				}
@@ -1426,6 +1485,20 @@ function NotesObject:getSectionContainer()
 				type = "CheckBox",
 				text = SV:T("Get current voice for new tracks"),
 				value = self.controls.isTrackClone.value,
+				width = 1.0
+				}
+			}
+		}
+
+	self.controls.isUpdateNotesOuterScale.value:setValue(self.isUpdateNotesOuterScale)
+	local updateNotesOuter = 
+		{
+			type = "Container",
+			columns = {
+				{
+				type = "CheckBox",
+				text = SV:T("Update notes outer scale"),
+				value = self.controls.isUpdateNotesOuterScale.value,
 				width = 1.0
 				}
 			}
@@ -1510,6 +1583,7 @@ function NotesObject:getSectionContainer()
 			harmonyChoice,
 			multiplePitchChoice,
 			transpositionSelected,
+			updateNotesOuter,
 			trackClone,
 			{
 				type = "Container",

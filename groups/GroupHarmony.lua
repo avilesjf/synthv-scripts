@@ -25,6 +25,8 @@ Major C 1      2      3    4      5        6         7    8
 
 New version 2.0 to use with SynthV >= 2.1.1
 
+Update: 10 - Nothing new in this version but replaced by HarmonyPanel.lua (SynthV >= 2.1.2)
+
 2025 - JF AVILES
 --]]
 
@@ -111,7 +113,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 9,
+		versionNumber = 10,
 		minEditorVersion = 65540
 	}
 end
