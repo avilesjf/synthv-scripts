@@ -113,7 +113,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 10,
+		versionNumber = 11,
 		minEditorVersion = 65540
 	}
 end
@@ -442,16 +442,6 @@ function NotesObject:getKeyScaleChoice(keyScaleFound)
 	return choice
 end
 
--- get relative minor scale Keys
-function NotesObject:getRelativeMinorScaleKeys(keyScaleFound)
-	local keys = self:getKeyScaleChoice(keyScaleFound)
-	local relativeMinor = {}
-	for iKey = 1, #keys do
-		table.insert(relativeMinor, self:getKeyMajToMinor(keys[iKey]))
-	end
-	return relativeMinor
-end
-
 -- Start to transpose notes
 function NotesObject:start()
 	local maxLengthResult = 30
@@ -488,11 +478,6 @@ function NotesObject:start()
 		if keyScaleFound == "" then
 			keyFoundDisplay = SV:T("No common scale key found!")
 		else
-			-- self.keyScaleChoice = self:getKeyScaleChoice(keyScaleFound)
-			self.relativeMinorScaleKeysChoice = self:getRelativeMinorScaleKeys(keyScaleFound)
-			self.relativeMinorScalekeys = SV:T("Relative minor keys: ") 
-				.. table.concat(self.relativeMinorScaleKeysChoice, "/")
-			
 			if #keyScaleFoundTrack > 0 then
 				if keyScaleFound ~= keyScaleFoundTrack then
 					keyFoundDisplay = keyScaleFound .. "\r" .. SV:T("Track: ") .. keyScaleFoundTrack

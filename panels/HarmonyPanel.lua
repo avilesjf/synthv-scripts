@@ -17,6 +17,7 @@ Update: Minor updates
 		4 - Add negative harmony option
 		5 - Major update: Prior use user scale choice (ComboBox) than scale found (or not)
 			and update outer scale checkbox is added
+		6 - Add check box: major scale only detection and detection property in scalesReference
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -29,7 +30,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 5,
+		versionNumber = 6,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -44,6 +45,7 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
+			{"Track scale test", "Track scale test"},
 			{"1 note", "1 note"},
 			{"Selected", "Selected"},
 			{"Major", "Major"},
@@ -81,18 +83,20 @@ function getArrayLanguageStrings()
 			{"groups", "groups"},
 			{"group", "group"},
 			{"No scale key found!", "No scale key found!"},
-			{"Relative minor keys: ", "Relative minor keys: "},
 			{"Track: ", "Track: "},
 			{"Error: No scale key found!", "Error: No scale key found!"},
 			{"Error: Position into scale error!", "Error: Position into scale error!"},
 			{"No group selected!", "No group selected!"},
+			{"Major scales only detection", "Major scales only detection"},
 			{"Select a key scale", "Select a key scale"},
 			{"Key scale type", "Key scale type"},
 			{"Get current voice for new tracks", "Get current voice for new tracks"},
 			{"Update notes outer scale", "Update notes outer scale"},
 			{"Harmony type", "Harmony type"},
 			{"Transpose (-7 to +7)", "Transpose (-7 to +7)"},
-			{"Select a group:", "Select a group:"},
+			{"Generate group", "Generate group"},
+			{"Detection: Select a group", "Detection: Select a group"},
+			{"Action: Select a scale and type", "Action: Select a scale and type"},
 			{"Apply", "Apply"},
 		},
 	}
@@ -109,8 +113,12 @@ NotesObject = {
 	hostVersionNumber = 0,	
 	displayVersion = true,	-- display version
 	displayAuthor = false,	-- display author
-	allScalesActive = false,		-- true to list all scales
-	isUpdateNotesOuterScale = true, -- Update notes outer scale
+	allScalesActive = false,			-- true to list all scales
+	isDetectionMajorScaleOnly = true, 	-- detection limited to major scale
+	isUpdateNotesOuterScale = true, 	-- Update notes outer scale
+	trackTestActive = false,			-- Add track button to generate samples notes in scale
+	trackTest = nil,					-- track to test harmonies
+	trackTestTitle = SV:T("Track scale test"), -- track to test harmonies
     scales = {},
 	errorMessages = {},
 	keyNames = {},					-- {"C", "Db", "D", ...
@@ -155,8 +163,9 @@ NotesObject = {
 	groupsSelected = {},
 	scalesList = {},
 	controls = {}, -- controls panel
-	applyButtonValue = nil,		-- button
-	statusTextValue = nil,		-- text panel
+	applyButtonValue = nil,				-- button
+	generateGroupButtonValue = nil,		-- button
+	statusTextValue = nil,				-- text panel
 	colors = {},
 	currentColorPos = 0,
 	currentColor = "",
@@ -208,12 +217,14 @@ function NotesObject:new()
 	self.transpositionSelected = 0
 	
 	self.applyButtonValue = SV:create("WidgetValue")
+	self.generateGroupButtonValue = SV:create("WidgetValue")
 	self.statusTextValue = SV:create("WidgetValue")
 	self.statusTextValue:setValue("")
 	self.statusTextValue:setEnabled(false)
 	
 	self:setControlsCallback()
 	self:setButtonApplyControlCallback()
+	self:setButtonGenerateGroupControlCallback()
 
 	-- load combox data
 	self:getComboLists()
@@ -269,24 +280,24 @@ function NotesObject:getScalesData(allscalesActive)
 	
 	local scalesReference = {
 		-- KeyScale type, Intervals
-		{name = SV:T("major"), 			val = {0,2,4,5,7,9,11},	active = true},
-		{name = SV:T("natural minor"),	val = {0,2,3,5,7,8,10},	active = true},
-		{name = SV:T("blues major"),	val = {0,2,3,4,7,9},	active = true},
-		{name = SV:T("dorian"),			val = {0,2,3,5,7,9,10},	active = true},
-		{name = SV:T("phrygian"),		val = {0,1,3,5,7,8,10},	active = true},
-		{name = SV:T("melodic minor"),	val = {0,2,3,5,7,9,11},	active = false},
-		{name = SV:T("harmonic minor"),	val = {0,2,3,5,7,8,11},	active = false},
-		{name = SV:T("ionian"),			val = {0,2,4,5,7,9,11},	active = false},
-		{name = SV:T("locrian"),		val	= {0,1,3,5,6,8,10},	active = false},
-		{name = SV:T("lydian"),			val = {0,2,4,6,7,9,11},	active = false},
-		{name = SV:T("mixolydian"),		val	= {0,2,4,5,7,9,10},	active = false},
-		{name = SV:T("aeolian"),		val	= {0,2,3,5,7,8,10},	active = false},
-		{name = SV:T("blues_minor"),	val	= {0,3,5,6,7,10},	active = false},
-		{name = SV:T("japanese"),		val	= {0,1,5,7,8}, 		active = false},
-		{name = SV:T("chinese"),		val	= {0,2,4,7,9}, 		active = false}, 
-		{name = SV:T("chinese 2"),		val	= {0,4,6,7,11}, 	active = false},
-		{name = SV:T("indian"),			val	= {0,1,3,4,7,8,10},	active = false},
-		{name = SV:T("hungarian_major"),val = {0,3,4,6,7,9,10},	active = false}
+		{name = SV:T("major"), 			val = {0,2,4,5,7,9,11},	active = true , detection = true},
+		{name = SV:T("natural minor"),	val = {0,2,3,5,7,8,10},	active = true , detection = true},
+		{name = SV:T("blues major"),	val = {0,2,3,4,7,9},	active = true , detection = true},
+		{name = SV:T("dorian"),			val = {0,2,3,5,7,9,10},	active = true , detection = true},
+		{name = SV:T("phrygian"),		val = {0,1,3,5,7,8,10},	active = true , detection = true},
+		{name = SV:T("melodic minor"),	val = {0,2,3,5,7,9,11},	active = false, detection = false},
+		{name = SV:T("harmonic minor"),	val = {0,2,3,5,7,8,11},	active = false, detection = false},
+		{name = SV:T("ionian"),			val = {0,2,4,5,7,9,11},	active = false, detection = false},
+		{name = SV:T("locrian"),		val	= {0,1,3,5,6,8,10},	active = false, detection = false},
+		{name = SV:T("lydian"),			val = {0,2,4,6,7,9,11},	active = false, detection = false},
+		{name = SV:T("mixolydian"),		val	= {0,2,4,5,7,9,10},	active = false, detection = false},
+		{name = SV:T("aeolian"),		val	= {0,2,3,5,7,8,10},	active = false, detection = false},
+		{name = SV:T("blues_minor"),	val	= {0,3,5,6,7,10},	active = false, detection = false},
+		{name = SV:T("japanese"),		val	= {0,1,5,7,8}, 		active = false, detection = false},
+		{name = SV:T("chinese"),		val	= {0,2,4,7,9}, 		active = false, detection = false}, 
+		{name = SV:T("chinese 2"),		val	= {0,4,6,7,11}, 	active = false, detection = false},
+		{name = SV:T("indian"),			val	= {0,1,3,4,7,8,10},	active = false, detection = false},
+		{name = SV:T("hungarian_major"),val = {0,3,4,6,7,9,10},	active = false, detection = false}
 	}
 	
 	-- loop to active scales
@@ -486,16 +497,6 @@ function NotesObject:getKeyScaleChoice(keyScaleFound)
 	return choice
 end
 
--- -- get relative minor scale Keys
--- function NotesObject:getRelativeMinorScaleKeys(keyScaleFound)
-	-- local keys = self:getKeyScaleChoice(keyScaleFound)
-	-- local relativeMinor = {}
-	-- for iKey = 1, #keys do
-		-- table.insert(relativeMinor, self:getKeyMajToMinor(keys[iKey]))
-	-- end
-	-- return relativeMinor
--- end
-
 -- Get keys data infos
 function NotesObject:getKeysInfos()
 	local keyScaleFound = ""
@@ -519,13 +520,10 @@ function NotesObject:getKeysInfos()
 		if string.find(keyScaleFound, self.SEP_KEYS) == nil then
 			self.isOnlyOneKeyFound = true
 		end
-		self.relativeMinorkeyScaleChoice = {}
+
 		if keyScaleFound == "" then
 			keyFoundDisplay = SV:T("No scale key found!")
 		else
-			-- self.relativeMinorScaleKeysChoice = self:getRelativeMinorScaleKeys(keyScaleFound)
-			-- self.relativeMinorScalekeys = SV:T("Relative minor keys: ") 
-				-- .. table.concat(self.relativeMinorScaleKeysChoice, "/")
 			
 			if #keyScaleFoundTrack > 0 then
 				if keyScaleFound ~= keyScaleFoundTrack then
@@ -542,6 +540,200 @@ function NotesObject:getKeysInfos()
 			keyScaleFoundTrack = keyScaleFoundTrack
 		}
 	return keysInfos
+end
+
+-- Get next measure Position
+function NotesObject:getNextMeasurePos(current_time, timeMeasureBar)
+	local notesLength =  16
+	local newtime =  current_time
+	local current_time_Int = math.floor(current_time)
+	
+	local new_next_time = current_time_Int
+	local maxTime = notesLength * 10
+	for i = 1, maxTime do
+		if current_time <= new_next_time then
+			newtime = new_next_time
+			break
+		end
+		new_next_time = timeMeasureBar * (i + current_time_Int)
+	end
+	return newtime
+end
+
+-- Get current project tempo
+function NotesObject:getProjectTempo(seconds)
+	local tempoActive = 120
+	local blicks = self:getTimeAxis():getBlickFromSeconds(seconds)
+	local tempoMarks = self:getTimeAxis():getAllTempoMarks()
+	for iTempo = 1, #tempoMarks do
+		local tempoMark = tempoMarks[iTempo]
+		if tempoMark ~= nil and blicks >= tempoMark.position then
+			tempoActive = tempoMark.bpm
+		end
+	end
+	return math.floor(tempoActive)
+end
+
+-- Get last group
+function NotesObject:getLastGroup(track)
+	local lastGroup = nil
+	local numGroups = track:getNumGroups()
+	if numGroups > 1 then
+		lastGroup = track:getGroupReference(numGroups)
+	end
+	return lastGroup
+end
+
+-- Generate group for test only
+function NotesObject:findTrackTest(title)
+	local trackFound = nil
+	local numTracks = self:getProject():getNumTracks()
+	
+	for iTrack = 1, numTracks do
+		local track = self:getProject():getTrack(iTrack)
+		if string.find(track:getName(), title) ~= nil then
+			trackFound = track
+			break
+		end
+	end
+	return trackFound
+end
+
+-- Get first mesure after first note (or next position + n)
+function NotesObject:getFirstMesure(notePos, nextPos)
+	local measurePos = 0
+	local measureBlick = 0
+	local measureFirst = self:getTimeAxis():getMeasureAt(notePos) + nextPos
+	local checkExistingMeasureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
+	
+	if checkExistingMeasureMark ~= nil then
+		if checkExistingMeasureMark.position == measureFirst then
+			measurePos = checkExistingMeasureMark.position
+			measureBlick = checkExistingMeasureMark.positionBlick
+		else 
+			self:getTimeAxis():addMeasureMark(measureFirst, 
+						checkExistingMeasureMark.numerator, 
+						checkExistingMeasureMark.denominator)
+			local measureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
+			measurePos = measureMark.position
+			measureBlick = measureMark.positionBlick
+			self:getTimeAxis():removeMeasureMark(measureFirst)
+		end
+	else
+		-- Temporary measure mark addition
+		self:getTimeAxis():addMeasureMark(measureFirst, 4, 4)
+		local measureMark = self:getTimeAxis():getMeasureMarkAt(measureFirst)
+		measurePos = measureMark.position
+		measureBlick = measureMark.positionBlick
+		self:getTimeAxis():removeMeasureMark(measureFirst)
+	end
+	return measureBlick
+end
+
+-- Get group reference in time position
+function NotesObject:getGroupRef(track, time)
+	local groupRefFound = nil
+	local numGroups = track:getNumGroups()
+	local blicksPos = self:getTimeAxis():getBlickFromSeconds(time)
+	
+	-- All groups except the main group
+	for iGroup = 1, numGroups do
+		local groupRef = track:getGroupReference(iGroup)
+		local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
+		
+		-- Get group on timing pos
+		if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
+			groupRefFound = groupRef
+			break
+		end
+	end						
+	return groupRefFound
+end
+
+-- Get next group start position
+function NotesObject:getNextGroupStartPosition(track, gapInSecond, measureBarTime)
+	local startPosition = 0
+	local lastGroup = self:getLastGroup(track)
+
+	if lastGroup ~= nil then
+		local lastGroupPosition = self:getTimeAxis():getSecondsFromBlick(lastGroup:getEnd())
+		if lastGroupPosition ~= nil then
+			local checkGroup = self:getGroupRef(track, lastGroupPosition)
+			if checkGroup ~= nil then
+				startPosition = self:getNextMeasurePos(lastGroupPosition + gapInSecond, measureBarTime)
+			end
+		end
+	end
+	return startPosition
+end
+
+-- Generate group for test only
+function NotesObject:generateGroupForTestOnly()
+	-- Create group of notes in a new track
+	-- with selected scale and scale type
+	local startPosition = 0
+	local duration = SV.QUARTER -- self:getTimeAxis():getBlickFromSeconds(0.1)
+	local BPM = self:getProjectTempo(0)
+	local BPM_ratio = 120 / BPM
+	local measureBarTime = BPM_ratio / 16
+	local gapInSecond = BPM/60
+
+	-- Find existing group in track test
+	self.trackTest = self:findTrackTest(self.trackTestTitle)
+	
+	if self.trackTest == nil then
+		self.trackTest = self:createTrack()
+		self.trackTest:setName(self.trackTestTitle)
+		
+		self.currentColor = self:getNewColor(self:getCurrentTrack())
+		self.trackTest:setDisplayColor(self.currentColor)
+	else
+		startPosition = self:getNextGroupStartPosition(self.trackTest, gapInSecond, measureBarTime)
+	end
+	
+	-- Create group
+	local noteGroup = SV:create("NoteGroup")
+	local scaleKeys = self.keyScaleTypeValuesSelected
+	local notePitch = 60 + self.posKeyInScaleForm
+	
+	local timePos = 0
+	local firstNote = nil
+	local lastNote = nil
+	-- self:show("#scaleKeys: " .. #scaleKeys .. ", scaleKeys: " .. table.concat(scaleKeys, ",") )
+	
+	for iKeyType = 1, #scaleKeys do
+		local new_next_time = self:getNextMeasurePos(timePos, measureBarTime)  -- Get next measure position
+		local notePitch = notePitch + scaleKeys[iKeyType]
+		local key = self.keyNames[notePitch % 12 + 1]
+		local note = SV:create("Note")
+		note:setPitch(notePitch)
+		note:setOnset(self:getTimeAxis():getBlickFromSeconds(new_next_time))
+		note:setLyrics(key)
+		note:setDuration(duration)
+		noteGroup:addNote(note)
+		timePos = self:getTimeAxis():getSecondsFromBlick(note:getEnd())
+		
+		if iKeyType == 1 then
+			firstNote = note
+		end
+		lastNote = note
+	end
+	noteGroup:setName(self.keyScaleSelected .. " " .. self.keyScaleTypeTitleSelected)
+	self:getProject():addNoteGroup(noteGroup)
+	
+	-- Add group reference to project new track
+	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
+	
+	-- Define start & end group length
+	local startPositionBlicks = self:getTimeAxis():getBlickFromSeconds(startPosition)
+	local endPositionBlicks = lastNote:getOnset() + lastNote:getDuration() - firstNote:getOnset()
+	-- New end position to next bar
+	local newEndPosition = self:getFirstMesure(endPositionBlicks, 1) - 10
+	newGrouptRef:setTimeOffset(startPositionBlicks)
+	newGrouptRef:setTimeRange(startPositionBlicks, newEndPosition) -- v2.1.1
+
+	self.trackTest:addGroupReference(newGrouptRef)
+	
 end
 
 -- Duplicate and transpose notes
@@ -835,16 +1027,28 @@ function NotesObject:getScale(groupsSelected, paramTrack)
 		local isInScale = false
 		local scaleFoundItem = ""
 		for j, keyScaleTypeValues in ipairs(self.scales) do
-		
-			-- Loop on pitch notes
-			isInScale = self:loopNotes(notes, keyScaleTypeValues.val, key - 1)
-			if isInScale then
-				-- scale found
-				scaleFoundItem = scaleFoundItem .. sep .. self.keyNames[key] .. " " .. keyScaleTypeValues.name
-				-- if keyScaleTypeValues.name == "major" then
-					-- scaleFoundItem = scaleFoundItem .. " (" .. self:getKeyMajToMinor(self.keyNames[key]) .. ")"
-				-- end
-				sep = self.SEP_KEYS
+			
+			-- Limit scale detection to activated detection
+			if keyScaleTypeValues.detection then
+				-- Limit to major scales or all activated scales
+				if (self.isDetectionMajorScaleOnly and keyScaleTypeValues.name == "major") 
+					or not self.isDetectionMajorScaleOnly then
+					
+					-- Loop on pitch notes
+					isInScale = self:loopNotes(notes, keyScaleTypeValues.val, key - 1)
+					if isInScale then
+						-- scale found
+						scaleFoundItem = scaleFoundItem .. sep .. self.keyNames[key]
+						if self.isDetectionMajorScaleOnly then
+							if keyScaleTypeValues.name == "major" then
+								scaleFoundItem = scaleFoundItem .. " (" .. self:getKeyMajToMinor(self.keyNames[key]) .. ")"
+							end
+						else
+							scaleFoundItem = scaleFoundItem .. " " .. keyScaleTypeValues.name
+						end
+						sep = self.SEP_KEYS
+					end
+				end
 			end
 		end
 		if oldScaleFoundItem ~= scaleFoundItem then
@@ -859,7 +1063,7 @@ end
 -- Append notes from group
 function NotesObject:addNotes(notes, refGroup)
 	-- Check group type
-	if not refGroup:isInstrumental() then
+	if refGroup ~= nil and not refGroup:isInstrumental() then
 		local notesGroup = refGroup:getTarget()
 		-- Store group notes
 		for note = 1, notesGroup:getNumNotes() do
@@ -1189,7 +1393,6 @@ function NotesObject:getControls()
 	-- ComboBox: Harmony type					harmonyChoice
 	-- CheckBox: Update notes outer scale		isUpdateNotesOuterScale
 	-- CheckBox: use current track as source	isTrackClone
-	-- button:   apply							applyButtonValue
 	-- TextArea: status text 					statusTextValue
 	
 	local controls = {
@@ -1197,6 +1400,11 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = "",
 			paramKey = "scaleKeyFound"
+		},
+		isDetectionMajorScaleOnly = {			-- CheckBox: Detection major scale only
+			value = SV:create("WidgetValue"),
+			defaultValue = true,
+			paramKey = "isDetectionMajorScaleOnly"
 		},
 		scaleKeyChoice = {						-- ComboBox: Select a key scale
 			value = SV:create("WidgetValue"),
@@ -1261,6 +1469,10 @@ function NotesObject:setControlsCallback()
 		control.value:setValueChangeCallback(function()
 				-- self:addLogsInPanel()
 								
+				if control.paramKey == "isDetectionMajorScaleOnly" then
+					self.isDetectionMajorScaleOnly = self.controls.isDetectionMajorScaleOnly.value:getValue()
+				end
+				
 				if control.paramKey == "pitchChoice" then
 					self.pitchSelectedType = control.paramKey
 					self.pitchSelected = string.format("%i", self.controls.pitch.value:getValue())
@@ -1353,6 +1565,27 @@ function NotesObject:setButtonApplyControlCallback()
 	)
 end
 
+-- Set button Generate group control callback
+function NotesObject:setButtonGenerateGroupControlCallback()
+
+	-- Button generate group harmony
+	self.generateGroupButtonValue:setValueChangeCallback(function()
+			self:getProject():newUndoRecord()
+
+			self.posKeyInScaleForm = self.controls.scaleKeyChoice.value:getValue()
+			self.isTrackClone = self.controls.isTrackClone.value:getValue()
+			
+			local keysInfos = self:getGroupKeyScale()
+			-- Get user selected scale
+			self:getScaleSelected()
+			
+			-- Generate group for test
+			local numGroups = self:generateGroupForTestOnly()
+			
+		end
+	)
+end
+
 -- Display message
 function NotesObject:displayMessage(message)
 	self:clearTextPanel()
@@ -1437,6 +1670,7 @@ function NotesObject:getSectionContainer()
 	-- ComboBox: Harmony type					harmonyChoice
 	-- CheckBox: use current track as source	isTrackClone
 	-- button:   apply							applyButtonValue
+	-- button:   generate group					generateGroupButtonValue
 	-- TextArea: status text 					statusTextValue
 	
 	self.controls.scaleKeyFound.value:setValue(self.defaultKeyFoundMessage)
@@ -1448,9 +1682,23 @@ function NotesObject:getSectionContainer()
 				{
 					type = "TextArea",
 					value = self.controls.scaleKeyFound.value,
-					height = 80,
+					height = 100,
 					width = 1.0,
 					readOnly = true
+				}
+			}
+		}
+
+	self.controls.isDetectionMajorScaleOnly.value:setValue(self.isDetectionMajorScaleOnly)
+	local detectionLimited = 
+		{
+			type = "Container",
+			columns = {
+				{
+				type = "CheckBox",
+				text = SV:T("Major scales only detection"),
+				value = self.controls.isDetectionMajorScaleOnly.value,
+				width = 1.0
 				}
 			}
 		}
@@ -1564,20 +1812,41 @@ function NotesObject:getSectionContainer()
 					maxValue = pitchMaxValue, 
 					interval = pitchInterval,
 					value = self.controls.pitch.value,
-					width = 0.5
+					width = 1.0
 				}
 			}
 		}
 	
+	local trackTest = {}
+	if self.trackTestActive	then
+		trackTest = 
+			{
+				type = "Container",
+				columns = {
+					{
+						type = "Button",
+						text = SV:T("Generate group"),
+						width = 1.0,
+						value = self.generateGroupButtonValue
+					}
+				}
+			}
+	end
+
 	-- Define CheckBox & button & textarea
 	local section = {
 		title = SV:T(SCRIPT_TITLE),
 		rows = {
 			{
 				type = "Label",
-				text = SV:T("Select a group:"),
+				text = SV:T("Detection: Select a group"),
 			},
 			scaleKeyFound,
+			detectionLimited,
+			{
+				type = "Label",
+				text = SV:T("Action: Select a scale and type"),
+			},			
 			scaleKeyChoice,
 			pitchChoice,
 			harmonyChoice,
@@ -1596,6 +1865,7 @@ function NotesObject:getSectionContainer()
 					}
 				}
 			},
+			trackTest,
 			{
 				type = "Container",
 				columns = {
@@ -1617,6 +1887,7 @@ end
 function NotesObject:getPanelSectionState()
 	self:logsClear()
 	self.applyButtonValue:setEnabled(true)
+	self.generateGroupButtonValue:setEnabled(true)
 	
 	local section = self:getSectionContainer()
 
