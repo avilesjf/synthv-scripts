@@ -37,7 +37,7 @@ function getArrayLanguageStrings()
 			{"Version", "Version"},
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
-			{"Rezising notes length", "Rezising notes length"},
+			{"Resizing notes length", "Resizing notes length"},
 			{"Infos on selected notes", "Infos on selected notes"},
 			{"blicks: ", "blicks: "},
 			{"Seconds: ", "Seconds: "},
@@ -45,7 +45,8 @@ function getArrayLanguageStrings()
 			{"Track seconds: ", "Track seconds: "},
 			{"Selected notes: ", "Selected notes: "},
 			{"Select at least one group!", "Select at least one group!"},
-			{"Resizing notes length:", "Resizing notes length:"},
+			{"Coef", "Coef"},
+			{"Resize from coef", "Resize from coef"},
 			{"Halve", "Halve"},
 			{"Double", "Double"},
 		},
@@ -91,6 +92,8 @@ function NotesObject:new()
 	
 	self.halveNotesValue = SV:create("WidgetValue")
 	self.doubleNotesValue = SV:create("WidgetValue")
+	self.resizeNotesValue = SV:create("WidgetValue")
+	
 	self.statusTextValue = SV:create("WidgetValue")
 	self.statusTextValue:setValue("")
 	self.statusTextValue:setEnabled(false)
@@ -99,6 +102,7 @@ function NotesObject:new()
 	self.statusNoteValue:setValue("")
 	self.statusNoteValue:setEnabled(false)
 	
+	self:setButtonResizeNotesLengthControlCallback()
 	self:setButtonHalveNotesLengthControlCallback()
 	self:setButtonDoubleNotesLengthControlCallback()
 
@@ -113,7 +117,7 @@ function NotesObject:new()
 	end
 	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
 	self:addTextPanel(self.infosToDisplay)
-	self:addTextPanel(SV:T("Rezising notes length") .. "...")
+	self:addTextPanel(SV:T("Resizing notes length") .. "...")
 	
 	if self.isInfosToDisplay then
 		-- Register editor selection callback
@@ -249,10 +253,10 @@ end
 function NotesObject:getControls()
 
 	local controls = {
-		timeCoef = {
+		coef = {
 			value = SV:create("WidgetValue"),
-			defaultValue = 2,  -- x2
-			paramKey = "timeCoef"
+			defaultValue = 0.5,  -- /2
+			paramKey = "coef"
 		}
 	}
 	return controls
@@ -284,13 +288,24 @@ function NotesObject:displayMessage(message)
 	self:addTextPanel(message)
 end
 
+-- Set button resize notes length control callback
+function NotesObject:setButtonResizeNotesLengthControlCallback()
+
+	-- Button resize notes length
+	self.resizeNotesValue:setValueChangeCallback(function()
+			self:getProject():newUndoRecord()			
+			self:updateNotesLength2(self.controls.coef.value:getValue()) 
+		end
+	)
+end
+
 -- Set button halve notes length control callback
 function NotesObject:setButtonHalveNotesLengthControlCallback()
 
 	-- Button halve notes length
 	self.halveNotesValue:setValueChangeCallback(function()
 			self:getProject():newUndoRecord()			
-			self:updateNotesLength(self.halveNoteCoef) -- * 0.5
+			self:updateNotesLength2(self.halveNoteCoef) -- * 0.5
 		end
 	)
 end
@@ -301,49 +316,61 @@ function NotesObject:setButtonDoubleNotesLengthControlCallback()
 	-- Button double notes length
 	self.doubleNotesValue:setValueChangeCallback(function()
 			self:getProject():newUndoRecord()			
-			self:updateNotesLength(self.doubleNoteCoef) -- * 2
+			self:updateNotesLength2(self.doubleNoteCoef) -- * 2
 		end
 	)
 end
 
 -- Update notes length()
-function NotesObject:updateNotesLength(coef)
-	-- local BPM = self:getProjectTempo(0)
+function NotesObject:updateNotesLength2(coef)
+	local selectedNotes = {}
+	local firstOnset = 0
 	local groupsSelected = self:getSelectedGroups()
-	local newNotesBeginPos = {}
-
+	
 	if #groupsSelected > 0 then
+	
 		for _, refGroup in pairs(groupsSelected) do
+			selectedNotes = {}
 			local noteGroup = refGroup:getTarget()
 			local notesCount = noteGroup:getNumNotes()
+			
 			if notesCount > 0 then
+				firstOnset = 0
+				-- Get all notes before sorting
 				for iNote = 1, notesCount do
 					local note = noteGroup:getNote(iNote)
-					if iNote > 1 then
-						local timeBeginPos = self:getTimeAxis():getSecondsFromBlick(note:getOnset())
-						local newTimeBeginPos = timeBeginPos * coef
-
-						-- Store updated notes to be updated further below (bug if doing this there!)
-						table.insert(newNotesBeginPos, {note = note, value = self:getTimeAxis():getBlickFromSeconds(newTimeBeginPos)})
-						
-					end
-					-- Update note duration only
-					note:setDuration(note:getDuration()  * coef)
+					table.insert(selectedNotes, note)
 				end
-			end
-			
-			-- Update starting notes (workaround because this during main loop = bug in notes indices!)
-			for iNote, val in pairs(newNotesBeginPos) do
-				local note = val.note
-				-- Update note position
-				note:setOnset(val.value)
+				-- Sort by onset values
+				table.sort(selectedNotes, function (noteA, noteB)
+					return noteA:getOnset() < noteB:getOnset()
+				end)
+				-- Loop notes sorted to update
+				local prevEnd = -1
+				for i = 1, #selectedNotes do
+					local currOnset = selectedNotes[i]:getOnset() - firstOnset
+					local currEnd = selectedNotes[i]:getEnd() - firstOnset
+
+					if currOnset == currEnd then
+						break
+					end
+					-- Update position
+					if i > 1 and prevEnd == currOnset then
+						selectedNotes[i]:setOnset(selectedNotes[i - 1]:getEnd())
+					else
+						selectedNotes[i]:setOnset(firstOnset + currOnset * coef)
+					end
+					--	Update duration
+					selectedNotes[i]:setDuration(currEnd * coef 
+						- (selectedNotes[i]:getOnset() - firstOnset))
+					prevEnd = currEnd
+				end
 			end
 		end
 	else
 		-- No group selected
 		self:show(SV:T("Select at least one group!"))
 	end
-
 end
 
 -- Get object properties
@@ -458,7 +485,33 @@ function NotesObject:getSection()
 			infoNoteDisplay,
 			{
 				type = "Label",
-				text = SV:T("Resizing notes length:"),
+				text = SV:T("Resizing notes length"),
+			},
+			{
+				type = "Container",
+				columns = {
+				  {
+					type = "Slider",
+					text = SV:T("Coef"),
+					format = "%1.2f",
+					minValue = 0.25,
+					maxValue = 2,
+					interval = 0.25,
+					value = self.controls.coef.value,
+					width = 1
+				  }
+				}
+			},
+			{
+				type = "Container",
+				columns = {
+					{
+						type = "Button",
+						text = SV:T("Resize from coef"),
+						width = 1.0,
+						value = self.resizeNotesValue
+					}
+				}
 			},
 			{
 				type = "Container",
@@ -502,6 +555,7 @@ end
 -- Get panel section state
 function NotesObject:getPanelSectionState()
 
+	self.resizeNotesValue:setEnabled(true)
 	self.halveNotesValue:setEnabled(true)
 	self.doubleNotesValue:setEnabled(true)
 	local errors = self:displayErrors()
