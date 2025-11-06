@@ -18,6 +18,7 @@ Update: Minor updates
 		5 - Major update: Prior use user scale choice (ComboBox) than scale found (or not)
 			and update outer scale checkbox is added
 		6 - Add check box: major scale only detection and detection property in scalesReference
+		7 - Add check box: update selected groups only in user selected scale (no new track)
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -30,7 +31,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 6,
+		versionNumber = 7,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -48,6 +49,7 @@ function getArrayLanguageStrings()
 			{"Track scale test", "Track scale test"},
 			{"1 note", "1 note"},
 			{"Selected", "Selected"},
+			{"Apply", "Apply"},
 			{"Major", "Major"},
 			{"Track H", "Track H"},
 			{"2 notes", "2 notes"},
@@ -87,9 +89,11 @@ function getArrayLanguageStrings()
 			{"Error: No scale key found!", "Error: No scale key found!"},
 			{"Error: Position into scale error!", "Error: Position into scale error!"},
 			{"No group selected!", "No group selected!"},
+			{"Update notes in selected scale", "Update notes in selected scale"},
 			{"Major scales only detection", "Major scales only detection"},
 			{"Select a key scale", "Select a key scale"},
 			{"Key scale type", "Key scale type"},
+			{"Update scale selected groups", "Update scale selected groups"},
 			{"Get current voice for new tracks", "Get current voice for new tracks"},
 			{"Update notes outer scale", "Update notes outer scale"},
 			{"Harmony type", "Harmony type"},
@@ -97,7 +101,6 @@ function getArrayLanguageStrings()
 			{"Generate group", "Generate group"},
 			{"Detection: Select a group", "Detection: Select a group"},
 			{"Action: Select a scale and type", "Action: Select a scale and type"},
-			{"Apply", "Apply"},
 		},
 	}
 end
@@ -145,13 +148,13 @@ NotesObject = {
 	keyScaleTypeTitleSelected  = "",
 	keyScaleTypeValuesSelected = {0,2,4,5,7,9,11}, -- default major
 	trackNameHarmony = "",
-	isTrackClone = false,
+	isTrackClone = false,			-- Clone track to keep voicebank
+	isUpdateCurrentGroup = false,	-- Update current groups only
 	isFixed = false,
 	isNegativeHarmony = false,
 	firstNegativeNote = 0,
 	newTrackRef = nil,
 	tracks = {},
-	trackListChoice = {},
 	outputLevelDefaultValue = 0,
 	isCurrentVoiceTrack = true,
 	languageOverride = "", 		-- Language override (Empty string => disabled)
@@ -163,6 +166,7 @@ NotesObject = {
 	groupsSelected = {},
 	scalesList = {},
 	controls = {}, -- controls panel
+	applyButtonText = SV:T("Apply"),
 	applyButtonValue = nil,				-- button
 	generateGroupButtonValue = nil,		-- button
 	statusTextValue = nil,				-- text panel
@@ -763,17 +767,20 @@ function NotesObject:duplicateNotes(groupsSelected)
 	local formatCount = "%3d"
 	local iTracks = self:getProject():getNumTracks()
 	
-	if self.isTrackClone then
-		self.newTrackRef = self:cloneTrackReference()
+	if not self.isUpdateCurrentGroup then
+		if self.isTrackClone then
+			self.newTrackRef = self:cloneTrackReference()
+		end
 	end
 
 	-- Only one track to add
 	if not isMultipleTracks then
-		local track = nil
 		
 		local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale)
 		-- New track
-		if #self.trackListChoice == trackChoice or trackChoice == 0 then
+		if not self.isUpdateCurrentGroup then
+			local track = nil
+			
 			if self.isTrackClone then
 				track = self:cloneTrack()
 			else
@@ -781,23 +788,22 @@ function NotesObject:duplicateNotes(groupsSelected)
 			end
 			local trackNumber = iTracks + 1
 			track:setName(self.trackNameHarmony .. trackNumber .. " (" .. pitchTarget .. ")")
-		else
-			track = self:getProject():getTrack(trackChoice)
-		end
-		
-		for iGroupRef = 1, #newGroupRefs do
-			track:addGroupReference(newGroupRefs[iGroupRef])
-			numGroups = numGroups + 1
+
+			for iGroupRef = 1, #newGroupRefs do
+				track:addGroupReference(newGroupRefs[iGroupRef])
+				numGroups = numGroups + 1
+			end
 		end
 	else
 		-- add multiple tracks
-		for iTrack = 1, #pitchTargets do
-			local track = nil
-			
+		for iTrack = 1, #pitchTargets do		
 			pitchTarget = self:trim(pitchTargets[iTrack])
 			self.isFixed = (pitchTarget == "Fixed")
 			self.isNegativeHarmony = (pitchTarget == "Negative")
+			
 			local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale)
+			local track = nil
+			
 			if self.isTrackClone then
 				track = self:cloneTrack()
 			else
@@ -813,8 +819,10 @@ function NotesObject:duplicateNotes(groupsSelected)
 		end
 	end
 	
-	if self.isTrackClone then
-		self:deleteClonedTrack()
+	if not self.isUpdateCurrentGroup then
+		if self.isTrackClone then
+			self:deleteClonedTrack()
+		end
 	end
 
 	return numGroups
@@ -863,9 +871,15 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 		-- local groupName = refGroup:getTarget():getName()
 		local noteGroup = refGroup:getTarget()
 		local groupRefTimeoffset = refGroup:getTimeOffset()
-
-		-- Clone source group
-		local newNoteGroup = noteGroup:clone()
+		
+		local newNoteGroup = nil
+		if self.isUpdateCurrentGroup then
+			-- Update current group
+			newNoteGroup = noteGroup
+		else
+			-- Clone source group
+			newNoteGroup = noteGroup:clone()
+		end
 		local selectedNotes = newNoteGroup:getNumNotes()
 		
 		if selectedNotes >= 0 then
@@ -882,29 +896,32 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 													tonumber(pitchTarget), posKeyInScale)
 				note:setPitch(notePitch)
 			end
-			self:getProject():addNoteGroup(newNoteGroup)
 			
-			-- Add group reference to project new track
-			local newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
+			local newGrouptRef = refGroup
+			if not self.isUpdateCurrentGroup then
+				self:getProject():addNoteGroup(newNoteGroup)
+				
+				-- Add group reference to project new track
+				newGrouptRef = SV:create("NoteGroupReference", newNoteGroup)
+				
+				-- Adjust time offset
+				newGrouptRef:setTimeOffset(groupRefTimeoffset)
 			
-			-- Adjust time offset
-			newGrouptRef:setTimeOffset(groupRefTimeoffset)
-			
-			-- Adjust time range & voice attributes
-			newGrouptRef:setTimeRange(refGroup:getOnset(), refGroup:getDuration())
-			newGrouptRef:setVoice(refGroup:getVoice())
-			
-			if #self.languageOverride > 0 then
-				-- Update notes language
-				self:updateNotesLanguageOverride(newNoteGroup)
+				-- Adjust time range & voice attributes
+				newGrouptRef:setTimeRange(refGroup:getOnset(), refGroup:getDuration())
+				newGrouptRef:setVoice(refGroup:getVoice())
+				
+				if #self.languageOverride > 0 then
+					-- Update notes language
+					self:updateNotesLanguageOverride(newNoteGroup)
+				end
+				-- AI retakes
+				if self.retakes then
+					-- Update AI retakes
+					self:updateAIRetakes(newNoteGroup)
+				end
 			end
 						
-			-- AI retakes
-			if self.retakes then
-				-- Update AI retakes
-				self:updateAIRetakes(newNoteGroup)
-			end
-			
 			table.insert(newGroupRefs, newGrouptRef)
 		end
 	end
@@ -1393,6 +1410,7 @@ function NotesObject:getControls()
 	-- ComboBox: Harmony type					harmonyChoice
 	-- CheckBox: Update notes outer scale		isUpdateNotesOuterScale
 	-- CheckBox: use current track as source	isTrackClone
+	-- CheckBox: Update current group only		isUpdateCurrentGroup
 	-- TextArea: status text 					statusTextValue
 	
 	local controls = {
@@ -1450,6 +1468,11 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = false,
 			paramKey = "isTrackClone"
+		},
+		isUpdateCurrentGroup = {				-- CheckBox: Update current group of notes
+			value = SV:create("WidgetValue"),
+			defaultValue = false,
+			paramKey = "isUpdateCurrentGroup"
 		}
 	}
 	return controls
@@ -1526,6 +1549,20 @@ function NotesObject:setControlsCallback()
 				if control.paramKey == "scaleKeyType" then
 					self.keyScaleTypeSelected = self.controls.scaleKeyType.value:getValue() + 1
 				end
+				if control.paramKey == "isUpdateCurrentGroup" then
+					self.isUpdateCurrentGroup = self.controls.isUpdateCurrentGroup.value:getValue()
+					self:clearTextPanel()
+					self:addTextPanel(self.infosToDisplay)
+					
+					if self.isUpdateCurrentGroup then
+						self:addTextPanel(SV:T("Update notes in selected scale") .. "...")
+						self.applyButtonText = SV:T("Update notes in selected scale")
+					else
+						self:addTextPanel(SV:T("Generate harmonies") .. "...")
+						self.applyButtonText = SV:T("Apply")
+					end
+					SV:refreshSidePanel()
+				end
 			end
 		)
 	end
@@ -1545,6 +1582,7 @@ function NotesObject:setButtonApplyControlCallback()
 				self.posKeyInScaleForm = self.controls.scaleKeyChoice.value:getValue()
 
 				self.isTrackClone = self.controls.isTrackClone.value:getValue()
+				self.isUpdateCurrentGroup = self.controls.isUpdateCurrentGroup.value:getValue()
 				self.isUpdateNotesOuterScale = self.controls.isUpdateNotesOuterScale.value:getValue()
 				
 				local keysInfos = self:getGroupKeyScale()
@@ -1574,6 +1612,7 @@ function NotesObject:setButtonGenerateGroupControlCallback()
 
 			self.posKeyInScaleForm = self.controls.scaleKeyChoice.value:getValue()
 			self.isTrackClone = self.controls.isTrackClone.value:getValue()
+			self.isUpdateCurrentGroup = self.controls.isUpdateCurrentGroup.value:getValue()
 			
 			local keysInfos = self:getGroupKeyScale()
 			-- Get user selected scale
@@ -1669,6 +1708,7 @@ function NotesObject:getSectionContainer()
 	-- Slider:   Pitch transposition			pitch
 	-- ComboBox: Harmony type					harmonyChoice
 	-- CheckBox: use current track as source	isTrackClone
+	-- CheckBox: Update gurrent Group			isUpdateCurrentGroup
 	-- button:   apply							applyButtonValue
 	-- button:   generate group					generateGroupButtonValue
 	-- TextArea: status text 					statusTextValue
@@ -1724,34 +1764,20 @@ function NotesObject:getSectionContainer()
 			}
 		}
 
-	self.controls.isTrackClone.value:setValue(self.isCurrentVoiceTrack)
-	local trackClone = 
+	self.controls.isUpdateCurrentGroup.value:setValue(self.isUpdateCurrentGroup)
+	local updateCurrentGroup = 
 		{
 			type = "Container",
 			columns = {
 				{
 				type = "CheckBox",
-				text = SV:T("Get current voice for new tracks"),
-				value = self.controls.isTrackClone.value,
+				text = SV:T("Update scale selected groups"),
+				value = self.controls.isUpdateCurrentGroup.value,
 				width = 1.0
 				}
 			}
 		}
-
-	self.controls.isUpdateNotesOuterScale.value:setValue(self.isUpdateNotesOuterScale)
-	local updateNotesOuter = 
-		{
-			type = "Container",
-			columns = {
-				{
-				type = "CheckBox",
-				text = SV:T("Update notes outer scale"),
-				value = self.controls.isUpdateNotesOuterScale.value,
-				width = 1.0
-				}
-			}
-		}
-		
+	
 	local transpositionSelected =  
 		{
 			type = "Container",
@@ -1766,23 +1792,59 @@ function NotesObject:getSectionContainer()
 			}
 		}
 
-	local harmonyChoice = 
-		{
-			type = "Container",
-			columns = {
-				{
-					type = "ComboBox",
-					text = SV:T("Harmony type"),
-					value = self.controls.harmonyChoice.value,
-					choices = self.harmonyList,
+	local trackClone = {}
+	local updateNotesOuter = {}
+	local multiplePitchChoice = {}
+	local harmonyChoice = {}
+
+	self.controls.isTrackClone.value:setValue(self.isCurrentVoiceTrack)
+	self.controls.isUpdateNotesOuterScale.value:setValue(self.isUpdateNotesOuterScale)
+
+	if self.isUpdateCurrentGroup then
+		self.controls.harmonyChoice.value:setValue(0)
+		self.controls.multiplePitchChoice.value:setValue(0)
+		self.displayMultiplePitchChoice = falses
+	else
+		trackClone = 
+			{
+				type = "Container",
+				columns = {
+					{
+					type = "CheckBox",
+					text = SV:T("Get current voice for new tracks"),
+					value = self.controls.isTrackClone.value,
 					width = 1.0
+					}
 				}
 			}
-		}
-	
-	
-	local multiplePitchChoice = {}
-	
+		updateNotesOuter = 
+			{
+				type = "Container",
+				columns = {
+					{
+					type = "CheckBox",
+					text = SV:T("Update notes outer scale"),
+					value = self.controls.isUpdateNotesOuterScale.value,
+					width = 1.0
+					}
+				}
+			}
+		
+		harmonyChoice = 
+			{
+				type = "Container",
+				columns = {
+					{
+						type = "ComboBox",
+						text = SV:T("Harmony type"),
+						value = self.controls.harmonyChoice.value,
+						choices = self.harmonyList,
+						width = 1.0
+					}
+				}
+			}
+	end
+
 	if self.displayMultiplePitchChoice then
 		local transpositionList = self.transposition[self.transpositionSelected][self.transpositionRefData]
 		multiplePitchChoice = 
@@ -1799,7 +1861,7 @@ function NotesObject:getSectionContainer()
 				}
 			}
 	end
-	
+		
 	local pitchChoice = 
 		{
 			type = "Container",
@@ -1854,12 +1916,13 @@ function NotesObject:getSectionContainer()
 			transpositionSelected,
 			updateNotesOuter,
 			trackClone,
+			updateCurrentGroup,
 			{
 				type = "Container",
 				columns = {
 					{
 						type = "Button",
-						text = SV:T("Apply"),
+						text = self.applyButtonText,
 						width = 1.0,
 						value = self.applyButtonValue
 					}
