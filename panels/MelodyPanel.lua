@@ -12,7 +12,8 @@ Includes variable spacing between notes based on rhythm and style
 
 Update: Added a ComboBox "Note fixed to measure bar 1/16 to 1/64.
 		Improve notes position fixed on timed bar measures related to BPM
-		
+		Add duration coef slider
+
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
 
@@ -24,7 +25,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 5,
+		versionNumber = 6,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -79,6 +80,7 @@ function getArrayLanguageStrings()
 			{"Note fixed: 1/64", "Note fixed: 1/64"},
 			{"Group created!", "Group created!"},
 			{"Error: Empty group, nothing created!", "Error: Empty group, nothing created!"},
+			{"Reduce duration", "Reduce duration"},
 			{"Select a key scale:", "Select a key scale:"},
 			{"Auto play melody", "Auto play melody"},
 			{"Loop into melody", "Loop into melody"},
@@ -141,10 +143,15 @@ NotesObject = {
 	keyScaleChoice = {},
 	styleChoice = {},
 	melodyLengthChoice = {},
+	durationCoefChoice = {},
 	measureBarChoice = {},
 	lyricsException = {},
 	infosToDisplay = "",
-	logs = {}
+	logs = {},
+	coefMinValue = 0.25,
+	coefMaxValue = 1,
+	coefInterval = 0.25,
+	durationCoef = 1	-- Multiplier/divider for note duration (1 = normal, 0.5 = shorter)
 }
 
 -- Define a class "NoteEvent"
@@ -285,6 +292,11 @@ end
 function NotesObject:getControls()
 
 	local controls = {
+		durationCoef = {
+			value = SV:create("WidgetValue"),
+			defaultValue = self.durationCoef,
+			paramKey = "durationCoef"
+		},
 		autoPlay = {
 			value = SV:create("WidgetValue"),
 			defaultValue = false,
@@ -401,6 +413,8 @@ function NotesObject:setButtonApplyControlCallback()
 	-- Button create melody
 	self.applyButtonValue:setValueChangeCallback(function()
 			self:getProject():newUndoRecord()
+			
+			self.durationCoef = self.controls.durationCoef.value:getValue()
 			
 			self:createMelody(self.controls.scaleKey.value:getValue(),
 				self.controls.scaleType.value:getValue(), self.controls.style.value:getValue(), 
@@ -921,7 +935,7 @@ function NotesObject:generate_melody(root_note, scale_type, style_name,
 		iCurrentNote = i
         -- Get base duration from rhythm pattern
         local duration_index = ((i - 1) % #rhythm_pattern) + 1
-        local base_duration = rhythm_pattern[duration_index]
+        local base_duration = rhythm_pattern[duration_index] * self.durationCoef
         
         -- Calculate actual note duration with style modifications
         local note_duration = self:calculate_note_duration(base_duration, style_config, rhythm_config)
@@ -1006,6 +1020,7 @@ function NotesObject:getNextMeasurePos(current_time, timeMeasureBar)
 	end
 	return newtime
 end
+
 -- Get current project tempo
 function NotesObject:getProjectTempo(seconds)
 	local tempoActive = 120
@@ -1436,6 +1451,23 @@ function NotesObject:getSection()
 	-- Define all ComboBox	
 	self:setComboChoices()
 
+	self.durationCoefChoice = 
+		{
+			type = "Container",
+			columns = {
+				{
+					type = "Slider",
+					text = SV:T("Reduce duration"),
+					format = "%1.2f coef",
+					minValue = self.coefMinValue, 
+					maxValue = self.coefMaxValue, 
+					interval = self.coefInterval,
+					value = self.controls.durationCoef.value,
+					width = 1.0
+				}
+			}
+		}
+
 	-- Define CheckBox & button & textarea
 	local section = {
 		title = SV:T(SCRIPT_TITLE),
@@ -1447,6 +1479,7 @@ function NotesObject:getSection()
 			self.keyScaleChoice,
 			self.styleChoice,
 			self.melodyLengthChoice,
+			self.durationCoefChoice,
 			{
 				type = "Container",
 				columns = {
