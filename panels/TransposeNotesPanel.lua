@@ -11,6 +11,7 @@ Notice: Works only with script panel
 		introduced with Synthesizer V version >= 2.1.2
 
 Update: Creation
+		Add a TextArea note information with check box
 
 2025 - JF AVILES
 --]]
@@ -20,7 +21,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -38,18 +39,23 @@ function getArrayLanguageStrings()
 			{"Version", "Version"},
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
-			{"Resizing notes length", "Resizing notes length"},
+			{"Transpose notes", "Transpose notes"},
 			{"Infos on selected notes", "Infos on selected notes"},
-			{"blicks: ", "blicks: "},
-			{"Seconds: ", "Seconds: "},
-			{"lyrics: ", "lyrics: "},
-			{"Track seconds: ", "Track seconds: "},
+			{"Note: ", "Note: "},
+			{"Lyrics: ", "Lyrics: "},
+			{"Time: ", "Time: "},
+			{"Track time: ", "Track time: "},
+			{"Blicks: ", "Blicks: "},
 			{"Selected notes: ", "Selected notes: "},
 			{"Select at least one group!", "Select at least one group!"},
-			{"Coef", "Coef"},
-			{"Resize from coef", "Resize from coef"},
-			{"Halve", "Halve"},
-			{"Double", "Double"},
+			{"Transpose", "Transpose"},
+			{"Select a value", "Select a value"},
+			{"+", "+"},
+			{"to", "to"},
+			{"in all tracks", "in all tracks"},
+			{"Limited to selected groups", "Limited to selected groups"},
+			{"Display note infos", "Display note infos"},
+			{"Transpose notes (semitones)", "Transpose notes (semitones)"},
 		},
 	}
 end
@@ -70,13 +76,16 @@ NotesObject = {
 	statusTextValue = nil,   	-- text panel
 	statusNoteValue = nil,   	-- text panel
 	infosToDisplay = "",
-	isInfosToDisplay = false,   -- debug notes
+	displayBlicks = false,
+	displayBlicksSize = 80,
 	isLimitedToSelectedGroups = true,
+	isDisplayNoteInfos = false, -- Display note information (check box)
 	transposeSemitone = 0,
 	transposeMinValue = -12,
 	transposeMaxValue = 12,
 	transposeInterval = 1,
 	updatedGroupChar = "*",
+	keyNames = {},
 	debug = false,
 	logs = {}
 }
@@ -108,7 +117,12 @@ function NotesObject:new()
 	self:setButtonTransposeNotesControlCallback()
 
 	local infos = getClientInfo()
-
+	
+	self.keyNames = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
+	
+	if self.displayBlicks then
+		self.displayBlicksSize = 100
+	end
 	self.infosToDisplay = ""
 	if self.displayVersion then
 		self.infosToDisplay = self.infosToDisplay .. SV:T("Version") .. ": " ..  infos.versionNumber
@@ -120,11 +134,9 @@ function NotesObject:new()
 	self:addTextPanel(self.infosToDisplay)
 	self:addTextPanel(SV:T("Transpose notes") .. "...")
 	
-	if self.isInfosToDisplay then
-		-- Register editor selection callback
-		self:registerEditorSelectionCallback()
-		self:addNoteInfoPanel(SV:T("Infos on selected notes"))
-	end
+	-- Register editor selection callback
+	self:registerEditorSelectionCallback()
+	self:addNoteInfoPanel(SV:T("Infos on selected notes"))
 
     return self
 end
@@ -158,15 +170,15 @@ function NotesObject:onSelectionChanged()
 			local note = selectedNotes[1]
 			local currentGroupRef = SV:getMainEditor():getCurrentGroup()
 			local timeOffset = currentGroupRef:getTimeOffset()
+			local key = self.keyNames[note:getPitch() % 12 + 1]
 
-			self:addNoteInfoPanel(SV:T("blicks: ") .. note:getOnset()
-			.. "\r"
-			.. SV:T("Seconds: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(note:getOnset()))
-			.. "\r"
-			.. SV:T("lyrics: ") .. note:getLyrics()
-			.. "\r"
-			.. SV:T("Track seconds: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(note:getOnset() + timeOffset))
-			)
+			self:addNoteInfoPanel(SV:T("Note: ") .. key)
+			self:addNoteInfoPanel(SV:T("Lyrics: ") .. note:getLyrics())
+			self:addNoteInfoPanel(SV:T("Time: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(note:getOnset())))
+			self:addNoteInfoPanel(SV:T("Track time: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(note:getOnset() + timeOffset)))
+			if self.displayBlicks then
+				self:addNoteInfoPanel(SV:T("Blicks: ") .. note:getOnset())
+			end
 		else
 			self:addNoteInfoPanel(SV:T("Selected notes: ") .. #selectedNotes)
 		end
@@ -259,6 +271,11 @@ function NotesObject:getControls()
 			defaultValue = self.transposeSemitone,
 			paramKey = "transposeSemitone"
 		},
+		isDisplayNoteInfos = {				-- checkbox
+			value = SV:create("WidgetValue"),
+			defaultValue = self.isDisplayNoteInfos,
+			paramKey = "isDisplayNoteInfos"
+		},
 		isLimitedToSelectedGroups = {			-- checkbox
 			value = SV:create("WidgetValue"),
 			defaultValue = true,
@@ -288,6 +305,10 @@ function NotesObject:setControlsCallback()
 			end
 			if control.paramKey == "isLimitedToSelectedGroups" then
 				self.isLimitedToSelectedGroups = self.controls.isLimitedToSelectedGroups.value:getValue()
+				SV:refreshSidePanel()
+			end
+			if control.paramKey == "isDisplayNoteInfos" then
+				self.isDisplayNoteInfos = self.controls.isDisplayNoteInfos.value:getValue()
 				SV:refreshSidePanel()
 			end
 		end
@@ -471,22 +492,6 @@ function NotesObject:getSection()
 		transposeSemitoneDisplay = transposeSemitoneDisplay .. " " .. SV:T("in all tracks")
 	end
 	
-	if self.isInfosToDisplay then
-		infoNoteDisplay = 
-			{
-				type = "Container",
-				columns = {
-					{
-						type = "TextArea",
-						value = self.statusNoteValue,
-						height = 80,
-						width = 1.0,
-						readOnly = true
-					}
-				}
-			}
-	end
-
 	self.controls.isLimitedToSelectedGroups.value:setValue(self.isLimitedToSelectedGroups)
 	local limitedToSelectedGroups = 
 		{
@@ -501,11 +506,41 @@ function NotesObject:getSection()
 			}
 		}
 		
-	
+	self.controls.isDisplayNoteInfos.value:setValue(self.isDisplayNoteInfos)
+	local displayNoteInfos = 
+		{
+			type = "Container",
+			columns = {
+				{
+				type = "CheckBox",
+				text = SV:T("Display note infos"),
+				value = self.controls.isDisplayNoteInfos.value,
+				width = 1.0
+				}
+			}
+		}
+		
+	if self.isDisplayNoteInfos then
+		infoNoteDisplay = 
+			{
+				type = "Container",
+				columns = {
+					{
+						type = "TextArea",
+						value = self.statusNoteValue,
+						height = self.displayBlicksSize,
+						width = 1.0,
+						readOnly = true
+					}
+				}
+			}
+	end
+
 	-- Define CheckBox & button & textarea
 	local section = {
 		title = SV:T(SCRIPT_TITLE),
 		rows = {
+			displayNoteInfos,
 			infoNoteDisplay,
 			{
 				type = "Container",
