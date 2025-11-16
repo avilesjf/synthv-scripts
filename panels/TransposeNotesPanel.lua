@@ -12,6 +12,7 @@ Notice: Works only with script panel
 
 Update: Creation
 		Add a TextArea note information with check box
+		Add a check box to play selected notes
 
 2025 - JF AVILES
 --]]
@@ -21,7 +22,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -47,6 +48,8 @@ function getArrayLanguageStrings()
 			{"Track time: ", "Track time: "},
 			{"Blicks: ", "Blicks: "},
 			{"Selected notes: ", "Selected notes: "},
+			{"...", "..."},
+			{"Notes: ", "Notes: "},
 			{"Select at least one group!", "Select at least one group!"},
 			{"Transpose", "Transpose"},
 			{"Select a value", "Select a value"},
@@ -55,6 +58,7 @@ function getArrayLanguageStrings()
 			{"in all tracks", "in all tracks"},
 			{"Limited to selected groups", "Limited to selected groups"},
 			{"Display note infos", "Display note infos"},
+			{"Play notes", "Play notes"},
 			{"Transpose notes (semitones)", "Transpose notes (semitones)"},
 		},
 	}
@@ -80,12 +84,14 @@ NotesObject = {
 	displayBlicksSize = 80,
 	isLimitedToSelectedGroups = true,
 	isDisplayNoteInfos = false, -- Display note information (check box)
+	isPlayNoteActive = false,
 	transposeSemitone = 0,
 	transposeMinValue = -12,
 	transposeMaxValue = 12,
 	transposeInterval = 1,
 	updatedGroupChar = "*",
 	keyNames = {},
+	currentPlayheadPos = 0,
 	debug = false,
 	logs = {}
 }
@@ -166,10 +172,10 @@ function NotesObject:onSelectionChanged()
 	self:clearNoteInfoPanel()
 	
 	if #selectedNotes > 0 then
+		local currentGroupRef = SV:getMainEditor():getCurrentGroup()
+		local timeOffset = currentGroupRef:getTimeOffset()
 		if #selectedNotes == 1 then
 			local note = selectedNotes[1]
-			local currentGroupRef = SV:getMainEditor():getCurrentGroup()
-			local timeOffset = currentGroupRef:getTimeOffset()
 			local key = self.keyNames[note:getPitch() % 12 + 1]
 
 			self:addNoteInfoPanel(SV:T("Note: ") .. key)
@@ -179,11 +185,55 @@ function NotesObject:onSelectionChanged()
 			if self.displayBlicks then
 				self:addNoteInfoPanel(SV:T("Blicks: ") .. note:getOnset())
 			end
+			if self.isPlayNoteActive then
+				local posNoteBeginSecond = self:getTimeAxis():getSecondsFromBlick(note:getOnset() + timeOffset)
+				local posNoteEndSecond = self:getTimeAxis():getSecondsFromBlick(note:getEnd() + timeOffset)
+				self:startToPlayNotes(posNoteBeginSecond, posNoteEndSecond)
+			end
 		else
 			self:addNoteInfoPanel(SV:T("Selected notes: ") .. #selectedNotes)
+			local keys = ""
+			for i = 1, #selectedNotes do
+				local note = selectedNotes[i]
+				local key = self.keyNames[note:getPitch() % 12 + 1]
+				keys = keys .. key .. " "
+			end
+			if #keys > 20 then
+				keys = keys:sub(1,20) .. SV:T("...")
+			end
+			self:addNoteInfoPanel(SV:T("Notes: ") .. keys)
+			self:addNoteInfoPanel(SV:T("Time: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(selectedNotes[1]:getOnset())))
+			self:addNoteInfoPanel(SV:T("Track time: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(selectedNotes[1]:getOnset() + timeOffset)))
+			if self.isPlayNoteActive then
+				local posNoteBeginSecond = self:getTimeAxis():getSecondsFromBlick(selectedNotes[1]:getOnset() + timeOffset)
+				local posNoteEndSecond = self:getTimeAxis():getSecondsFromBlick(selectedNotes[#selectedNotes]:getEnd() + timeOffset)
+				self:startToPlayNotes(posNoteBeginSecond, posNoteEndSecond)			
+			end
 		end
 	else
 		self:clearNoteInfoPanel()
+	end
+end
+
+-- Start to play note
+function NotesObject:startToPlayNotes(posNoteBeginSecond, posNoteEndSecond)
+	-- Play note
+	self.currentPlayheadPos = SV:getPlayback():getPlayhead()
+	SV:getPlayback():seek(posNoteBeginSecond)
+	SV:getPlayback():play()
+	SV:setTimeout(200, function() self:playNote(posNoteEndSecond) end)
+end
+
+-- Play note
+function NotesObject:playNote(posNoteEndSecond)
+	-- SV:getPlayback():loop(posNoteBeginSecond, posNoteEndSecond)
+	if SV:getPlayback():getPlayhead() > posNoteEndSecond then
+		SV:getPlayback():stop()
+		SV:getPlayback():seek(self.currentPlayheadPos)
+	else
+		if SV:getPlayback():getStatus() == "looping" or SV:getPlayback():getStatus() == "playing"  then
+			SV:setTimeout(200, function() self:playNote(posNoteEndSecond) end)
+		end
 	end
 end
 
@@ -276,6 +326,11 @@ function NotesObject:getControls()
 			defaultValue = self.isDisplayNoteInfos,
 			paramKey = "isDisplayNoteInfos"
 		},
+		isPlayNoteActive = {				-- checkbox
+			value = SV:create("WidgetValue"),
+			defaultValue = self.isPlayNoteActive,
+			paramKey = "isPlayNoteActive"
+		},
 		isLimitedToSelectedGroups = {			-- checkbox
 			value = SV:create("WidgetValue"),
 			defaultValue = true,
@@ -309,7 +364,16 @@ function NotesObject:setControlsCallback()
 			end
 			if control.paramKey == "isDisplayNoteInfos" then
 				self.isDisplayNoteInfos = self.controls.isDisplayNoteInfos.value:getValue()
+				
+				if self.isDisplayNoteInfos then
+					self.isPlayNoteActive = false
+					self.controls.isPlayNoteActive.value:setValue(self.isPlayNoteActive)
+				end
 				SV:refreshSidePanel()
+			end
+			if control.paramKey == "isPlayNoteActive" then
+				self.isPlayNoteActive = self.controls.isPlayNoteActive.value:getValue()
+				-- SV:refreshSidePanel()
 			end
 		end
 		)
@@ -473,6 +537,7 @@ end
 -- Get section
 function NotesObject:getSection()
 	local infoNoteDisplay = {}
+	local playNoteActive = {}
 	local transposeSemitoneDisplay = SV:T("Transpose")
 	
 	self.transposeNotesValue:setEnabled(self.transposeSemitone ~= 0)
@@ -520,7 +585,21 @@ function NotesObject:getSection()
 			}
 		}
 		
+	self.controls.isPlayNoteActive.value:setValue(self.isPlayNoteActive)
 	if self.isDisplayNoteInfos then
+		playNoteActive = 
+			{
+				type = "Container",
+				columns = {
+					{
+					type = "CheckBox",
+					text = SV:T("Play notes"),
+					value = self.controls.isPlayNoteActive.value,
+					width = 1.0
+					}
+				}
+			}
+			
 		infoNoteDisplay = 
 			{
 				type = "Container",
@@ -542,6 +621,7 @@ function NotesObject:getSection()
 		rows = {
 			displayNoteInfos,
 			infoNoteDisplay,
+			playNoteActive,
 			{
 				type = "Container",
 				columns = {
