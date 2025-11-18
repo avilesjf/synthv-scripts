@@ -22,6 +22,9 @@ isFileStored & isInternalGroup => false
 But set to true for both variable is possible:
 => saved to external file & inside the project (hidden group).
 
+See new note panel script (NotesPanel.lua) for SynthV >= 2.1.2
+Notes are now stored inside project source (.svp) with the new setScriptData api
+
 2025 - JF AVILES
 --]]
 
@@ -34,21 +37,10 @@ end
 function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
-			{"Version", "Version"},
-			{"author", "author"},
-			{"minEditorVersion", "minEditorVersion"},
-			{"Project notes", "Project notes"},
-			{"Notes cleared!", "Notes cleared!"},
-			{"Remember to save this project!", "Remember to save this project!"},
-			{"Notes loaded!", "Notes loaded!"},
-			{"Project notes! Click OK button to save notes!", "Project notes! Click OK button to save notes!"},
-			{"Notes saved!", "Notes saved!"},
-			{"Notes created!", "Notes created!"},
+			{"Unable to save notes:", "Unable to save notes:"},
 			{"Project notes:", "Project notes:"},
-			{"Load notes project", "Load notes project"},
-			{"Input notes project", "Input notes project"},
-			{"Save notes project", "Save notes project"},
-			{"Clear notes project", "Clear notes project"},
+			{"Project notes! Click OK button to save notes!", "Project notes! Click OK button to save notes!"},
+			{"Unable to store notes in an unnamed .svp project!", "Unable to store notes in an unnamed .svp project!"},
 		},
 	}
 end
@@ -58,7 +50,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Tools",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end

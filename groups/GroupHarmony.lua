@@ -16,7 +16,6 @@ Add only one track or multiple tracks depending on user selection.
 7/ Use current track to duplicate new track (template to keep voice set)
 8/ Generate AI retakes for each new group harmony
 
-
 Degrees I     II     III  IV      V       VI       VII   +I
 Major C 1      2      3    4      5        6         7    8
 		0     +1     +2   +3     +4       +5        +6   +7
@@ -26,6 +25,8 @@ Major C 1      2      3    4      5        6         7    8
 New version 2.0 to use with SynthV >= 2.1.1
 
 Update: 10 - Nothing new in this version but replaced by HarmonyPanel.lua (SynthV >= 2.1.2)
+See new harmony panel script (HarmonyPanel.lua) for SynthV >= 2.1.2
+Better implementation for harmony detection and application with new option update notes out of scale
 
 2025 - JF AVILES
 --]]
@@ -81,7 +82,6 @@ function getArrayLanguageStrings()
 			{"Key scale type selected: ", "Key scale type selected: "},
 			{"Key scale selected: ", "Key scale selected: "},
 			{"Use current track as a source voice for new tracks", "Use current track as a source voice for new tracks"},
-			{"Lower output level for new harmony groups", "Lower output level for new harmony groups"},
 			{"New track", "New track"},
 			{"Select destination track:", "Select destination track:"},
 			{"Create track and duplicate transposed group of notes", "Create track and duplicate transposed group of notes"},
@@ -90,7 +90,6 @@ function getArrayLanguageStrings()
 			{"Please select groups first on Arrangement view!", "Please select groups first on Arrangement view!"},
 			{"Keys found major (minor): ", "Keys found major (minor): "},
 			{"No common scale key found!", "No common scale key found!"},
-			{"Relative minor keys: ", "Relative minor keys: "},
 			{"Track: ", "Track: "},
 			{"Nothing to do!", "Nothing to do!"},
 			{"Error: No scale key found!", "Error: No scale key found!"},
@@ -113,7 +112,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 11,
+		versionNumber = 12,
 		minEditorVersion = 65540
 	}
 end
