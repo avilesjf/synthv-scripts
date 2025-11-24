@@ -735,16 +735,17 @@ function NotesObject:getTracksList()
 		local numGroups = track:getNumGroups() - 1
 		local formatGroup = formatCount .. " " .. SV:T("groups")
 		local formatNotes = formatCount .. " " .. SV:T("notes")
-		if numGroups < 2 then
-			format = formatCount .. " " .. SV:T("group")
-		end
+
 		local numNotes = 0
-		for i = 1, numGroups do
+		for i = 1, track:getNumGroups() do
 			local groupRef = track:getGroupReference(i)
 			local groupNote = groupRef:getTarget()
 			numNotes = numNotes + groupNote:getNumNotes()
 		end
 		
+		if numGroups < 2 then
+			format = formatCount .. " " .. SV:T("group")
+		end
 		if numNotes < 2 then
 			formatNotes = formatCount .. " " .. SV:T("note")
 		end
