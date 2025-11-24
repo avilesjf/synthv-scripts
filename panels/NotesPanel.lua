@@ -19,7 +19,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -37,7 +37,6 @@ function getArrayLanguageStrings()
 			{"Version", "Version"},
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
-			{"Project notes", "Project notes"},
 			{"Notes cleared!", "Notes cleared!"},
 			{"Remember to save this project!", "Remember to save this project!"},
 			{"Notes loaded!", "Notes loaded!"},
@@ -57,7 +56,7 @@ end
 NotesObject = {
 	playBack = nil,
 	playHeadPosition = nil,
-	displayVersion = false,	-- display version
+	displayVersion = true,	-- display version
 	displayAuthor = false,	-- display author
 	errorMessages = {},
 	hostinfo = nil,
@@ -121,9 +120,6 @@ function NotesObject:new()
 	end
 	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
 	self:addTextPanel(self.infosToDisplay)
-	self:addTextPanel(SV:T("Project notes") .. "...")
-	
-	-- self:getProjectData()
 	self:setProjectNotesTextPanel(self.projectNotes)
 	
     return self
@@ -132,6 +128,16 @@ end
 -- Show message dialog
 function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
+end
+
+-- Show message dialog async
+function NotesObject:showAsync(message)
+	SV:showMessageBoxAsync(SV:T(SCRIPT_TITLE), message, function() self:ShowResponse(message) end)
+end
+
+-- Show response
+function NotesObject:ShowResponse(message)
+	self:addTextPanel(message)
 end
 
 -- Get selected groups
@@ -480,7 +486,6 @@ local notesObject = NotesObject:new()
 
 -- Get panel section state called by Synthesizer V internal system
 function getSidePanelSectionState()
-
 	local section = notesObject:getPanelSectionState()
 	return section
 end
