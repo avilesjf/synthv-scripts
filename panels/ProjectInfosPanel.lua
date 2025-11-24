@@ -22,7 +22,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -41,6 +41,9 @@ function getArrayLanguageStrings()
 			{"Version", "Version"},
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
+			{"Clear project script data", "Clear project script data"},
+			{"Project script data cleared!", "Project script data cleared!"},
+			{"Remember to save this project!", "Remember to save this project!"},
 			{"Infos copied: ", "Infos copied: "},
 			{"chars", "chars"},
 			{"Infos are empty!", "Infos are empty!"},
@@ -70,6 +73,8 @@ function getArrayLanguageStrings()
 			{"No filename", "No filename"},
 			{"Duration: ", "Duration: "},
 			{"s", "s"},
+			{"Project script data:", "Project script data:"},
+			{"Poject script data:", "Poject script data:"},
 			{"Project svp file:", "Project svp file:"},
 			{"groups", "groups"},
 			{"notes", "notes"},
@@ -98,9 +103,10 @@ NotesObject = {
 	hostVersionNumber = 0,
 	projectDurationBlicks = 0,
 	projectDuration = 0,
-	clearButtonValue = nil, 		-- button Clear lyrics
-	applyButtonValue = nil, 		-- button apply get infos
-	clipBoardButtonValue = nil, 	-- button clipBoardButtonValue
+	clearButtonValue = nil, 			-- button Clear lyrics
+	clearScriptDataButtonValue = nil,	-- button clearScriptDataButtonValue
+	applyButtonValue = nil, 			-- button apply get infos
+	clipBoardButtonValue = nil,			-- button clipBoardButtonValue
 	tracksList = {},
 	projectInfos = "",
 	labelApply = "",
@@ -123,6 +129,7 @@ function NotesObject:new()
 	self:setControlsCallback()
 	
 	self.clearButtonValue = SV:create("WidgetValue")
+	self.clearScriptDataButtonValue = SV:create("WidgetValue")
 	self.applyButtonValue = SV:create("WidgetValue")
 	self.clipBoardButtonValue = SV:create("WidgetValue")
 	
@@ -137,6 +144,7 @@ function NotesObject:new()
 	self:setButtonApplyControlCallback()
 	self:setButtonclipBoardControlCallback()
 	self:setButtonClearControlCallback()
+	self:setButtonClearScriptDataControlCallback()
 	
 	local infos = getClientInfo()
 
@@ -277,13 +285,35 @@ end
 -- Set button Clear control callback
 function NotesObject:setButtonClearControlCallback()
 
-	-- Button load notes
+	-- Button Clear text area control
 	self.clearButtonValue:setValueChangeCallback(function()
 			self.projectInfos = ""
 			self.projectInfosTextValue:setValue(self.projectInfos)
 			self:displayMessage("")
 		end
 	)
+end
+
+-- Set button Clear project script data control callback
+function NotesObject:setButtonClearScriptDataControlCallback()
+
+	-- Button clear project script data
+	self.clearScriptDataButtonValue:setValueChangeCallback(function()
+			SV:showOkCancelBoxAsync(SCRIPT_TITLE, SV:T("Clear project script data"), 
+			function(response) self:clearProjectScriptData(response) end)
+		end
+	)
+end
+
+-- Clear project script data()
+function NotesObject:clearProjectScriptData(response)
+	if response then
+		self:getProject():newUndoRecord()
+		self.getProject():clearScriptData()
+		self.projectInfos = ""
+		self.projectInfosTextValue:setValue(self.projectInfos)
+		self:displayMessage(SV:T("Project script data cleared!") .. "\r" .. SV:T("Remember to save this project!"))
+	end
 end
 
 -- Set button clipBoard control callback
@@ -701,11 +731,32 @@ function NotesObject:getProjectInfos()
 	local trackCount = SV:T("Tracks: ") .. self:getProject():getNumTracks()
 	local tracksInfos, tracksList = self:getTracksList()
 	self.tracksList = tracksList
+	local projectScriptData = ""
+	local projectScriptDataKeys = self.getProject():getScriptDataKeys()
+	
+	if #projectScriptDataKeys > 0 then
+		projectScriptData = SV:T("Project script data:") .. " (" .. #projectScriptDataKeys ..  ")" .. "\r"
+		local displayStringLength = 15
+		-- projectScriptData = SV:T("Poject script data:") .. "\r" .. table.concat(projectScriptDataKeys, "\r") .. "\r"
+		for _, key in ipairs(projectScriptDataKeys) do
+			if self.getProject():hasScriptData(key) then
+				local data = self.getProject():getScriptData(key)
+				local nextData = "..."
+				if #data <= displayStringLength then
+					nextData = ""
+				end
+				projectScriptData =  projectScriptData .. key .. "=" .. string.sub(data, 1, displayStringLength)  .. nextData .. "\r"
+			end
+		end
+		projectScriptData = projectScriptData .. "\r"
+	end
 
 	infos = filename .. "\r"
 		.. durationLabel .. "\r"
 		.. groupCount .. ", " .. trackCount .. "\r"
 		.. tracksInfos .. "\r"
+		.. 	projectScriptData
+
 		
 	if isFile then
 		local projectInfos = self:fileProcess(self:getProject():getFileName())
@@ -729,7 +780,6 @@ function NotesObject:getTracksList()
 
 	local formatCount = "%1d"
 	local iTracks = self.getProject():getNumTracks()
-	
 	for iTrack = 1, iTracks do
 		local track = self.getProject():getTrack(iTrack)
 		local numGroups = track:getNumGroups() - 1
@@ -744,7 +794,7 @@ function NotesObject:getTracksList()
 		end
 		
 		if numGroups < 2 then
-			format = formatCount .. " " .. SV:T("group")
+			formatGroup = formatCount .. " " .. SV:T("group")
 		end
 		if numNotes < 2 then
 			formatNotes = formatCount .. " " .. SV:T("note")
@@ -800,7 +850,7 @@ function NotesObject:getSection()
 					{
 						type = "TextArea",
 						value = self.statusTextValue,
-						height = 40,
+						height = 60,
 						width = 1.0,
 						readOnly = true
 					}
@@ -820,6 +870,17 @@ function NotesObject:getSection()
 						text = SV:T("Clear"),
 						width = 0.5,
 						value = self.clearButtonValue
+					}
+				}
+			},
+			{
+				type = "Container",
+				columns = {
+					{
+						type = "Button",
+						text = SV:T("Clear project script data"),
+						width = 1,
+						value = self.clearScriptDataButtonValue
 					}
 				}
 			}
