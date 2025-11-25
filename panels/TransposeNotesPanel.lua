@@ -13,6 +13,7 @@ Notice: Works only with script panel
 Update: Creation
 		Add a TextArea note information with check box
 		Add a check box to play selected notes
+		Update note display with position A=>A4
 
 2025 - JF AVILES
 --]]
@@ -22,7 +23,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -177,8 +178,8 @@ function NotesObject:onSelectionChanged()
 		if #selectedNotes == 1 then
 			local note = selectedNotes[1]
 			local key = self.keyNames[note:getPitch() % 12 + 1]
-
-			self:addNoteInfoPanel(SV:T("Note: ") .. key)
+			local keyInfo = key .. (math.floor(note:getPitch()/12) - 1)
+			self:addNoteInfoPanel(SV:T("Note: ") .. keyInfo)
 			self:addNoteInfoPanel(SV:T("Lyrics: ") .. note:getLyrics())
 			self:addNoteInfoPanel(SV:T("Time: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(note:getOnset())))
 			self:addNoteInfoPanel(SV:T("Track time: ") .. self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(note:getOnset() + timeOffset)))
