@@ -10,6 +10,7 @@ Notice: Works only with script panel
 		introduced with Synthesizer V version >= 2.1.2
 
 Update: Minor updates
+		Add check box limit lyrics to current track
 
 2025 - JF AVILES
 --]]
@@ -19,7 +20,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -43,6 +44,7 @@ function getArrayLanguageStrings()
 			{"Lyrics are empty!", "Lyrics are empty!"},
 			{"Project: ", "Project: "},
 			{"Display lyrics:", "Display lyrics:"},
+			{"Limit to current track", "Limit to current track"},
 			{"Display lyrics", "Display lyrics"},
 			{"Display group name and time", "Display group name and time"},
 			{"Clipboard", "Clipboard"},
@@ -58,6 +60,7 @@ NotesObject = {
 	displayVersion = true,			-- display version
 	displayAuthor = false,			-- display author
 	isGroupNameDisplayed = false,	-- is group name and time displayed
+	isLimitTrack = false,			-- is limit lyrics from current track
 	errorMessages = {},
 	hostinfo = nil,
 	osType = "",
@@ -210,6 +213,11 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = 0, 
 			paramKey = "groupName"
+		},
+		limitTrack = {
+			value = SV:create("WidgetValue"),
+			defaultValue = 0, 
+			paramKey = "limitTrack"
 		}
 	}
 	return controls
@@ -298,8 +306,10 @@ function NotesObject:getLyrics()
 	local trackReferenceLyricsLength = 0
 	local result = ""
 	local lyricsToStore = ""
+	local currentTrackIndex = SV:getMainEditor():getCurrentTrack():getDisplayOrder()
 	
 	self.isGroupNameDisplayed = self.controls.groupName.value:getValue()
+	self.isLimitTrack = self.controls.limitTrack.value:getValue()
 	
 	lyricsToStore = lyricsToStore .. SV:T("Project: ") 
 		.. self:getFileNameOnly(self:getProject():getFileName()) .. "\r"
@@ -307,41 +317,45 @@ function NotesObject:getLyrics()
 	for iTrack = 1, trackCount do
 		local track = project:getTrack(iTrack)
 		local trackName = track:getName()
+		local trackIndex = track:getDisplayOrder()
 		maxLyrics = 0
-
-		resultLyrics = self:getTrackLyrics(track, timeAxis, 0)
 		
-		if #resultLyrics > 0 then
+		if not self.isLimitTrack or (self.isLimitTrack and trackIndex == currentTrackIndex) then
+			resultLyrics = self:getTrackLyrics(track, timeAxis, 0)
 			
-			for iGroups = 1, #resultLyrics do
-				local lyricsInGroups = resultLyrics[iGroups]
-				trackNumber = lyricsInGroups.track
+			if #resultLyrics > 0 then
 				
-				table.insert(lyricsTable, {
-					trackOrder = resultLyrics.track,
-					trackNumber = iTrack,
-					trackName = trackName,
-					groupName = lyricsInGroups.groupName,
-					timeBegin  =  lyricsInGroups.timeBegin,
-					timeEnd  =  lyricsInGroups.timeEnd,
-					timeSecondBegin = lyricsInGroups.timeSecondBegin,
-					timeSecondEnd = lyricsInGroups.timeSecondEnd,
-					timeOffset = lyricsInGroups.timeOffset,
-					groupIndex = lyricsInGroups.groupIndex,
-					lyric = lyricsInGroups.lyricsGroup,
-					lyricsSubGroups = lyricsInGroups.lyricsSubGroups
-				})
-				
-				maxLyrics = maxLyrics + lyricsInGroups.lyricsLength
-			 end
+				for iGroups = 1, #resultLyrics do
+					local lyricsInGroups = resultLyrics[iGroups]
+					trackNumber = lyricsInGroups.track
+					
+					table.insert(lyricsTable, {
+						trackOrder = resultLyrics.track,
+						trackNumber = iTrack,
+						trackName = trackName,
+						groupName = lyricsInGroups.groupName,
+						timeBegin  =  lyricsInGroups.timeBegin,
+						timeEnd  =  lyricsInGroups.timeEnd,
+						timeSecondBegin = lyricsInGroups.timeSecondBegin,
+						timeSecondEnd = lyricsInGroups.timeSecondEnd,
+						timeOffset = lyricsInGroups.timeOffset,
+						groupIndex = lyricsInGroups.groupIndex,
+						lyric = lyricsInGroups.lyricsGroup,
+						lyricsSubGroups = lyricsInGroups.lyricsSubGroups
+					})
+					
+					maxLyrics = maxLyrics + lyricsInGroups.lyricsLength
+				 end
+			end
+			
+			if maxLyrics > previousMaxLyrics then
+				trackReference = iTrack
+				trackReferenceOrder = track:getDisplayOrder()
+				trackReferenceLyricsLength = maxLyrics
+			end
+			previousMaxLyrics = maxLyrics
 		end
-		
-		if maxLyrics > previousMaxLyrics then
-			trackReference = iTrack
-			trackReferenceOrder = track:getDisplayOrder()
-			trackReferenceLyricsLength = maxLyrics
-		end
-		previousMaxLyrics = maxLyrics
+
 	end
 
 	-- Result infos
@@ -654,6 +668,17 @@ function NotesObject:getSection()
 						height = 300,
 						width = 1.0,
 						readOnly = false
+					}
+				}
+			},
+			{
+				type = "Container",
+				columns = {
+					{
+					type = "CheckBox",
+					text = SV:T("Limit to current track"),
+					value = self.controls.limitTrack.value,
+					width = 1.0
 					}
 				}
 			},
