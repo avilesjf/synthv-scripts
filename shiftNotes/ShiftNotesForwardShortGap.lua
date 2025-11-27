@@ -1,15 +1,15 @@
-local SCRIPT_TITLE = 'Shift notes backward V1.0'
+local SCRIPT_TITLE = 'Shift notes forward ShortGap V1.0'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: ShiftNotesBackward.lua
+lua file name: ShiftNotesForwardShortGap.lua
 
-This script will move notes backward
+This script will move notes forward
 with a short gap.
 
-Set shortcut to ALT + cursor left
+Set shortcut to ALT + cursor right
 
 2025 - JF AVILES
 --]]
@@ -31,9 +31,9 @@ end
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Tools",
+		category = "_JFA_Shift_Notes",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -43,7 +43,7 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
-	direction = -1, -- Backward
+	direction = 1, -- Forward
 	selectedNotes = nil,
 	timeGapSeconds = 0.001	-- Gap in milliseconds 1 millisecond = 1411200 blicks
 }

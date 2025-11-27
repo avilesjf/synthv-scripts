@@ -1,16 +1,16 @@
-local SCRIPT_TITLE = 'Shift notes up V1.0'
+local SCRIPT_TITLE = 'Shift notes right V1.0'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: ShiftNotesUp.lua
+lua file name: ShiftNotesRight.lua
 
-This script will move pitch notes up
+This script will move notes right
 on selected notes.
-If no notes selected piano-roll scroll up
+If no notes selected piano-roll scroll right
 
-Set shortcut to Cursor Up
+Set shortcut to Cursor Right
 
 2025 - JF AVILES
 --]]
@@ -32,9 +32,9 @@ end
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Tools",
+		category = "_JFA_Shift_Notes",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -44,7 +44,8 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
-	positionGap = 1, -- Pitch or Scroll (up = 1 & down = -1)
+	direction = 1, -- direction (left = -1 & right = +1)
+	noteTimeGap = SV.QUARTER / 4, -- moving left/right QUARTER/4
 	navigation = nil,
 	selectedNotes = nil
 }
@@ -76,15 +77,16 @@ function NotesObject:start()
 	if #self.selectedNotes > 0 then
 		-- For each selected notes
 		for _, note in pairs(self.selectedNotes) do
-			-- Set new position
-			note:setPitch(note:getPitch() + self.positionGap)
+			
+			-- Set new position			
+			note:setOnset(note:getOnset() + (self.noteTimeGap * self.direction))
 		end
 	else
 		-- No notes selected
-        local viewRange = self.navigation:getValueViewRange()
-        local newPos = (viewRange[1] + viewRange[2]) / 2
-		-- Scroll up/down
-        self.navigation:setValueCenter(newPos + self.positionGap)
+		local timeViewRange = self.navigation:getTimeViewRange()
+        local newPos = timeViewRange[1] + (self.noteTimeGap * self.direction)
+		-- Scroll left/right
+		self.navigation:setTimeLeft(newPos)
 	end	
 end
 

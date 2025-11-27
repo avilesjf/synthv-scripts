@@ -1,15 +1,15 @@
-local SCRIPT_TITLE = 'Shift notes forward to next bar V1.0'
+local SCRIPT_TITLE = 'Shift notes backward to previous bar V1.0'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: ShiftNotesForward2Bar.lua
+lua file name: ShiftNotesBackward2Bar.lua
 
-This script will move notes forward
-to the first next measure bar
+This script will move notes backward
+to the first previous measure bar
 
-Set shortcut to CTRL + ALT + Cursor right
+Set shortcut to CTRL + ALT + Cursor left
 
 2025 - JF AVILES
 --]]
@@ -31,9 +31,9 @@ end
 function getClientInfo()
 	return {
 		name = SV:T(SCRIPT_TITLE),
-		category = "_JFA_Tools",
+		category = "_JFA_Shift_Notes",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -43,7 +43,7 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
-	direction = 1,
+	direction = -1,
 	numerator = 4,
 	denominator = 4,
 	selectedNotes = nil,
@@ -82,42 +82,50 @@ end
 function NotesObject:getFirstMeasureFromNote(notePos)
 	local measurePos = 0
 	local measureBlick = 0
-	local measureFirst = self.timeAxis:getMeasureAt(notePos) + 1
-	local existingMeasureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
+	local noteIsOnFirstMeasure = false
+	local measureFirst = self.timeAxis:getMeasureAt(notePos)
+	local checkExistingMeasureMark = self.timeAxis:getMeasureMarkAt(measureFirst)
 	
-	if existingMeasureMark ~= nil then
-		self.numerator = existingMeasureMark.numerator
-		self.denominator = existingMeasureMark.denominator
-		measurePos = existingMeasureMark.position
-		measureBlick = existingMeasureMark.positionBlick
+	if checkExistingMeasureMark ~= nil then
+		self.numerator = checkExistingMeasureMark.numerator
+		self.denominator = checkExistingMeasureMark.denominator
+		measurePos = checkExistingMeasureMark.position
+		measureBlick = checkExistingMeasureMark.positionBlick
 		if measurePos == 0 and measureFirst == 0 then
-			measureFirst = measureFirst + 1
+			measureBlick = notePos
+		else
+			measurePos, measureBlick = self:createTempMeasureMark(measureFirst)
 		end
-		measurePos, measureBlick = self:createTempMeasureMark(measureFirst)
 	else
 		measurePos, measureBlick = self:createTempMeasureMark(measureFirst)
 	end
-
+	noteIsOnFirstMeasure = notePos == measureBlick
+		
+	if noteIsOnFirstMeasure then
+		if measureFirst > 1 then
+			measureFirst = measureFirst - 1
+			-- Carefull don't create new mark on measure = 0 => crash!
+			measurePos, measureBlick = self:createTempMeasureMark(measureFirst)
+		else
+			measurePos = 0
+			measureBlick = 0
+		end
+	end
 	return measurePos, measureBlick
 end
 
 -- Shift selected notes
-function NotesObject:shiftSelectedNotes()	
+function NotesObject:shiftSelectedNotes()
 	local measurePos, measureBlick = self:getFirstMeasureFromNote(self.noteFirst:getOnset())
 	
-	local noteTimeGap = measureBlick - self.noteFirst:getOnset()
+	local noteTimeGap = self.noteFirst:getOnset() + (measureBlick * self.direction)
 	-- for each selected notes
 	for iNote = 1, #self.selectedNotes do
 		local note = self.selectedNotes[iNote]
 
 		-- Set new position
-		note:setOnset(note:getOnset() + noteTimeGap)
+		note:setOnset(note:getOnset() + (noteTimeGap * self.direction))
 	end
-end
-
--- Display message box
-function NotesObject:show(message)
-	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
 end
 
 -- Main process
