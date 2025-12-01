@@ -20,8 +20,9 @@ A/ If you want to STOP this script without the required drag&drop DAW (multiple 
 	C- STOP this script by running this script again! 
 		(hidden group used for this feature)
 
-Update: Minor updates
-
+Update: 0 - Minor updates
+		6 - Add multiple group creation after dropping chords notes from DAW
+		
 2025 - JF AVILES
 --]]
 
@@ -47,7 +48,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 5,
+		versionNumber = 6,
 		minEditorVersion = 65540
 	}
 end
@@ -59,32 +60,20 @@ NotesObject = {
 	editor = nil,
 	THRESHOLD = 41505882,  -- 0.03 seconds (120)
 	INITIAL_TRACK_NAME_REF = "initialTrackName",
-	INITIAL_COLOR_TRACK_REF = "initialColorTrack",
 	NUM_TRACKS_REF = "numTracks",
 	CURRENT_TRACK_REF = "currentTrack",
-	TRACKS_COLOR_REF =  "tracksColor",
 	GROUP_TAG = "GroupData:",
 	GROUP_STOP_TAG = "GroupStop:",
-	CURRENT_TRACK_COLOR_REF = "FFFF0000",
-	TRACK_TARGET_COLOR_REF = "FFFF0000",
 	LINK_NOTES_ACTIVE = "linkNotesActive",
 	TRACK_TARGET_REF = "trackTarget",
-	tracksColor = {},
-	tracksColorStored = {},
-	currentTrackColor = "",
-	currentTrackColorOn = false,
 	groupStoredRefFound = nil,
 	groupStoredFound = nil,
 	groupStoredRefToStopPrevious = nil,
 	groupStoredToStopPrevious = nil,
-	initialColorTrack = "",
 	linkNotesActive = true,
 	trackTarget = nil,
-	trackTargetName = SV:T("Track"),
 	initialTrackName = "",
 	scriptInstance = "",
-	trackTargetColor = "",
-	trackTargetColorOn = false,
 	newDAWTrack = nil,
 	newGrouptRef = nil,
 	currentTrack = nil,
@@ -96,6 +85,11 @@ NotesObject = {
 	currentSeconds = 0,
 	stopProcess = false,
 	stopProcessOK = false,
+	processing = 0,
+	isTrackClone = true, -- clone current track voice
+	colors = {},
+	currentColorPos = 0,
+	currentColor = "",
 	sepParam = "|",
 	lyricsException = {}
 }
@@ -115,14 +109,12 @@ function NotesObject:new()
 	self.selectedNotes = self.selection:getSelectedNotes()
 	self.numSelectedNotes = #self.selection:getSelectedNotes()
 	
-	self.playBack = SV:getPlayback()	
+	self.playBack = SV:getPlayback()
 	self.currentSeconds = self.playBack:getPlayhead()
-	self.tracksColor = self:getTracksColor()
 	self.currentTrack = self.editor:getCurrentTrack()
 	self.initialTrackName = self.currentTrack:getName()
-	self.initialColorTrack = self.currentTrack:getDisplayColor()
 	self.trackTarget = self.currentTrack
-	
+	self.colors = self:getColors()
 	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
 
     return self
@@ -188,6 +180,47 @@ function NotesObject:secondsToClock(timestamp)
 	  timestamp%60):gsub("%.",",")
 end
 
+-- Get new color
+function NotesObject:getNewColor(track)
+	if self.currentColorPos == 0 then 
+		self.currentColorPos = self:getCurrentColorPos(track)
+	end
+	self.currentColorPos = self.currentColorPos + 1
+	if self.currentColorPos > #self.colors then
+		self.currentColorPos = 1
+	end
+	return self.colors[self.currentColorPos].val
+end
+
+-- Get current color position
+function NotesObject:getCurrentColorPos(track)
+	local newPos = 1
+	for i, color in ipairs(self.colors) do
+		if color.val == track:getDisplayColor() then
+			newPos = i
+			break
+		end
+	end	
+	return newPos
+end
+
+-- Get colors
+function NotesObject:getColors()
+	local colors = {}
+	table.insert(colors, {val = "ffd14f5b", name = "red"})
+	table.insert(colors, {val = "ffc27455", name = "orange"})
+	table.insert(colors, {val = "ffc27455", name = "ocher"})
+	table.insert(colors, {val = "ffd6bc43", name = "yellow"})
+	table.insert(colors, {val = "ff7db235", name = "green"})
+	table.insert(colors, {val = "ff3bb26c", name = "greenish"})
+	table.insert(colors, {val = "ff3eb2a8", name = "blue-sky"})
+	table.insert(colors, {val = "ff4794cb", name = "blue"})
+	table.insert(colors, {val = "ff5478c7", name = "turquoise"})
+	table.insert(colors, {val = "ff6959d4", name = "purple"})
+	table.insert(colors, {val = "ffb853b3", name = "pink"})
+	return colors
+end
+
 -- Get first mesure before first note
 function NotesObject:getFirstMesure(notePos)
 	local measurePos = 0
@@ -227,50 +260,118 @@ function NotesObject:removeTrackDAW()
 	end
 end
 
+-- Clone track to keep current track voice
+function NotesObject:cloneTrackReference(trackRef, trackName)
+	local newTrack = trackRef:clone()		
+	local iGroups = newTrack:getNumGroups()
+	local color = self:getNewColor(self.trackTarget)
+	newTrack:setDisplayColor(color)
+	
+	if iGroups > 1 then
+		-- Delete groups
+		while iGroups > 1 do
+			local groupRef = newTrack:getGroupReference(iGroups)
+			local index = groupRef:getIndexInParent()
+			if groupRef ~= nil and not groupRef:isMain() then
+				newTrack:removeGroupReference(index)
+				iGroups = newTrack:getNumGroups()
+			end
+		end
+	end
+	
+	newTrack:setName(trackName)
+	self.project:addTrack(newTrack)
+
+	return newTrack
+end
+
+-- Create track target
+function NotesObject:createTrackTarget(name)
+	local newTrackTarget = SV:create("Track")
+	local color = self:getNewColor(self.trackTarget)
+	newTrackTarget:setDisplayColor(color)
+	
+	local newTrackIndex = self.project:addTrack(newTrackTarget)
+	newTrackTarget = self.project:getTrack(newTrackIndex)
+	newTrackTarget:setName(name)
+	return newTrackTarget
+end
+
 -- Create group for new track with new notes
 function NotesObject:createGroup(startPosition, targetPosition)
 	local maxLengthResult = 30
 	local groupRefMain = self.newDAWTrack:getGroupReference(self.newDAWTrack:getNumGroups())
 	local durationGroupRefMain = groupRefMain:getDuration()
 	local groupNotesMain = groupRefMain:getTarget()
+	local isChordsGroup = false
 	
 	local mainGroupNotes = {}
-	self.THRESHOLD = self:getMaxTimeGapFromBPM(targetPosition) -- 41505882 = 0.06 seconds
 	
+	local iGroup = 1
+	self.THRESHOLD = self:getMaxTimeGapFromBPM(targetPosition) -- 41505882 = 0.06 seconds
+	local previousNote = nil
+
 	-- Save notes to groups
 	for iNote = 1, groupNotesMain:getNumNotes() do
-		table.insert(mainGroupNotes, groupNotesMain:getNote(iNote))
+		local note = groupNotesMain:getNote(iNote)
+		if previousNote ~= nil then
+			if note:getOnset() == previousNote:getOnset() then
+				isChordsGroup = true
+				iGroup = iGroup + 1
+			else
+				iGroup = 1
+			end
+		end
+		if mainGroupNotes[iGroup] == nil then
+			mainGroupNotes[iGroup] = {}
+		end
+		table.insert(mainGroupNotes[iGroup], note)
+		previousNote = groupNotesMain:getNote(iNote)
 	end
 	
 	if #mainGroupNotes > 0 then
-		-- Create new group 
-		local noteGroup = SV:create("NoteGroup")
-		self.newGrouptRef = SV:create("NoteGroupReference")
+		for iGroup, group in ipairs(mainGroupNotes) do
+			-- Create new group 
+			local noteGroup = SV:create("NoteGroup")
+			local newGrouptRef = SV:create("NoteGroupReference")
+				
+			self.project:addNoteGroup(noteGroup)
+			newGrouptRef:setTarget(noteGroup)
+			newGrouptRef:setTimeOffset(startPosition)
+			newGrouptRef:setTimeRange(startPosition, durationGroupRefMain) -- v2.1.1
 			
-		self.project:addNoteGroup(noteGroup)
-		self.newGrouptRef:setTarget(noteGroup)
-		self.newGrouptRef:setTimeOffset(startPosition)
-		self.newGrouptRef:setTimeRange(startPosition, durationGroupRefMain) -- v2.1.1
-
-		self.currentTrack:addGroupReference(self.newGrouptRef)
-
-		local previousNote = nil
-		for iNote = 1, #mainGroupNotes do
-			local note = mainGroupNotes[iNote]:clone()
-			-- Update position within the new group
-			note:setOnset(mainGroupNotes[iNote]:getOnset())
-			
-			if self.linkNotesActive then
-				if previousNote ~= nil then
-					self:linkedTheNotes(previousNote, note, noteGroup:getNote(iNote - 1))
+			if iGroup == 1 then
+				self.currentTrack:addGroupReference(newGrouptRef)
+			else
+				local trackName = self.initialTrackName .. "-" .. iGroup
+				if self.isTrackClone then
+					-- Clone track for new groups
+					local track = self:cloneTrackReference(self.currentTrack, trackName)
+					track:addGroupReference(newGrouptRef)
+				else
+					local track = self:createTrackTarget(trackName)
+					track:addGroupReference(newGrouptRef)
 				end
 			end
+
+			local previousNote = nil
+			for iNote = 1, #group do
+				local note = group[iNote]:clone()
+				-- Update position within the new group
+				note:setOnset(group[iNote]:getOnset())
+				
+				if self.linkNotesActive then
+					if previousNote ~= nil then
+						self:linkedTheNotes(previousNote, note, noteGroup:getNote(iNote - 1))
+					end
+				end
+				
+				noteGroup:addNote(note)
+				previousNote = note
+			end
 			
-			noteGroup:addNote(note)
-			previousNote = note
+			local resultLyrics = self:renameOneGroup(self.timeAxis, maxLengthResult, noteGroup)
 		end
-		
-		local resultLyrics = self:renameOneGroup(self.timeAxis, maxLengthResult, noteGroup)
 	end
 	
 	return true
@@ -395,17 +496,16 @@ function NotesObject:isTextAccepted(timeAxis, note)
 	return result
 end
 
--- Set color for track "trackTarget"
-function NotesObject:setTrackTargetColor()
+-- Set track name waiting
+function NotesObject:setTrackNameWaiting()
 	if self.trackTarget ~= nil then
-		self.trackTargetColorOn = not self.trackTargetColorOn
-
-		if self.trackTargetColorOn then
-			self.trackTargetColor = "FFF09C9C"
-		else
-			self.trackTargetColor = self.TRACK_TARGET_COLOR_REF
+		self.processing = self.processing  + 1
+		if self.processing > 4 then
+			self.processing = 0
 		end
-		self.trackTarget:setDisplayColor("#" .. self.trackTargetColor)
+		local followString = string.rep(".", self.processing)
+		local targetName = followString .. " " .. self.initialTrackName
+		self.trackTarget:setName(targetName)
 	end
 end
 
@@ -455,20 +555,6 @@ function NotesObject:getGroupContentData(data)
 		data = string.sub(data, pos + string.len(self.GROUP_TAG) + 1)
 	end
 	return data
-end
-
--- Set color for current track
-function NotesObject:setCurrentTrackColor()
-	if self.currentTrack ~= nil then
-		self.currentTrackColorOn = not self.currentTrackColorOn
-
-		if self.currentTrackColorOn then
-			self.currentTrackColor = self.initialColorTrack
-		else
-			self.currentTrackColor = self.CURRENT_TRACK_COLOR_REF
-		end
-		self.currentTrack:setDisplayColor("#" .. self.currentTrackColor)
-	end
 end
 
 -- Get group reference in time position
@@ -533,9 +619,7 @@ end
 
 -- Scan a new track
 function NotesObject:scanNewTrack()
-	local titleTrack = SV:T("Waiting: ")
-
-	SV:setTimeout(200, function() self:setTrackTargetColor() end)
+	SV:setTimeout(200, function() self:setTrackNameWaiting() end)
 	self.currentSeconds = self.playBack:getPlayhead()
 	local secondsInfo = self:secondsToClock(self.currentSeconds)
 	
@@ -554,6 +638,7 @@ function NotesObject:scanNewTrack()
 			self:removeTrackDAW()
 			self.stopProcess = true -- End of process
 			self.stopProcessOK = true -- End of process OK
+			self:setTrackTarget()
 		else
 			-- a new track is created with no notes
 		end
@@ -566,32 +651,17 @@ function NotesObject:stopScript()
 		SV:finish()
 end
 
--- set track target
+-- Set track target
 function NotesObject:setTrackTarget()
-	
 	if self.trackTarget ~= nil then
-		self.trackTarget:setDisplayColor("#" .. self.initialColorTrack)
+		self.trackTarget:setName(self.initialTrackName)
 	end
-	
 end
 
 -- Stop script 
 function NotesObject:stopScript()
 		self.stopProcess = true
 		SV:setTimeout(30, function() self:finishScriptProcess() end)
-end
-
--- Set initial tracks color
-function NotesObject:setInitialTracksColor()
-	if self.currentTrack ~= nil then
-		self.currentTrack:setDisplayColor("#" .. self.initialColorTrack)
-	end
-	
-	for iTrack = 1, #self.tracksColorStored do
-		-- table.insert(self.tracksColorStored, {track[1], track[2]})
-		local iTrackNumber = tonumber(self.tracksColorStored[iTrack][1])
-		self.project:getTrack(iTrackNumber):setDisplayColor("#" .. self.tracksColorStored[iTrack][2])
-	end
 end
 
 -- Delete stop stored group
@@ -621,8 +691,6 @@ function NotesObject:endOfScript()
 	self.stopProcess = true
 	self:setTrackTarget()
 
-	self:setInitialTracksColor()
-	
 	-- clean previous data
 	SV:setTimeout(10, function() self:deletePreviousStoredGroup() end)	
 	SV:setTimeout(20, function() self:deleteStopStoredGroup() end)
@@ -640,24 +708,11 @@ function NotesObject:trim(s)
 	  return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
 end
 
--- Get tracks color
-function NotesObject:getTracksColor()
-	local sep = ""
-	self.tracksColor = ""
-	for iTrack = 1, self.numTracks do
-		self.tracksColor = self.tracksColor .. sep 
-			.. iTrack .. "-" .. self.project:getTrack(iTrack):getDisplayColor()
-		sep = ","
-	end
-	return self.tracksColor
-end
-
 -- Get stored data 
 function NotesObject:getStoredData()
 	local result = false
 	
 	-- self.GROUP_TAG .. self.sepParam .. |initialTrackName=Track 1
-	-- |initialColorTrack=ffff0000|numTracks=2|currentTrack=1|tracksColor=1-fff0000
 	local groupData = self:getGroupContentData(self.groupStoredFound:getName())
 
 	if self:isParametersOk(groupData) then
@@ -706,9 +761,6 @@ function NotesObject:setParametersFromStoredGroup(paramName, value)
 	if string.find(paramName, self.INITIAL_TRACK_NAME_REF) then
 		self.initialTrackName = value
 	end
-	if string.find(paramName, self.INITIAL_COLOR_TRACK_REF) then
-		self.initialColorTrack = value
-	end
 	if string.find(paramName, self.NUM_TRACKS_REF) then
 		self.numTracks = tonumber(value)
 	end	
@@ -728,15 +780,6 @@ function NotesObject:setParametersFromStoredGroup(paramName, value)
 		else
 			self:show(SV:T("Error in saved parameters, try again!"))
 			self:stopScript()
-		end
-	end
-	if string.find(paramName, self.TRACKS_COLOR_REF) then
-		-- tracksColor=1-fff09c9c,2-fff09c9c
-		local tracks = self:split(value, ",")
-		
-		for iTrack = 1, #tracks do
-			local track = self:split(tracks[iTrack], "-")
-			table.insert(self.tracksColorStored, {track[1], track[2]})
 		end
 	end
 	if string.find(paramName, self.LINK_NOTES_ACTIVE) then
@@ -764,12 +807,10 @@ function NotesObject:storeToHiddenGroup()
 	if self.groupStoredFound == nil then
 		self.groupStoredRefFound, self.groupStoredFound = self:createInternalGroup()
 		local data = self.INITIAL_TRACK_NAME_REF	.. "=" .. self.initialTrackName					.. self.sepParam
-			.. self.INITIAL_COLOR_TRACK_REF			.. "=" .. self.initialColorTrack 				.. self.sepParam
 			.. self.LINK_NOTES_ACTIVE				.. "=" .. tostring(self.linkNotesActive)		.. self.sepParam
 			.. self.NUM_TRACKS_REF					.. "=" .. self.numTracks						.. self.sepParam
 			.. self.TRACK_TARGET_REF				.. "=" .. self.trackTarget:getIndexInParent()	.. self.sepParam
-			.. self.CURRENT_TRACK_REF				.. "=" .. self.currentTrack:getIndexInParent()	.. self.sepParam
-			.. self.TRACKS_COLOR_REF				.. "=" .. self.tracksColor
+			.. self.CURRENT_TRACK_REF				.. "=" .. self.currentTrack:getIndexInParent()
 		self:setNewGroupName(self.groupStoredFound, self.GROUP_TAG, data)
 
 		-- Get this stored data
@@ -788,7 +829,8 @@ function NotesObject:startProcess()
 	self.groupStoredRefFound, self.groupStoredFound = self:getPreviousStoredGroup(self.GROUP_TAG)
 	
 	-- Is first script processing
-	if self.groupStoredFound == nil then	
+	if self.groupStoredFound == nil then
+		-- self:getProject():newUndoRecord()
 		self:storeToHiddenGroup()
 		SV:setTimeout(100, function() self:loop() end)
 	else

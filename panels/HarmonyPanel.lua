@@ -14,13 +14,14 @@ Add only one track or multiple tracks depending on user selection.
 5/ Panel display introduced with Synthesizer V version 2.1.2
 
 Update: Minor updates
-		4 - Add negative harmony option
-		5 - Major update: Prior use user scale choice (ComboBox) than scale found (or not)
-			and update outer scale checkbox is added
-		6 - Add check box: major scale only detection and detection property in scalesReference
-		7 - Add check box: update selected groups only in user selected scale (no new track)
-		8 - Add synchronize unlinked groups
-		9 - Minor update
+		 4 - Add negative harmony option
+		 5 - Major update: Prior use user scale choice (ComboBox) than scale found (or not)
+			 and update outer scale checkbox is added
+		 6 - Add check box: major scale only detection and detection property in scalesReference
+		 7 - Add check box: update selected groups only in user selected scale (no new track)
+		 8 - Add synchronize unlinked groups
+		 9 - Minor update
+		10 - Add multiple group creation after dropping chords notes from DAW
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -33,7 +34,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 9,
+		versionNumber = 10,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -126,6 +127,7 @@ NotesObject = {
 	isDetectionMajorScaleOnly = true, 	-- detection limited to major scale
 	isUpdateNotesOuterScale = true, 	-- Update notes outer scale
 	isSynchronizeGroup = false, 		-- Synchronize group unlinked
+	isDropNotesFromDAW = false, 		-- Drop notes after drag from DAW
 	trackTestActive = false,			-- Add track button to generate samples notes in scale
 	trackTest = nil,					-- track to test harmonies
 	trackTestTitle = SV:T("Track scale test"), -- track to test harmonies
@@ -148,14 +150,12 @@ NotesObject = {
 	posKeyInScaleForm = 0,
 	SEP_KEYS = "/",
 	keyScaleChoice = {},
-	-- relativeMinorScalekeysChoice = {},
-	-- relativeMinorScalekeys = "",
 	keyScaleSelected = "",
 	keyScaleTypeSelected  = 1,		
 	keyScaleTypeTitleSelected  = "",
 	keyScaleTypeValuesSelected = {0,2,4,5,7,9,11}, -- default major
 	trackNameHarmony = "",
-	isTrackClone = false,			-- Clone track to keep voicebank
+	isTrackClone = true,			-- Clone track to keep voicebank
 	isUpdateCurrentGroup = false,	-- Update current groups only
 	isFixed = false,
 	isNegativeHarmony = false,
@@ -190,6 +190,15 @@ NotesObject = {
 	currentSecondsDisplay = "",
 	currentTrackNumber = nil,
 	processing = 0,
+	stopProcess = false,
+	stopProcessOK = false,
+	newDAWTrack = nil,
+	linkNotesActive = true,
+	trackTarget = nil,
+	initialTrackName = "",
+	initialTrack = nil,
+	lyricsException = {},
+	defaultLabelInfoText = SV:T("Generate harmonies"),
 	debug = false,
 	resultDebug = "",
 	logs = {}
@@ -257,9 +266,10 @@ function NotesObject:new()
 	end
 	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
 	self:addTextPanel(self.infosToDisplay)
-	self:addTextPanel(SV:T("Generate harmonies") .. "...")
+	self:addTextPanel(self.defaultLabelInfoText .. "...")
 	
 	self.defaultKeyFoundMessage = SV:T("Select at least one group!") .. "\r"
+	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
 	
 	-- Register arrangement selection callback
 	self:registerArrangementSelectionCallback()
@@ -803,7 +813,7 @@ function NotesObject:duplicateNotes(groupsSelected)
 	
 	if not self.isUpdateCurrentGroup then
 		if self.isTrackClone then
-			self.newTrackRef = self:cloneTrackReference()
+			self.newTrackRef = self:cloneTrackReference(self:getCurrentTrack(), self:getCurrentTrack():getName())
 		end
 	end
 
@@ -863,9 +873,11 @@ function NotesObject:duplicateNotes(groupsSelected)
 end
 
 -- Clone track to keep current track voice
-function NotesObject:cloneTrackReference()
-	local newTrack = self:getCurrentTrack():clone()
+function NotesObject:cloneTrackReference(trackRef, trackName)
+	local newTrack = trackRef:clone()
 	local iGroups = newTrack:getNumGroups()
+	local color = self:getNewColor(self.trackTarget)
+	newTrack:setDisplayColor(color)
 	
 	if iGroups > 1 then
 		-- Delete groups
@@ -879,10 +891,22 @@ function NotesObject:cloneTrackReference()
 		end
 	end
 	
-	newTrack:setName("Track voice ref")
+	newTrack:setName(trackName)
 	self:getProject():addTrack(newTrack)
 
 	return newTrack
+end
+
+-- Create track target
+function NotesObject:createTrackTarget(name)
+	local newTrackTarget = SV:create("Track")
+	local color = self:getNewColor(self.trackTarget)
+	newTrackTarget:setDisplayColor(color)
+	
+	local newTrackIndex = self:getProject():addTrack(newTrackTarget)
+	newTrackTarget = self:getProject():getTrack(newTrackIndex)
+	newTrackTarget:setName(name)
+	return newTrackTarget
 end
 
 -- Delete track reference
@@ -1445,6 +1469,7 @@ function NotesObject:getControls()
 	-- ComboBox: Harmony type					harmonyChoice
 	-- CheckBox: Update notes outer scale		isUpdateNotesOuterScale
 	-- CheckBox: Synchronize unlinked groups	isSynchronizeGroup
+	-- CheckBox: Drop notes from DAW			isDropNotesFromDAW
 	-- CheckBox: use current track as source	isTrackClone
 	-- CheckBox: Update current group only		isUpdateCurrentGroup
 	-- TextArea: status text 					statusTextValue
@@ -1504,6 +1529,11 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = false,
 			paramKey = "isSynchronizeGroup"
+		},
+		isDropNotesFromDAW = {				-- 	CheckBox: Drop notes from DAW
+			value = SV:create("WidgetValue"),
+			defaultValue = false,
+			paramKey = "isDropNotesFromDAW"
 		},
 		isTrackClone = {						-- CheckBox: Use current track as source
 			value = SV:create("WidgetValue"),
@@ -1587,43 +1617,71 @@ function NotesObject:setControlsCallback()
 					-- Reset simple transposition value because user select "harmonyChoice" double notes
 					self.controls.pitch.value:setValue(0)
 				end
+				
 				if control.paramKey == "scaleKeyType" then
 					self.keyScaleTypeSelected = self.controls.scaleKeyType.value:getValue() + 1
 				end
+				
 				if control.paramKey == "isSynchronizeGroup" then
 					self.isSynchronizeGroup = self.controls.isSynchronizeGroup.value:getValue()
 					self.numTracks = self:getProject():getNumTracks()
 					
 					if self.isSynchronizeGroup then
+						self:getProject():newUndoRecord()
 						self:setGroupSource()
 
 						if self.groupSource == nil then
 							self.isSynchronizeGroup = false
 							self.controls.isSynchronizeGroup.value:setValue(self.isSynchronizeGroup)
 							self:show(SV:T("Select a group first (only one)!"))
-						else												
+						else							
+							self.initialTrack = self:getCurrentTrack()
+							self.initialTrackName = self.initialTrack:getName()
 							self:displayMessage(SV:T("Synchronize unlinked groups") .. "...")
-							-- self.applyButtonText = SV:T("Synchronize unlinked groups")
 							self.resultDebug = ""
-							SV:setTimeout(100, function() self:loop() end)
+							SV:setTimeout(100, function() self:loopSynchronize() end)
 						end
 					else
-						self:displayMessage(SV:T("Generate harmonies") .. "...")
+						if self.initialTrack ~= nil then
+							self.initialTrack:setName(self.initialTrackName)
+						end
+						self:displayMessage(self.defaultLabelInfoText .. "...")
 						self.applyButtonText = SV:T("Apply")
 					end
 					SV:refreshSidePanel()
 				end
+				
+				if control.paramKey == "isDropNotesFromDAW" then
+					self.isDropNotesFromDAW = self.controls.isDropNotesFromDAW.value:getValue()
+					self.isSynchronizeGroup = false
+					self.numTracks = self:getProject():getNumTracks()
+
+					if self.isDropNotesFromDAW then
+						self:getProject():newUndoRecord()
+						self.trackTarget = self:getCurrentTrack()
+						self.stopProcess = false
+						self.initialTrackName = self.trackTarget:getName()
+						SV:setTimeout(100, function() self:loopDropNotesFromDAW() end)
+					else
+						self.stopProcess = true
+						self:refreshAfterDropNotesFromDAWPanel(self.isDropNotesFromDAW)
+					end
+					SV:refreshSidePanel()
+				end
+				
 				if control.paramKey == "isUpdateCurrentGroup" then
 					self.isSynchronizeGroup = false
+					self.isDropNotesFromDAW = false
 					self.controls.isSynchronizeGroup.value:setValue(self.isSynchronizeGroup)
 					self.isUpdateCurrentGroup = self.controls.isUpdateCurrentGroup.value:getValue()
 					self:addTextPanel(self.infosToDisplay)
 					
 					if self.isUpdateCurrentGroup then
+						self:getProject():newUndoRecord()
 						self:displayMessage(SV:T("Update notes in selected scale") .. "...")
 						self.applyButtonText = SV:T("Update notes in selected scale")
 					else
-						self:displayMessage(SV:T("Generate harmonies") .. "...")
+						self:displayMessage(self.defaultLabelInfoText .. "...")
 						self.applyButtonText = SV:T("Apply")
 					end
 					SV:refreshSidePanel()
@@ -1658,13 +1716,13 @@ end
 function NotesObject:getGroupRefTime(track, time)
 	local groupRefFound = nil
 	local numGroups = track:getNumGroups()
-	local blicksPos = self.timeAxis:getBlickFromSeconds(time)
+	local blicksPos = self:getTimeAxis():getBlickFromSeconds(time)
 	
 	-- All groups 
 	for iGroup = 1, numGroups do
 		local groupRef = track:getGroupReference(iGroup)
 		if not groupRef:isInstrumental() then
-			local blickSeconds = self:secondsToClock(self.timeAxis:getSecondsFromBlick(groupRef:getOnset()))
+			local blickSeconds = self:secondsToClock(self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset()))
 			
 			-- Get group on timing pos
 			if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
@@ -1803,8 +1861,8 @@ function NotesObject:getColors()
 	return colors
 end
 
--- Main loop
-function NotesObject:loop()
+-- loop synchronize groups
+function NotesObject:loopSynchronize()
 
 	if not self.isSynchronizeGroup then
 		-- Stop loop
@@ -1812,6 +1870,7 @@ function NotesObject:loop()
 			-- SV:setHostClipboard(self.resultDebug)
 			-- self:show(#self.resultDebug)
 		-- end
+		self.initialTrack:setName(self.initialTrackName)
 		self:refreshAfterSynchroPanel(self.isSynchronizeGroup)
 	else
 		-- if a track is deleted by another script or action
@@ -1826,19 +1885,371 @@ function NotesObject:loop()
 			end
 			local followString = string.rep(".", self.processing)
 			self:displayMessage(SV:T("Synchronize unlinked groups") .. followString)
-			
+			local targetName = followString .. " " .. self.initialTrackName
+			self.initialTrack:setName(targetName)
+		
 			-- Find current group
 			self:scanTracks()
 
-			SV:setTimeout(400, function() self:loop() end)
+			SV:setTimeout(400, function() self:loopSynchronize() end)
 		end			
 	end	
+end
+
+-- loop drop notes from DAW
+function NotesObject:loopDropNotesFromDAW()
+
+	if self.stopProcess then
+		-- self:show("cause: " .. cause)
+		self.isDropNotesFromDAW = false
+		self.controls.isDropNotesFromDAW.value:setValue(self.isDropNotesFromDAW)
+		self:refreshAfterDropNotesFromDAWPanel(self.isDropNotesFromDAW)
+	else
+		-- if a new same script instance is running or track is deleted by another script
+		if self.numTracks > self:getProject():getNumTracks() then
+			self.stopProcess = true
+			self.isDropNotesFromDAW = false
+			self.controls.isDropNotesFromDAW.value:setValue(self.isDropNotesFromDAW)
+			self:refreshAfterDropNotesFromDAWPanel(self.isDropNotesFromDAW)
+		else
+			-- Scan a new track
+			self:scanNewTrack()
+			
+			if not self.stopProcess then
+				SV:setTimeout(500, function() self:loopDropNotesFromDAW() end)
+			else
+				-- if #self.resultDebug > 0 then
+					-- SV:setHostClipboard(self.resultDebug)
+					-- -- self:show(#self.resultDebug)
+				-- end
+				self.isDropNotesFromDAW = false
+				self.controls.isDropNotesFromDAW.value:setValue(self.isDropNotesFromDAW)
+				self.stopProcess = true
+				self:refreshAfterDropNotesFromDAWPanel(self.isDropNotesFromDAW)
+			end
+		end
+	end	
+end
+
+-- Set track name waiting
+function NotesObject:setTrackNameWaiting()
+	if self.trackTarget ~= nil then
+		self.processing = self.processing  + 1
+		if self.processing > 4 then
+			self.processing = 0
+		end
+		local followString = string.rep(".", self.processing)
+		local targetName = followString .. " " .. self.initialTrackName
+		
+		if self.isDropNotesFromDAW then
+			self.trackTarget:setName(targetName)
+			self:displayMessage(SV:T("Drop notes from DAW") .. followString)
+		else
+			self:displayMessage(self.defaultLabelInfoText .. "...")
+			self:setTrackTarget()
+		end
+	end
+end
+
+-- Scan a new track
+function NotesObject:scanNewTrack()
+
+	SV:setTimeout(100, function() self:setTrackNameWaiting() end)
+	self.currentSeconds = SV:getPlayback():getPlayhead()
+	local secondsInfo = self:secondsToClock(self.currentSeconds)
+	
+	-- Check if a new track is created
+	if self.numTracks < self:getProject():getNumTracks() then
+		self.newDAWTrack = self:getLastTrack()
+		local numNotesNewDAWTrack = self:getTrackNumNotes(self.newDAWTrack)
+		
+		if numNotesNewDAWTrack > 0 then
+			
+			local newStartPosition = self:getTimeAxis():getBlickFromSeconds(self.currentSeconds)
+			local measureBlick = self:getFirstMesure(newStartPosition, 0)
+
+			-- New notes => Create a new group
+			self:createGroup(measureBlick, self.currentSeconds)
+			
+			self:removeTrackDAW()
+			self.isDropNotesFromDAW = false
+			self.stopProcess = true -- End of process
+			self.stopProcessOK = true -- End of process OK
+			self:setTrackTarget()
+		else
+			-- a new track is created with no notes
+		end
+	end
+end
+
+-- Remove track DAW
+function NotesObject:removeTrackDAW()
+	if self.newDAWTrack ~= nil then
+		self:getProject():removeTrack(self.newDAWTrack:getIndexInParent())
+		self.newDAWTrack = nil
+	end
+end
+
+--- Get last created track
+function NotesObject:getLastTrack()
+	return self:getProject():getTrack(self:getProject():getNumTracks())
+end
+
+-- Get track notes count
+function NotesObject:getTrackNumNotes(track)
+	local numNotes = 0
+	for iGroupNote = 1, track:getNumGroups() do
+		local groupRef = track:getGroupReference(iGroupNote)
+		local group = groupRef:getTarget()
+		numNotes = numNotes + group:getNumNotes()
+	end
+	return numNotes
+end
+
+-- Create group for new track with new notes
+function NotesObject:createGroup(startPosition, targetPosition)
+	local maxLengthResult = 30
+	local groupRefMain = self.newDAWTrack:getGroupReference(self.newDAWTrack:getNumGroups())
+	local durationGroupRefMain = groupRefMain:getDuration()
+	local groupNotesMain = groupRefMain:getTarget()
+	local isChordsGroup = false
+	local mainGroupNotes = {}
+	
+	local iGroup = 1
+	self.THRESHOLD = self:getMaxTimeGapFromBPM(targetPosition) -- 41505882 = 0.06 seconds
+	local previousNote = nil
+
+	-- Save notes to groups
+	for iNote = 1, groupNotesMain:getNumNotes() do
+		local note = groupNotesMain:getNote(iNote)
+		if previousNote ~= nil then
+			if note:getOnset() == previousNote:getOnset() then
+				isChordsGroup = true
+				iGroup = iGroup + 1
+			else
+				iGroup = 1
+			end
+		end
+		if mainGroupNotes[iGroup] == nil then
+			mainGroupNotes[iGroup] = {}
+		end
+		table.insert(mainGroupNotes[iGroup], note)
+		previousNote = groupNotesMain:getNote(iNote)
+	end
+	
+	if #mainGroupNotes > 0 then
+		for iGroup, group in ipairs(mainGroupNotes) do
+			-- Create new group 
+			local noteGroup = SV:create("NoteGroup")
+			local newGrouptRef = SV:create("NoteGroupReference")
+				
+			self:getProject():addNoteGroup(noteGroup)
+			newGrouptRef:setTarget(noteGroup)
+			newGrouptRef:setTimeOffset(startPosition)
+			newGrouptRef:setTimeRange(startPosition, durationGroupRefMain) -- v2.1.1
+			
+			
+			if iGroup == 1 then
+				self.trackTarget:addGroupReference(newGrouptRef)
+			else
+				if self.isTrackClone then
+					-- Clone track for new groups
+					local track = self:cloneTrackReference(self.trackTarget, trackName)
+					track:addGroupReference(newGrouptRef)
+				else
+					local track = self:createTrackTarget(trackName)
+					track:addGroupReference(newGrouptRef)
+				end
+			end
+
+			local previousNote = nil
+			for iNote = 1, #group do
+				local note = group[iNote]:clone()
+				-- Update position within the new group
+				note:setOnset(group[iNote]:getOnset())
+				
+				if self.linkNotesActive then
+					if previousNote ~= nil then
+						self:linkedTheNotes(previousNote, note, noteGroup:getNote(iNote - 1))
+					end
+				end
+				
+				noteGroup:addNote(note)
+				previousNote = note
+			end
+			
+			local resultLyrics = self:renameOneGroup(self:getTimeAxis(), maxLengthResult, noteGroup)
+		end
+	end
+	
+	return true
+end
+
+-- Linked the notes
+function NotesObject:linkedTheNotes(previousNote, note, storedNote)
+	local gapNotes = previousNote:getEnd() - note:getOnset()
+	-- SIL = 29400000 => 0.02s
+	-- if iNote == 2 then 
+		-- self:show("gapNotes: " .. gapNotes .. ", " 
+		-- .. self.timeAxis:getSecondsFromBlick(gapNotes))
+	-- end
+	
+	-- Notes overlay
+	if gapNotes > 0 then
+	-- if previousNote:getEnd() > note:getOnset() then
+		-- Reduce previous note duration
+		storedNote:setDuration(previousNote:getDuration() - gapNotes)
+	end
+				
+	-- SIL = short time between notes
+	if gapNotes < 0 and math.abs(gapNotes) < self.THRESHOLD then
+		-- Spread previous note duration
+		storedNote:setDuration(previousNote:getDuration() + math.abs(gapNotes))
+	end
+end
+
+-- Rename one group
+function NotesObject:renameOneGroup(timeAxis, maxLengthResult, noteGroup)
+	local resultLyrics = ""
+	local groupName = noteGroup:getName()
+	local notesCount = noteGroup:getNumNotes()
+
+	if notesCount > 0 then
+		local lyricsLine = ""
+		local sep = ""
+
+		for i = 1, notesCount do
+			local infos = ""
+			local note = noteGroup:getNote(i)
+			
+			if note ~= nil then
+				local lyrics = note:getLyrics()
+				if string.len(lyrics) > 0 then
+				
+					-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
+					if self:isTextAccepted(timeAxis, note) then
+						-- Replace following note char '-'
+						if lyrics == "-" then lyrics = ".." end 
+						-- Add lyrics for each note
+						lyricsLine = lyricsLine .. sep .. lyrics
+						sep = " "
+					end				  
+				end
+			end
+		end
+
+		-- Add lyrics
+		resultLyrics = self:limitStringLength(lyricsLine, maxLengthResult)
+		-- Update if new lyrics only
+				if string.len(resultLyrics)> 0 and
+			noteGroup:getName() ~= resultLyrics then
+			noteGroup:setName(resultLyrics)
+		end
+	end
+
+	return resultLyrics
+end
+
+-- Limit string max length
+function NotesObject:limitStringLength(resultLyrics, maxLengthResult)
+	-- Limit string max length
+	if string.len(resultLyrics) > maxLengthResult then
+		local posStringChar = string.find(resultLyrics," ", maxLengthResult - 10)
+		if posStringChar == nil then posStringChar = maxLengthResult end
+		resultLyrics = string.sub(resultLyrics, 1, posStringChar)
+	end
+	return resultLyrics
+end
+
+-- Is lyrics is a text accepted new
+function NotesObject:isTextAcceptedNew(lyrics)
+	local result = true
+	
+	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
+	for i, lyricsExcept in pairs(self.lyricsException) do
+		if  lyrics == lyricsExcept then
+			result = false
+			break
+		end
+	end
+
+	return result
+end
+
+-- Is lyrics is a text accepted
+function NotesObject:isTextAccepted(timeAxis, note)
+	local result = false
+	local lyrics = note:getLyrics()
+	
+	if self:isTextAcceptedNew(lyrics) then
+		result = true
+	end
+	
+	-- Specific for personal vocal effect
+	if lyrics == "a" and self:isLyricsEffect(timeAxis, note) then
+		result = false
+	end
+
+	return result
+end
+
+-- Get time max gap between notes
+function NotesObject:getMaxTimeGapFromBPM(positionSeconds)
+	local THRESHOLDBlicks = self.THRESHOLD
+	local coef = 17 -- Convert 1/quarterBlicks to 0.03 seconds (120)
+	local bpm = self:getProjectTempo(positionSeconds)
+	
+	if bpm ~= nil then
+		-- "120:" time: 0.03s, 1s: blicks 1411200000 quarter 2
+		-- "60: " time: 0.06s, 1s: blicks 705600000 quarter 1
+		local blicks = SV:seconds2Blick(1, bpm) -- get blicks 1 second with bpm
+		local quarterBlicks = SV:blick2Quarter(blicks)
+		local gapMax = (1/quarterBlicks) / coef  -- result gap in seconds
+		THRESHOLDBlicks = self:getTimeAxis():getBlickFromSeconds(gapMax)
+	end
+	return THRESHOLDBlicks
+end
+
+-- Get current project tempo
+function NotesObject:getProjectTempo(seconds)
+	local tempoActive = 120
+	local blicks = self:getTimeAxis():getBlickFromSeconds(seconds)
+	local tempoMarks = self:getTimeAxis():getAllTempoMarks()
+	for iTempo = 1, #tempoMarks do
+		local tempoMark = tempoMarks[iTempo]
+		if tempoMark ~= nil and blicks >= tempoMark.position then
+			tempoActive = tempoMark.bpm
+		end
+	end
+	return math.floor(tempoActive)
+end
+
+-- Set track target
+function NotesObject:setTrackTarget()
+	if self.trackTarget ~= nil then
+		self.trackTarget:setName(self.initialTrackName)
+	end
 end
 
 -- Refresh after synchro panel
 function NotesObject:refreshAfterSynchroPanel(value)
 	self.controls.isSynchronizeGroup.value:setValue(value)
-	self:displayMessage(SV:T("Synchronize unlinked groups") .. "...")
+	if not value then
+		self:displayMessage(self.defaultLabelInfoText .. "...")
+	else
+		self:displayMessage(SV:T("Synchronize unlinked groups") .. "...")
+	end
+	SV:refreshSidePanel()
+end
+
+-- Refresh after drop notes from DAW panel
+function NotesObject:refreshAfterDropNotesFromDAWPanel(value)	
+	if value then
+		self:displayMessage(SV:T("Drop notes from DAW") .. "...")
+	else
+		self:displayMessage(self.defaultLabelInfoText .. "...")
+		self:setTrackTarget()
+	end
 	SV:refreshSidePanel()
 end
 
@@ -1866,7 +2277,6 @@ function NotesObject:scanTracks()
 					-- Same group to synchronize
 					local isSimilarGroupFound = self:isSameGroup(groupRefTrack)
 					if isSimilarGroupFound then
-						-- self.resultDebug = self.resultDebug .. "Track: " .. iTrack .. ": " .. targetGroup:getName() .. "\r"
 						local groupNotesModified = self:setNotSimilarNotes(targetGroup, iTrack)						
 					 end
 				end
@@ -1942,6 +2352,8 @@ function NotesObject:getSectionContainer()
 	local updateCurrentGroup = {}
 	local labelAction = {}
 	local labelSynchroGroups = {}
+	local dropFromDAW = {}
+	local labelDropFromDAW = {}
 
 	self.controls.isTrackClone.value:setValue(self.isCurrentVoiceTrack)
 	self.controls.isUpdateNotesOuterScale.value:setValue(self.isUpdateNotesOuterScale)
@@ -1961,13 +2373,22 @@ function NotesObject:getSectionContainer()
 	-- button:   generate group					generateGroupButtonValue
 	-- TextArea: status text 					statusTextValue
 	
-	if not self.isUpdateCurrentGroup then
+	if not self.isUpdateCurrentGroup and not self.isDropNotesFromDAW then
 		labelSynchroGroups = 
 			{
 				type = "Label",
 				text = SV:T("Action2: Synchronize groups"),
 			}
 	end
+	
+	if not self.isUpdateCurrentGroup and not self.isSynchronizeGroup then
+		labelDropFromDAW = 
+			{
+				type = "Label",
+				text = SV:T("Action3: Drop from DAW"),
+			}
+	end
+	
 	local scaleKeyFound =
 		{
 			type = "Container",
@@ -1995,7 +2416,7 @@ function NotesObject:getSectionContainer()
 			}
 		}
 
-	if not self.isSynchronizeGroup then
+	if not self.isSynchronizeGroup and not self.isDropNotesFromDAW then
 		labelAction = {
 				type = "Label",
 				text = SV:T("Action1: Select a scale and type"),
@@ -2085,7 +2506,7 @@ function NotesObject:getSectionContainer()
 		self.controls.isSynchronizeGroup.value:setValue(self.isSynchronizeGroup)
 	end
 
-	if not self.isUpdateCurrentGroup and not self.isSynchronizeGroup then
+	if not self.isUpdateCurrentGroup and not self.isSynchronizeGroup and not self.isDropNotesFromDAW then
 		trackClone = 
 			{
 				type = "Container",
@@ -2126,7 +2547,7 @@ function NotesObject:getSectionContainer()
 			}
 	end
 	
-	if not self.isUpdateCurrentGroup then
+	if not self.isUpdateCurrentGroup and not self.isDropNotesFromDAW then
 			synchroGroups = 
 			{
 				type = "Container",
@@ -2135,6 +2556,21 @@ function NotesObject:getSectionContainer()
 					type = "CheckBox",
 					text = SV:T("Synchronize similar groups"),
 					value = self.controls.isSynchronizeGroup.value,
+					width = 1.0
+					}
+				}
+			}
+	end
+	
+	if not self.isUpdateCurrentGroup and not self.isSynchronizeGroup then
+			dropFromDAW = 
+			{
+				type = "Container",
+				columns = {
+					{
+					type = "CheckBox",
+					text = SV:T("Drop notes from DAW"),
+					value = self.controls.isDropNotesFromDAW.value,
 					width = 1.0
 					}
 				}
@@ -2196,6 +2632,8 @@ function NotesObject:getSectionContainer()
 			trackTest,
 			labelSynchroGroups,
 			synchroGroups,
+			labelDropFromDAW,
+			dropFromDAW,
 			{
 				type = "Container",
 				columns = {
