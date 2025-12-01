@@ -20,6 +20,7 @@ Update: Minor updates
 		6 - Add check box: major scale only detection and detection property in scalesReference
 		7 - Add check box: update selected groups only in user selected scale (no new track)
 		8 - Add synchronize unlinked groups
+		9 - Minor update
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -32,7 +33,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 8,
+		versionNumber = 9,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -1189,7 +1190,7 @@ end
 -- Get next valid key in scale
 function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, posKeyInScale)
 	local notePitchNew = notePitch 
-	
+
 	-- NOT negative harmony
 	if not self.isNegativeHarmony then
 		local octave = 0
@@ -1203,8 +1204,8 @@ function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, po
 		notePitchNew = notePitch + gapDegree + octave
 	else
 		-- Negative Harmony
-		local scaleFromTonic = self:getScaleFromTonic(posKeyInScale)
-        
+		local scaleFromTonic = self:getScaleFromTonic(posKeyInScale, self.keyScaleTypeValuesSelected)
+		
 		-- Calculate reflexion axe
 		local axis = self:getScaleAxis(scaleFromTonic)
         -- Octave
@@ -1220,6 +1221,7 @@ function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, po
 		if self.firstNegativeNote == 0 then
 			self.firstNegativeNote = notePitchNewTemp
 		end
+
 		notePitchNew = self:getClosestNote(self.firstNegativeNote, notePitchNewTemp)
 		
 	end
