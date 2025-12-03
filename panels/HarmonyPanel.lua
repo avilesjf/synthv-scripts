@@ -22,6 +22,7 @@ Update: Minor updates
 		 8 - Add synchronize unlinked groups
 		 9 - Minor update
 		10 - Add multiple group creation after dropping chords notes from DAW
+		11 - Add rotating voicing with presets, thanks to Enkerli (forum2 Dreamtonics)
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -34,7 +35,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 10,
+		versionNumber = 11,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -53,6 +54,7 @@ function getArrayLanguageStrings()
 			{"1 note", "1 note"},
 			{"Selected", "Selected"},
 			{"Apply", "Apply"},
+			{"Generate harmonies", "Generate harmonies"},
 			{"Major", "Major"},
 			{"Track H", "Track H"},
 			{"2 notes", "2 notes"},
@@ -60,10 +62,16 @@ function getArrayLanguageStrings()
 			{"Octaves", "Octaves"},
 			{"Fixed", "Fixed"},
 			{"Negative", "Negative"},
+			{"Rotating", "Rotating"},
+			{"Basic (Scale Steps)", "Basic (Scale Steps)"},
+			{"Brecker Voice-Steal", "Brecker Voice-Steal"},
+			{"Brecker Chromatic", "Brecker Chromatic"},
+			{"Constant Fifth + Rotating", "Constant Fifth + Rotating"},
+			{"Chromatic Clusters", "Chromatic Clusters"},
+			{"Mixed Mode Demo", "Mixed Mode Demo"},
 			{"Version", "Version"},
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
-			{"Generate harmonies", "Generate harmonies"},
 			{"Select at least one group!", "Select at least one group!"},
 			{"major", "major"},
 			{"natural minor", "natural minor"},
@@ -95,7 +103,9 @@ function getArrayLanguageStrings()
 			{"Select a group first (only one)!", "Select a group first (only one)!"},
 			{"Synchronize unlinked groups", "Synchronize unlinked groups"},
 			{"Update notes in selected scale", "Update notes in selected scale"},
+			{"Drop notes from DAW", "Drop notes from DAW"},
 			{"Action2: Synchronize groups", "Action2: Synchronize groups"},
+			{"Action3: Drop from DAW", "Action3: Drop from DAW"},
 			{"Major scales only detection", "Major scales only detection"},
 			{"Action1: Select a scale and type", "Action1: Select a scale and type"},
 			{"Select a key scale", "Select a key scale"},
@@ -160,6 +170,13 @@ NotesObject = {
 	isFixed = false,
 	isNegativeHarmony = false,
 	firstNegativeNote = 0,
+	isRotating = false,					-- Rotating mode
+	isRotatingScaleQuantize = true,		-- Scale-quantize rotating chords
+	isRotatingScaleSteps = true,		-- Use scale steps instead of chromatic semitones for rotating
+	rotatingPresets = {},				-- Voicing presets 
+	rotatingPresetSelected = 1,			-- Default position
+	rotatingCustomPattern = {},			-- Default to Basic
+	rotatingIntervals = {},				-- Parse to new format
 	newTrackRef = nil,
 	tracks = {},
 	outputLevelDefaultValue = 0,
@@ -225,9 +242,26 @@ function NotesObject:new()
 		{SV:T("3 notes"), 1, {"+2,+5,+7", "+1,+3,+5", "+2,+3,+5", "-2,-5,-7"}},
 		{SV:T("Octaves"), 4, {"+3,+5,+7", "+2,+7", "-7"; "-7,+7", "-3,-5,+7"}},
 		{SV:T("Fixed"),  1, {"Fixed"}},
-		{SV:T("Negative"),  1, {"Negative"}}
+		{SV:T("Negative"),  1, {"Negative"}},
+		{SV:T("Rotating"),  1, {"Rotating"}}
 	}
 	
+	-- Preset rotating chord patterns (using new notation)
+	self.rotatingPresets = {
+		{name = SV:T("Basic (Scale Steps)"), pattern = "2 | 3,4,2,5 | -2,-3,4"},
+		{name = SV:T("Brecker Voice-Steal"), pattern = "0 | 7 (C3-C5) | -5,-3,-4,-1 (G2-G4)"},
+		{name = SV:T("Brecker Chromatic"), pattern = "0 | 7c (C3-C5) | -8c,-5c,-7c,-1c (G2-G4)"},
+		{name = SV:T("Constant Fifth + Rotating"), pattern = "7 | 3,4,-3,-4 | -5,5,2,-2"},
+		{name = SV:T("Chromatic Clusters"), pattern = "3c,-8c,5c | 7c,-5c | 2c,3c,4c,5c"},
+		{name = SV:T("Mixed Mode Demo"), pattern = "3,4c,-2 | 7,-5c,3 (C3-C5)"}
+	}
+
+	-- Current rotating intervals (will be set from preset or custom input)
+	self.rotatingPresetSelected = 1
+	
+	self.rotatingCustomPattern = self.rotatingPresets[1].pattern  -- Default to Basic
+	self.rotatingIntervals = self:parseRotatingPattern(self.rotatingCustomPattern)  -- Parse to new format
+
 	self.colors = self:getColors()
 	self.scales = self:getScalesData(self.allScalesActive) -- Init activated scales or all	
 	self.keyScaleChoice = self.keyNames
@@ -235,6 +269,9 @@ function NotesObject:new()
 	self.controls = self:getControls()
 	self:initializeControlsValues()
 	
+	-- Initialize rotating pattern input
+	self.controls.rotatingCustomInput.value:setValue(self.rotatingCustomPattern)
+
 	self.pitchSelected = "0"
 	self.harmonyList = self:getHarmonyList()
 	
@@ -504,6 +541,122 @@ function NotesObject:getHarmonyList()
 		table.insert(resultList, self.transposition[iList][self.transpositionRefLabel])
 	end
 	return resultList
+end
+
+-- Get rotating preset names list
+function NotesObject:getRotatingPresetList()
+	local resultList = {}
+	for i = 1, #self.rotatingPresets do
+		table.insert(resultList, self.rotatingPresets[i].name)
+	end
+	return resultList
+end
+
+-- Convert note name to MIDI pitch number
+-- Examples: "C3" -> 48, "Db4" -> 61, "G#2" -> 44
+function NotesObject:noteToPitch(noteName)
+	if noteName == nil or #noteName < 2 then
+		return nil
+	end
+
+	local noteMap = {C=0, D=2, E=4, F=5, G=7, A=9, B=11}
+
+	-- Parse note letter
+	local letter = noteName:sub(1,1):upper()
+	local basePitch = noteMap[letter]
+	if basePitch == nil then
+		return nil
+	end
+
+	-- Parse accidentals and octave
+	local pos = 2
+	local accidental = 0
+
+	if noteName:sub(pos,pos) == "#" or noteName:sub(pos,pos) == "♯" then
+		accidental = 1
+		pos = pos + 1
+	elseif noteName:sub(pos,pos) == "b" or noteName:sub(pos,pos) == "♭" then
+		accidental = -1
+		pos = pos + 1
+	end
+
+	-- Parse octave number
+	local octaveStr = noteName:sub(pos)
+	local octave = tonumber(octaveStr)
+	if octave == nil then
+		return nil
+	end
+
+	-- Calculate MIDI pitch: octave * 12 + note + accidental
+	-- C0 = 12, C1 = 24, C2 = 36, C3 = 48, C4 = 60, etc.
+	return (octave + 1) * 12 + basePitch + accidental
+end
+
+-- Parse custom rotating pattern from text input
+-- Format: "intervals1 | intervals2 | intervals3"
+-- Examples:
+--   "5,-7,4 | -8,3,2,0,-4 | 7,-5,3"  (scale steps)
+--   "3c,-8c,5c | 7c"  (chromatic semitones)
+--   "4,7 (C3-C4) | 2,-2,5 (C2-C5)"  (with voice ranges)
+--   "3,4c,-2 | 7,-5c (C3-C5)"  (mixed modes with range)
+function NotesObject:parseRotatingPattern(patternText)
+	local patterns = {}
+	if patternText == nil or #patternText == 0 then
+		return nil
+	end
+
+	-- Split by pipe separator
+	local trackPatterns = self:split(patternText, "|")
+
+	for _, trackPattern in ipairs(trackPatterns) do
+		trackPattern = self:trim(trackPattern)
+
+		-- Parse optional voice range at end: (C3-C4) or (C3,C4)
+		local minPitch, maxPitch = nil, nil
+		local rangePattern = trackPattern:match("%(([^%)]+)%)")
+
+		if rangePattern then
+			-- Remove range from pattern
+			trackPattern = trackPattern:gsub("%s*%([^%)]+%)", "")
+
+			-- Parse range: "C3-C4" or "C3,C4"
+			local lowNote, highNote = rangePattern:match("([^%-,]+)%-([^%-,]+)")
+			if not lowNote then
+				lowNote, highNote = rangePattern:match("([^,]+),([^,]+)")
+			end
+
+			if lowNote and highNote then
+				minPitch = self:noteToPitch(self:trim(lowNote))
+				maxPitch = self:noteToPitch(self:trim(highNote))
+			end
+		end
+
+		-- Parse intervals with optional 'c' suffix
+		local track = {intervals = {}, minPitch = minPitch, maxPitch = maxPitch}
+		local intervalStrs = self:split(trackPattern, ",")
+
+		for _, intervalStr in ipairs(intervalStrs) do
+			intervalStr = self:trim(intervalStr)
+
+			-- Check for 'c' suffix (chromatic)
+			local isChromatic = false
+			if intervalStr:sub(-1) == "c" or intervalStr:sub(-1) == "C" then
+				isChromatic = true
+				intervalStr = intervalStr:sub(1, -2) -- Remove 'c'
+			end
+
+			local value = tonumber(self:trim(intervalStr))
+			if value ~= nil then
+				table.insert(track.intervals, {value = value, isChromatic = isChromatic})
+			end
+		end
+
+		if #track.intervals > 0 then
+			table.insert(patterns, track)
+		end
+	end
+
+	return (#patterns > 0) and patterns or nil
 end
 
 -- Get track list
@@ -793,10 +946,20 @@ function NotesObject:duplicateNotes(groupsSelected)
 	self.currentColor = self:getNewColor(self:getCurrentTrack())
 	self.isFixed = (pitchTarget == "Fixed")
 	self.isNegativeHarmony = (pitchTarget == "Negative")
+	self.isRotating = (pitchTarget == "Rotating")
 	
 	local pitchTargets = self:split(pitchTarget, ",")
 	if #pitchTargets > 1 then
 		isMultipleTracks = true -- force for "build your own"
+	end
+
+	-- For rotating mode, create multiple tracks (one per interval array)
+	if self.isRotating then
+		isMultipleTracks = true
+		pitchTargets = {}
+		for i = 1, #self.rotatingIntervals do
+			table.insert(pitchTargets, "Rotating_" .. i)
+		end
 	end
 
 	if string.len(self.keyScaleSelected) == 0 then
@@ -820,7 +983,7 @@ function NotesObject:duplicateNotes(groupsSelected)
 	-- Only one track to add
 	if not isMultipleTracks then
 		
-		local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale)
+		local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale, nil)
 		-- New track
 		if not self.isUpdateCurrentGroup then
 			local track = nil
@@ -844,8 +1007,8 @@ function NotesObject:duplicateNotes(groupsSelected)
 			pitchTarget = self:trim(pitchTargets[iTrack])
 			self.isFixed = (pitchTarget == "Fixed")
 			self.isNegativeHarmony = (pitchTarget == "Negative")
-			
-			local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale)
+		
+			local newGroupRefs = self:groupLoop(groupsSelected, self.isFixed, pitchTarget, self.posKeyInScale, iTrack)
 			local track = nil
 			
 			if self.isTrackClone then
@@ -921,7 +1084,7 @@ function NotesObject:deleteClonedTrack()
 end
 
 -- Loop into groups to duplicate & transpose notes
-function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale)
+function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInScale, iTrack)
 	local newGroupRefs = {}
 	self.firstNegativeNote = 0
 	
@@ -949,9 +1112,30 @@ function NotesObject:groupLoop(groupsSelected, isFixed, pitchTarget, posKeyInSca
 			local firstNotePitch = firstNote:getPitch()
 			for iNote = 1, selectedNotes do
 				local note = newNoteGroup:getNote(iNote)
+				
+				-- Rotating option
+				local rotatingTrack = nil
+				local currentPitchTarget = pitchTarget
+				local rotatingData = nil
+				local intervalObj = nil
+				local voiceMinPitch = nil
+				local voiceMaxPitch = nil
+
+				-- For rotating mode, get the interval object from the track
+				if self.isRotating then
+					local rotatingTrack = self.rotatingIntervals[iTrack]
+					local arrayIndex = ((iNote - 1) % #rotatingTrack.intervals) + 1
+					intervalObj = rotatingTrack.intervals[arrayIndex]
+					currentPitchTarget = intervalObj.value
+					voiceMinPitch = rotatingTrack.minPitch
+					voiceMaxPitch = rotatingTrack.maxPitch
+					rotatingData = {intervalObj = intervalObj, voiceMinPitch = voiceMinPitch, voiceMaxPitch = voiceMaxPitch}
+				end
+
 				-- Get new pitch
-				local notePitch = self:getNewPitch(isFixed, firstNotePitch, note:getPitch(), 
-													tonumber(pitchTarget), posKeyInScale)
+				local notePitch = self:getNewPitch(isFixed, firstNotePitch, note:getPitch(),
+													currentPitchTarget, posKeyInScale, rotatingData)
+
 				note:setPitch(notePitch)
 			end
 			
@@ -1150,11 +1334,95 @@ function NotesObject:addNotes(notes, refGroup)
 	end
 end
 
+-- Snap pitch to nearest scale note (for scale-quantize feature)
+function NotesObject:snapToScale(pitch, keyScaleTypeValues, posKeyInScale)
+	local octave = math.floor(pitch / 12)
+	local pitchClass = pitch % 12
+
+	-- Check if already in scale
+	if self:isInScale(pitch, keyScaleTypeValues, posKeyInScale) then
+		return pitch
+	end
+
+	-- Find nearest scale note
+	local minDistance = 12
+	local nearestPitchClass = pitchClass
+
+	for _, scaleNote in ipairs(keyScaleTypeValues) do
+		local scalePitchClass = (scaleNote + posKeyInScale) % 12
+		local distance = math.abs(pitchClass - scalePitchClass)
+
+		-- Handle wraparound (e.g., distance from B to C)
+		if distance > 6 then
+			distance = 12 - distance
+		end
+
+		if distance < minDistance then
+			minDistance = distance
+			nearestPitchClass = scalePitchClass
+		end
+	end
+
+	return octave * 12 + nearestPitchClass
+end
+
+-- Wrap pitch to voice range by octave shifting
+-- Keeps the note within minPitch to maxPitch by trying different octaves
+function NotesObject:wrapToVoiceRange(pitch, minPitch, maxPitch)
+	if minPitch == nil or maxPitch == nil then
+		return pitch
+	end
+
+	-- If already in range, return as-is
+	if pitch >= minPitch and pitch <= maxPitch then
+		return pitch
+	end
+
+	-- Try shifting by octaves to find best fit
+	local bestPitch = pitch
+	local minDistance = math.abs(pitch - ((minPitch + maxPitch) / 2))
+
+	for octaveShift = -3, 3 do
+		local shiftedPitch = pitch + (octaveShift * 12)
+
+		if shiftedPitch >= minPitch and shiftedPitch <= maxPitch then
+			local midpoint = (minPitch + maxPitch) / 2
+			local distance = math.abs(shiftedPitch - midpoint)
+
+			if distance < minDistance then
+				minDistance = distance
+				bestPitch = shiftedPitch
+			end
+		end
+	end
+
+	return bestPitch
+end
+
 -- Get new pitch in key scale
-function NotesObject:getNewPitch(isFixed, firstNotePitch, notePitch, pitchTarget, posKeyInScale)
+function NotesObject:getNewPitch(isFixed, firstNotePitch, notePitch, pitchTarget, posKeyInScale, rotatingData)
 	if isFixed then 
 		-- Fix all notes from the first note found
 		notePitch = firstNotePitch
+		
+	elseif self.isRotating and rotatingData ~= nil then
+	
+		-- Rotating chords with new interval object format
+		if rotatingData.intervalObj.isChromatic then
+			-- Use chromatic semitone transposition
+			notePitch = notePitch + pitchTarget
+
+			-- Apply scale quantization if enabled
+			if self.isRotatingScaleQuantize then
+				notePitch = self:snapToScale(notePitch, self.keyScaleTypeValuesSelected, posKeyInScale - 1)
+			end
+		else
+			-- Use scale-degree transposition (default for rotating chords)
+			notePitch = self:getNextKeyInScale(self.keyScaleSelected, notePitch, pitchTarget, posKeyInScale)
+		end
+
+		-- Apply voice range wrapping if specified
+		notePitch = self:wrapToVoiceRange(notePitch, rotatingData.voiceMinPitch, rotatingData.voiceMaxPitch)
 	else
 		notePitch = self:getNextKeyInScale(self.keyScaleSelected, notePitch, pitchTarget, posKeyInScale)
 	end
@@ -1544,6 +1812,26 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = false,
 			paramKey = "isUpdateCurrentGroup"
+		},
+		rotatingPresetChoice = {				-- ComboBox: Rotating pattern preset
+			value = SV:create("WidgetValue"),
+			defaultValue = 0,
+			paramKey = "rotatingPresetChoice"
+		},
+		rotatingCustomInput = {					-- TextArea: Custom rotating pattern input
+			value = SV:create("WidgetValue"),
+			defaultValue = "",
+			paramKey = "rotatingCustomInput"
+		},
+		isRotatingScaleQuantize = {			-- CheckBox: Scale-quantize rotating chords
+			value = SV:create("WidgetValue"),
+			defaultValue = false,
+			paramKey = "isRotatingScaleQuantize"
+		},
+		isRotatingScaleSteps = {			-- CheckBox: Use scale steps for rotating chords
+			value = SV:create("WidgetValue"),
+			defaultValue = true,
+			paramKey = "isRotatingScaleSteps"
 		}
 	}
 	return controls
@@ -1562,7 +1850,7 @@ function NotesObject:setControlsCallback()
 	for key, control in pairs(self.controls) do
 		control.value:setValueChangeCallback(function()
 				-- self:addLogsInPanel()
-								
+
 				if control.paramKey == "isDetectionMajorScaleOnly" then
 					self.isDetectionMajorScaleOnly = self.controls.isDetectionMajorScaleOnly.value:getValue()
 				end
@@ -1594,9 +1882,10 @@ function NotesObject:setControlsCallback()
 
 					-- Reset simple transposition value because user select "harmonyChoice" double notes
 					self.controls.pitch.value:setValue(0)
-					
+					-- self.controls.rotatingPresetChoice.value:setValue(self.rotatingPresetSelected - 1)
+
 					if self.pitchSelected == "Fixed" or self.transpositionSelected == 1 
-						or self.pitchSelected == "Negative" then
+						or self.pitchSelected == "Negative" or self.pitchSelected == "Rotating" then
 						self.displayMultiplePitchChoice = false
 					else
 						-- Add new ComboBox for multiple pitch choice
@@ -1672,6 +1961,10 @@ function NotesObject:setControlsCallback()
 				if control.paramKey == "isUpdateCurrentGroup" then
 					self.isSynchronizeGroup = false
 					self.isDropNotesFromDAW = false
+					self.controls.harmonyChoice.value:setValue(0)
+					self.controls.multiplePitchChoice.value:setValue(0)
+					self.pitchSelected = string.format("%i", self.controls.pitch.value:getValue())
+					self.controls.transpositionSelected.value:setValue(self.pitchSelectedLabel .. self.pitchSelected)
 					self.controls.isSynchronizeGroup.value:setValue(self.isSynchronizeGroup)
 					self.isUpdateCurrentGroup = self.controls.isUpdateCurrentGroup.value:getValue()
 					self:addTextPanel(self.infosToDisplay)
@@ -1686,6 +1979,38 @@ function NotesObject:setControlsCallback()
 					end
 					SV:refreshSidePanel()
 				end
+
+				if control.paramKey == "rotatingPresetChoice" then
+					self.rotatingPresetSelected = self.controls.rotatingPresetChoice.value:getValue() + 1
+					local preset = self.rotatingPresets[self.rotatingPresetSelected]
+
+					-- Get pattern text from preset
+					local patternText = preset.pattern
+
+					-- Parse pattern to new format
+					self.rotatingIntervals = self:parseRotatingPattern(patternText)
+					self.rotatingCustomPattern = patternText
+
+					-- Update custom input text to show the current preset
+					self.controls.rotatingCustomInput.value:setValue(patternText)
+				end
+
+				if control.paramKey == "rotatingCustomInput" then
+					local customPattern = self.controls.rotatingCustomInput.value:getValue()
+					local parsed = self:parseRotatingPattern(customPattern)
+					if parsed ~= nil then
+						self.rotatingIntervals = parsed
+						self.rotatingCustomPattern = customPattern
+					end
+				end
+
+				if control.paramKey == "isRotatingScaleQuantize" then
+					self.isRotatingScaleQuantize = self.controls.isRotatingScaleQuantize.value:getValue()
+				end
+				if control.paramKey == "isRotatingScaleSteps" then
+					self.isRotatingScaleSteps = self.controls.isRotatingScaleSteps.value:getValue()
+				end
+
 			end
 		)
 	end
@@ -2048,10 +2373,10 @@ function NotesObject:createGroup(startPosition, targetPosition)
 			newGrouptRef:setTimeOffset(startPosition)
 			newGrouptRef:setTimeRange(startPosition, durationGroupRefMain) -- v2.1.1
 			
-			
 			if iGroup == 1 then
 				self.trackTarget:addGroupReference(newGrouptRef)
 			else
+				trackName = self.initialTrackName .. "-" .. iGroup
 				if self.isTrackClone then
 					-- Clone track for new groups
 					local track = self:cloneTrackReference(self.trackTarget, trackName)
@@ -2354,6 +2679,11 @@ function NotesObject:getSectionContainer()
 	local labelSynchroGroups = {}
 	local dropFromDAW = {}
 	local labelDropFromDAW = {}
+	local rotatingPresetChoice = {}
+	local rotatingCustomInput = {}
+	local rotatingScaleQuantize = {}
+	local rotatingScaleSteps = {}
+	local rotatingLabel = {}
 
 	self.controls.isTrackClone.value:setValue(self.isCurrentVoiceTrack)
 	self.controls.isUpdateNotesOuterScale.value:setValue(self.isUpdateNotesOuterScale)
@@ -2361,6 +2691,11 @@ function NotesObject:getSectionContainer()
 	self.controls.scaleKeyFound.value:setValue(self.defaultKeyFoundMessage)
 	self.controls.isDetectionMajorScaleOnly.value:setValue(self.isDetectionMajorScaleOnly)
 	self.controls.isUpdateCurrentGroup.value:setValue(self.isUpdateCurrentGroup)
+	-- Rotating
+	self.controls.rotatingPresetChoice.value:setValue(self.rotatingPresetSelected - 1)
+	self.controls.rotatingCustomInput.value:setValue(self.rotatingCustomPattern)
+	self.controls.isRotatingScaleQuantize.value:setValue(self.isRotatingScaleQuantize)
+	self.controls.isRotatingScaleSteps.value:setValue(self.isRotatingScaleSteps)
 
 	-- TextArea: Key found 						scaleKeys
 	-- ComboBox: Select a key scale				scaleKeyChoice
@@ -2498,6 +2833,8 @@ function NotesObject:getSectionContainer()
 	
 	if self.isUpdateCurrentGroup then
 		self.controls.harmonyChoice.value:setValue(0)
+		self.pitchSelected = string.format("%i", self.controls.pitch.value:getValue())
+		self.controls.transpositionSelected.value:setValue(self.pitchSelectedLabel .. self.pitchSelected)
 		self.controls.multiplePitchChoice.value:setValue(0)
 		self.displayMultiplePitchChoice = false
 		self.isUpdateNotesOuterScale = true
@@ -2519,18 +2856,20 @@ function NotesObject:getSectionContainer()
 					}
 				}
 			}
-		updateNotesOuter = 
-			{
-				type = "Container",
-				columns = {
-					{
-					type = "CheckBox",
-					text = SV:T("Update notes outer scale"),
-					value = self.controls.isUpdateNotesOuterScale.value,
-					width = 1.0
+		if self.pitchSelected ~= "Rotating" then
+			updateNotesOuter = 
+				{
+					type = "Container",
+					columns = {
+						{
+						type = "CheckBox",
+						text = SV:T("Update notes outer scale"),
+						value = self.controls.isUpdateNotesOuterScale.value,
+						width = 1.0
+						}
 					}
 				}
-			}
+		end
 		
 		harmonyChoice = 
 			{
@@ -2545,6 +2884,65 @@ function NotesObject:getSectionContainer()
 					}
 				}
 			}
+	end
+
+	-- Show rotating controls when "Rotating" harmony type is selected
+	if self.pitchSelected == "Rotating" and not self.isUpdateCurrentGroup and not self.isSynchronizeGroup and not self.isDropNotesFromDAW  then
+		rotatingLabel = {
+			type = "Label",
+			text = "Rotating Chord Patterns",
+		}
+
+		rotatingPresetChoice = {
+			type = "Container",
+			columns = {
+				{
+					type = "ComboBox",
+					text = "Pattern Preset",
+					value = self.controls.rotatingPresetChoice.value,
+					choices = self:getRotatingPresetList(),
+					width = 1.0
+				}
+			}
+		}
+
+		rotatingCustomInput = {
+			type = "Container",
+			columns = {
+				{
+					type = "TextArea",
+					text = "Custom Pattern (e.g., 5,-7,4 | -8,3,2 | 7)",
+					value = self.controls.rotatingCustomInput.value,
+					height = 40,
+					width = 1.0,
+					readOnly = false
+				}
+			}
+		}
+
+		rotatingScaleQuantize = {
+			type = "Container",
+			columns = {
+				{
+					type = "CheckBox",
+					text = "Quantize to scale",
+					value = self.controls.isRotatingScaleQuantize.value,
+					width = 1.0
+				}
+			}
+		}
+
+		rotatingScaleSteps = {
+			type = "Container",
+			columns = {
+				{
+					type = "CheckBox",
+					text = "Use scale steps (vs. chromatic semitones)",
+					value = self.controls.isRotatingScaleSteps.value,
+					width = 1.0
+				}
+			}
+		}
 	end
 	
 	if not self.isUpdateCurrentGroup and not self.isDropNotesFromDAW then
@@ -2577,7 +2975,7 @@ function NotesObject:getSectionContainer()
 			}
 	end
 
-	if self.displayMultiplePitchChoice then
+	if self.displayMultiplePitchChoice and not self.isUpdateCurrentGroup and not self.isSynchronizeGroup and not self.isDropNotesFromDAW  then
 		local transpositionList = self.transposition[self.transpositionSelected][self.transpositionRefData]
 		multiplePitchChoice = 
 			{
@@ -2625,6 +3023,11 @@ function NotesObject:getSectionContainer()
 			harmonyChoice,
 			multiplePitchChoice,
 			transpositionSelected,
+			rotatingLabel,
+			rotatingPresetChoice,
+			rotatingCustomInput,
+			rotatingScaleQuantize,
+			rotatingScaleSteps,
 			updateNotesOuter,
 			trackClone,
 			updateCurrentGroup,
