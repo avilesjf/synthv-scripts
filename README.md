@@ -42,6 +42,7 @@ Group synchronization for duplicate groups across multiple tracks.
 List all groups in the project, copy a group linked or not, delete a group or all un referenced groups.
 Expand current group size to the last existing note inside.
 Get group phonemes and user updated data.
+Add automatic breathing.
 Harmony: Copy selected groups to new tracks (or select one) and transpose all notes in desired scale with AI retakes.
 
 ## lyrics-scripts
