@@ -47,6 +47,7 @@ NotesObject = {
 	project = nil,
 	timeAxis = nil,
 	editor = nil,
+	currentTrack = nil,
 	BREATH_DURATION = 0,	-- Breath duration in blicks updated by getMaxTimeGapFromBPM
 	MIN_GAP_FOR_BREATH = 0,	-- Minimum gap required to insert a breath updated by getMaxTimeGapFromBPM
 	BREATH_PHONEME = "br"	-- Breath phoneme (may vary depending on voice bank)
@@ -61,7 +62,6 @@ function NotesObject:new()
     self.project = SV:getProject()
     self.timeAxis = self.project:getTimeAxis()
     self.editor =  SV:getMainEditor()
-	self.numTracks = self.project:getNumTracks()
 	
 	self.currentTrack = self.editor:getCurrentTrack()
 	

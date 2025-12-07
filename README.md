@@ -31,6 +31,7 @@ Playing: Show lyrics and time while playing.
 ProjectInfos: Show information on the project.
 SizingNotes: Halve and double notes length.
 TransposeNotes: Transpose notes by semitones for selected groups (or all groups in project).
+BackupPanel: Backup project file in same svp folder with timestamp.
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
