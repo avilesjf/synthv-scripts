@@ -23,6 +23,7 @@ Update: Minor updates
 		 9 - Minor update
 		10 - Add multiple group creation after dropping chords notes from DAW
 		11 - Add rotating voicing with presets, thanks to Enkerli (forum2 Dreamtonics)
+		12 - Update scale list (same as Dreamtonics combobox)
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -35,7 +36,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 11,
+		versionNumber = 12,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -73,7 +74,6 @@ function getArrayLanguageStrings()
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
 			{"Select at least one group!", "Select at least one group!"},
-			{"major", "major"},
 			{"natural minor", "natural minor"},
 			{"blues major", "blues major"},
 			{"dorian", "dorian"},
@@ -141,6 +141,7 @@ NotesObject = {
 	trackTestActive = false,			-- Add track button to generate samples notes in scale
 	trackTest = nil,					-- track to test harmonies
 	trackTestTitle = SV:T("Track scale test"), -- track to test harmonies
+	majorScale = "Major",
     scales = {},
 	errorMessages = {},
 	keyNames = {},					-- {"C", "Db", "D", ...
@@ -358,24 +359,28 @@ function NotesObject:getScalesData(allscalesActive)
 	
 	local scalesReference = {
 		-- KeyScale type, Intervals
-		{name = SV:T("major"), 			val = {0,2,4,5,7,9,11},	active = true , detection = true},
-		{name = SV:T("natural minor"),	val = {0,2,3,5,7,8,10},	active = true , detection = true},
-		{name = SV:T("blues major"),	val = {0,2,3,4,7,9},	active = true , detection = true},
-		{name = SV:T("dorian"),			val = {0,2,3,5,7,9,10},	active = true , detection = true},
-		{name = SV:T("phrygian"),		val = {0,1,3,5,7,8,10},	active = true , detection = true},
-		{name = SV:T("melodic minor"),	val = {0,2,3,5,7,9,11},	active = false, detection = false},
-		{name = SV:T("harmonic minor"),	val = {0,2,3,5,7,8,11},	active = false, detection = false},
-		{name = SV:T("ionian"),			val = {0,2,4,5,7,9,11},	active = false, detection = false},
-		{name = SV:T("locrian"),		val	= {0,1,3,5,6,8,10},	active = false, detection = false},
-		{name = SV:T("lydian"),			val = {0,2,4,6,7,9,11},	active = false, detection = false},
-		{name = SV:T("mixolydian"),		val	= {0,2,4,5,7,9,10},	active = false, detection = false},
-		{name = SV:T("aeolian"),		val	= {0,2,3,5,7,8,10},	active = false, detection = false},
-		{name = SV:T("blues_minor"),	val	= {0,3,5,6,7,10},	active = false, detection = false},
-		{name = SV:T("japanese"),		val	= {0,1,5,7,8}, 		active = false, detection = false},
-		{name = SV:T("chinese"),		val	= {0,2,4,7,9}, 		active = false, detection = false}, 
-		{name = SV:T("chinese 2"),		val	= {0,4,6,7,11}, 	active = false, detection = false},
-		{name = SV:T("indian"),			val	= {0,1,3,4,7,8,10},	active = false, detection = false},
-		{name = SV:T("hungarian_major"),val = {0,3,4,6,7,9,10},	active = false, detection = false}
+		{name = SV:T("Major"), 				val = {0,2,4,5,7,9,11},		active = true,	detection = true},
+		{name = SV:T("Natural minor"),		val = {0,2,3,5,7,8,10},		active = true,	detection = true},
+		{name = SV:T("Harmonic minor"),		val = {0,2,3,5,7,8,11},		active = true,	detection = false},
+		{name = SV:T("Melodic minor"),		val = {0,2,3,5,7,9,11},		active = true,	detection = false},
+		{name = SV:T("Major pentatonic"),	val = {0,2,4,7,9},			active = true,	detection = true},
+		{name = SV:T("Minor pentatonic"),	val = {0,3,5,7,10},			active = true,	detection = false},
+		{name = SV:T("Major blues "),		val = {0,2,3,4,7,9},		active = true,	detection = true},
+		{name = SV:T("Minor blues"),		val	= {0,3,5,6,7,10},		active = true,	detection = false},
+		{name = SV:T("Dorian"),				val = {0,2,3,5,7,9,10},		active = true,	detection = false},
+		{name = SV:T("Phrygian"),			val = {0,1,3,5,7,8,10},		active = true,	detection = false},
+		{name = SV:T("Lydian"),				val = {0,2,4,6,7,9,11},		active = true,	detection = false},
+		{name = SV:T("Mixolydian"),			val	= {0,2,4,5,7,9,10},		active = true,	detection = false},
+		{name = SV:T("Locrian"),			val	= {0,1,3,5,6,8,10},		active = true,	detection = false},
+		{name = SV:T("Ionian"),				val = {0,2,4,5,7,9,11},		active = false,	detection = false},
+		{name = SV:T("Aeolian"),			val	= {0,2,3,5,7,8,10},		active = false,	detection = false},
+		{name = SV:T("Whole tone"),			val = {0,2,4,6,8,10},		active = true,	detection = false},
+		{name = SV:T("Octatonic"),			val = {0,1,3,4,6,7,9,10},	active = true,	detection = false},
+		{name = SV:T("Japanese"),			val	= {0,1,5,7,8}, 			active = false,	detection = false},
+		{name = SV:T("Chinese"),			val	= {0,2,4,7,9}, 			active = false,	detection = false}, 
+		{name = SV:T("Chinese 2"),			val	= {0,4,6,7,11}, 		active = false,	detection = false},
+		{name = SV:T("Indian"),				val	= {0,1,3,4,7,8,10},		active = false,	detection = false},
+		{name = SV:T("Hungarian major"),	val = {0,3,4,6,7,9,10},		active = false,	detection = false}
 	}
 	
 	-- loop to active scales
@@ -1290,7 +1295,7 @@ function NotesObject:getScale(groupsSelected, paramTrack)
 			-- Limit scale detection to activated detection
 			if keyScaleTypeValues.detection then
 				-- Limit to major scales or all activated scales
-				if (self.isDetectionMajorScaleOnly and keyScaleTypeValues.name == "major") 
+				if (self.isDetectionMajorScaleOnly and keyScaleTypeValues.name == self.majorScale) 
 					or not self.isDetectionMajorScaleOnly then
 					
 					-- Loop on pitch notes
@@ -1299,7 +1304,7 @@ function NotesObject:getScale(groupsSelected, paramTrack)
 						-- scale found
 						scaleFoundItem = scaleFoundItem .. sep .. self.keyNames[key]
 						if self.isDetectionMajorScaleOnly then
-							if keyScaleTypeValues.name == "major" then
+							if keyScaleTypeValues.name == self.majorScale then
 								scaleFoundItem = scaleFoundItem .. " (" .. self:getKeyMajToMinor(self.keyNames[key]) .. ")"
 							end
 						else
