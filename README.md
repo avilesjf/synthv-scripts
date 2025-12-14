@@ -32,6 +32,7 @@ ProjectInfos: Show information on the project.
 SizingNotes: Halve and double notes length.
 TransposeNotes: Transpose notes by semitones for selected groups (or all groups in project).
 BackupPanel: Backup project file in same svp folder with timestamp.
+ManualMode2: Vibrato (similar V1 "manual mode") with progressive vibrato fade-in or fade-out.
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
