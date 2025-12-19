@@ -24,6 +24,7 @@ Update: Minor updates
 		10 - Add multiple group creation after dropping chords notes from DAW
 		11 - Add rotating voicing with presets, thanks to Enkerli (forum2 Dreamtonics)
 		12 - Update scale list (same as Dreamtonics combobox)
+		13 - Minor update
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -36,7 +37,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 12,
+		versionNumber = 13,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -1495,13 +1496,19 @@ function NotesObject:getNextKeyInScale(keyScaleFound, notePitch, pitchTarget, po
 	-- NOT negative harmony
 	if not self.isNegativeHarmony then
 		local octave = 0
+		local newPitchTarget = 0
+		if type(pitchTarget) == "string" then
+			newPitchTarget = tonumber(pitchTarget)
+		else
+			newPitchTarget = pitchTarget
+		end
 		-- Octave -1
-		if pitchTarget < 0 then
-			pitchTarget = 7 + pitchTarget
+		if newPitchTarget < 0 then
+			newPitchTarget = 7 + newPitchTarget
 			octave = -12
 		end
 			
-		local gapDegree = self:getShiftDegrees(pitchTarget, notePitch)
+		local gapDegree = self:getShiftDegrees(newPitchTarget, notePitch)
 		notePitchNew = notePitch + gapDegree + octave
 	else
 		-- Negative Harmony
