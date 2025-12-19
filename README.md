@@ -56,20 +56,22 @@ Remove all notes containing matched lyric or phoneme.
 Extracting pitchbend or velocity from midi file.
 Also import a midi file and create group notes (not done by SynthV).
 
+## ShiftNotes-scripts
+Shift notes: Move pitch notes value up/down.
+Shift notes: Move notes left/right.
+Shift notes: Backward or forward in very short gap or in previous/next first measure bar.
+
+## parameters-scripts
+Shift offset parameters (pitch/loudness/etc.) down/up/left/right.
+
 ## tools-scripts
 Extracting (and copy into the clipboard) all existing shortcuts into the file: settings.xml.
 Duplicate selected notes to a new target position.
 Microtonality: Update pitchDelta for each individual key for notes.
-Shift notes: Backward or forward in very short gap or in previous/next first measure bar.
-Shift notes: Move pitch notes value up/down.
-Shift notes: Move notes left/right.
 Playing SynthV: Displaying time in the track name and key notes inside groups during play.
 Store and display internal project notes for a track.
 Retrieving all SV:T(text) inside a script and generate a function for translation language.
 Read loudness audio data and apply loudness parameters.
-
-## parameters-scripts
-Shift offset parameters (pitch/loudness/etc.) down/up/left/right.
 
 ## Modifying these scripts or making your own
 If you copy, modify, fork, etc. these scripts, crediting me for the original source could be a good choice and be free to notify me.
