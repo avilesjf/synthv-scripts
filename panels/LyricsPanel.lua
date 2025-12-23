@@ -11,6 +11,8 @@ Notice: Works only with script panel
 
 Update: Minor updates
 		Add check box limit lyrics to current track
+		4 - Add sort groups by time 
+		(online documentation issue:getGroupReference... The groups are sorted in ascending onset positions. => in fact not)
 
 2025 - JF AVILES
 --]]
@@ -20,7 +22,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -416,9 +418,17 @@ function NotesObject:getTrackLyrics(track, timeAxis, secondDecayInput)
 	local lineInc = 0
 	local resultLyrics = {}
 	local lyricsGroup = ""
-
+	local groupsReference = {}
+	
 	for iGroup = 1, groupsCount do
 		local ref = track:getGroupReference(iGroup)
+		table.insert(groupsReference, ref)
+	end
+	table.sort(groupsReference, function(a, b) return a:getOnset() < b:getOnset() end)
+	
+	for iGroup = 1, groupsCount do
+		-- local ref = track:getGroupReference(iGroup)
+		local ref = groupsReference[iGroup]
 		local noteGroup = ref:getTarget()
 		local groupName = noteGroup:getName()
 		local notesCount = noteGroup:getNumNotes()
