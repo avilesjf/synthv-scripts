@@ -15,6 +15,7 @@ Convert LATIN to XSAMPA (Spanish, modo "all'italiana" adapted SynthV spanish) + 
 - It preserves line breaks from the original text.
 
 Update: Creation js to lua & panel (JFA)
+		2 - add "sc_e_i = SC + E / I → sh + vocal
 
 Original JavaScript code author: Blancanegra
 Subject: https://vi-control.net/community/threads/synthesizer-v-choir-voice-collections.169542/page-2#post-5823669
@@ -29,7 +30,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -50,65 +51,67 @@ function getArrayLanguageStrings()
 			{"minEditorVersion", "minEditorVersion"},
 			{"Latin to SV2", "Latin to SV2"},
 			{"The Latin diphthongs AE and OE are pronounced as a single E.", "The Latin diphthongs AE and OE are pronounced as a single E."},
-			{"C before A, O, or U is pronounced like 'k', even though it is spelled with c.", "C before A, O, or U is pronounced like 'k', even though it is spelled with c."},
-			{"C before E or I sounds like the Spanish 'ch'.", "C before E or I sounds like the Spanish 'ch'."},
+			{"C before A, O or U is pronounced like 'k'.", "C before A, O or U is pronounced like 'k'."},
+			{"In Latin, C before E or I sounds like the Spanish 'ch'. In Spanish, C before E or I sounds like 'zeta', the phoneme 'C' (English 'th').", "In Latin, C before E or I sounds like the Spanish 'ch'. In Spanish, C before E or I sounds like 'zeta', the phoneme 'C' (English 'th')."},
 			{"La secuencia CC ante E o I suena como 'kch' (ecce → ecche).", "The sequence CC before E or I sounds like 'kch' (ecce → ecche). 'kch' (ecce → ecche)."},
 			{"CH from Greek (CHORUS, CHRISTUS) is pronounced like 'k'.", "CH from Greek (CHORUS, CHRISTUS) is pronounced like 'k'."},
 			{"G before E or I is pronounced like the Italian /dʒ/, similar to the French 'j'; we use 'y'.", "G before E or I is pronounced like the Italian /dʒ/, similar to the French 'j'; we use 'y'."},
-			{"The sequence GN is pronounced like ñ.", "The sequence GN is pronounced like ñ."},
+			{"The sequence GN is pronounced like 'ñ'. Leave unchanged if the GN sound is preferred.", "The sequence GN is pronounced like 'ñ'. Leave unchanged if the GN sound is preferred."},
 			{"GU before a vowel is pronounced with a semivowel [w] (XSAMPA 'U'). In lyrics we write (¨ü) for a diphthong or (u-) for hiatus.", "GU before a vowel is pronounced with a semivowel [w] (XSAMPA 'U'). In lyrics we write (¨ü) for a diphthong or (u-) for hiatus."},
-			{"In words like JULIUS or FILIUS, we break the diphthong IU/UI with a hyphen.", "In words like JULIUS or FILIUS, we break the diphthong IU/UI with a hyphen."},
+			{"We break the diphthong IU/UI with a hyphen.", "We break the diphthong IU/UI with a hyphen."},
 			{"J (JESUS, JERUSALEM) is pronounced like a short i; we use 'y'.", "J (JESUS, JERUSALEM) is pronounced like a short i; we use 'y'."},
-			{"We write 'll' as 'l-l' to force two l's in SynthV. Or you can leave one, doubling its duration.", "We write 'll' as 'l-l' to force two l's in SynthV. Or you can leave one, doubling its duration."},
+			{"The LL has a double articulation which we force with the hyphen to avoid 'll'. An 'l' is pronounced in each syllable as in Italian. The same occurs with the CC group (k+k) where the hyphen is not necessary.", "The LL has a double articulation which we force with the hyphen to avoid 'll'. An 'l' is pronounced in each syllable as in Italian. The same occurs with the CC group (k+k) where the hyphen is not necessary."},
 			{"PH is pronounced like 'f'.", "PH is pronounced like 'f'."},
 			{"The U is pronounced as a semivowel.", "The U is pronounced as a semivowel."},
+			{"When SC comes before E or I, it is pronounced like 'sh'. This phoneme must be added manually to the phoneme label of the note.", "When SC comes before E or I, it is pronounced like 'sh'. This phoneme must be added manually to the phoneme label of the note."},
 			{"The 't' sounds approximately 'ts'.", "The 't' sounds approximately 'ts'."},
 			{"TH is pronounced like a normal 't'.", "TH is pronounced like a normal 't'."},
-			{"The Latin V is pronounced like a Spanish B; in pseudocode we write it with 'b'.", "The Latin V is pronounced like a Spanish B; in pseudocode we write it with 'b'."},
-			{"The X is pronounced like 'ks'.", "The X is pronounced like 'ks'."},
-			{"The Z is mapped to 'ds' to avoid /C' (zone → dsona).", "The Z is mapped to 'ds' to avoid /C' (zone → dsona)."},
-			{"Input activated!"},
-			{"Stop input text"},
-			{"Input disabled"},
+			{"The Latin V is pronounced like the Spanish B; in pseudo we write it with 'b'. In cases, the V may be preferable.", "The Latin V is pronounced like the Spanish B; in pseudo we write it with 'b'. In cases, the V may be preferable."},
+			{"The letter X is pronounced like 'ks', just like in Spanish.", "The letter X is pronounced like 'ks', just like in Spanish."},
+			{"Z is mapped to 'ds' avoiding 'C'.", "Z is mapped to 'ds' avoiding 'C'."},
+			{"Input activated!", "Input activated!"},
+			{"Stop input text", "Stop input text"},
+			{"Input disabled", "Input disabled"},
 			{"Rules", "Rules"}, 
 			{"Latin:", "Latin:"}, 
 			{"Pseudo spanish:", "Pseudo spanish:"}, 
 			{"Phonemes:", "Phonemes:"}, 
 			{"Rules conversions:", "Rules conversions:"},
 		},
-		["es-es"] = {
-			{"Start input text", "Start input text"},
-			{"Version", "Version"},
-			{"author", "author"},
+		["es-la"] = {
+			{"Start input text", "Iniciar texto entrada"},
+			{"Version", "Versión"},
+			{"author", "autor"},
 			{"minEditorVersion", "minEditorVersion"},
-			{"Latin to SV2", "Latin to SV2"},
+			{"Latin to SV2", "Del latín al SV2"},
 			{"The Latin diphthongs AE and OE are pronounced as a single E.", "Los diptongos latinos AE y OE se pronuncian como una sola E."},
-			{"C before A, O, or U is pronounced like 'k', even though it is spelled with c.", "C ante A, O o U se pronuncia como 'k', aunque se escriba con c."},
-			{"C before E or I sounds like the Spanish 'ch'.", "C ante E o I suena como 'ch' española."},
+			{"C before A, O or U is pronounced like 'k'.", "C ante A, O o U se pronuncia como 'k'."},
+			{"In Latin, C before E or I sounds like the Spanish 'ch'. In Spanish, C before E or I sounds like 'zeta', the phoneme 'C' (English 'th').", "En latín C ante E o I suena como 'ch' española. En español C ante E o I suena como zeta, fonema 'C' ('th' inglesa)."},
 			{"The sequence CC before E or I sounds like 'kch' (ecce → ecche). 'kch' (ecce → ecche).", "La secuencia CC ante E o I suena como 'kch' (ecce → ecche)."},
 			{"CH from Greek (CHORUS, CHRISTUS) is pronounced like 'k'.", "CH procedente del griego (CHORUS, CHRISTUS) se pronuncia como 'k'."},
 			{"G before E or I is pronounced like the Italian /dʒ/, similar to the French 'j'; we use 'y'.", "G ante E o I se pronuncia como la /dʒ/ italiana, similar a la 'j' francesa; usamos 'y'."},
-			{"The sequence GN is pronounced like ñ.", "La secuencia GN se pronuncia como ñ."},
+			{"The sequence GN is pronounced like 'ñ'. Leave unchanged if the GN sound is preferred.", "La secuencia GN se pronuncia como 'ñ'. Dejar sin cambios si se prefiere el sonido GN."},
 			{"GU before a vowel is pronounced with a semivowel [w] (XSAMPA 'U'). In lyrics we write (¨ü) for a diphthong or (u-) for hiatus.", "GU ante vocal se pronuncia con semivocal [w] (XSAMPA 'U'). En lyrics escribimos (¨ü) para diptongo o (u-) para hiato."},
-			{"In words like JULIUS or FILIUS, we break the diphthong IU/UI with a hyphen.", "En palabras como JULIUS o FILIUS rompemos el diptongo IU/UI con guión."},
+			{"We break the diphthong IU/UI with a hyphen.", "Rompemos el diptongo IU/UI con guión."},
 			{"J (JESUS, JERUSALEM) is pronounced like a short i; we use 'y'.", "J (JESUS, JERUSALEM) se pronuncia como una i corta; usamos 'y'."},
-			{"We write 'll' as 'l-l' to force two l's in SynthV. Or you can leave one, doubling its duration.", "Escribimos 'll' como 'l-l' para forzar dos eles en SynthV. O puedes dejar una doblando su duración."},
+			{"The LL has a double articulation which we force with the hyphen to avoid 'll'. An 'l' is pronounced in each syllable as in Italian. The same occurs with the CC group (k+k) where the hyphen is not necessary.", "La LL tiene articulación doble que forzamos con el guión para evitar 'll' .Se pronuncia una 'l' en cada sílaba como en italiano. Lo mismo ocurre con el grupo CC (k+k) donde no es necesario el guión."},
 			{"PH is pronounced like 'f'.", "PH se pronuncia como 'f'."},
 			{"The U is pronounced as a semivowel.", "Se pronuncia la U como semivocal."},
+			{"When SC comes before E or I, it is pronounced like 'sh'. This phoneme must be added manually to the phoneme label of the note.", "Cuando SC va antes de E o I se pronuncia como 'sh'. Este fonema hay que añadirlo a mano en la etiqueta de fonemas de la nota."},
 			{"The 't' sounds approximately 'ts'.", "La 't' suena aproximadamente 'ts'."},
 			{"TH is pronounced like a normal 't'.", "TH se pronuncia como 't' normal."},
-			{"The Latin V is pronounced like a Spanish B; in pseudocode we write it with 'b'.", "La V latina se pronuncia como B española; en pseudo la escribimos con 'b'."},
-			{"The X is pronounced like 'ks'.", "La X se pronuncia como 'ks'."},
-			{"The Z is mapped to 'ds' to avoid /C' (zone → dsona).", "La Z se mapea a 'ds' para evitar /C' (zona → dsona)."},
-			{"Input actived!", "Input actived!"},
+			{"The Latin V is pronounced like the Spanish B; in pseudo we write it with 'b'. In cases, the V may be preferable.", "La V latina se pronuncia como B española; en pseudo la escribimos con 'b'. Encasos, peude ser preferible la V."},
+			{"The letter X is pronounced like 'ks', just like in Spanish.", "La X se pronuncia como 'ks' igual que en español."},
+			{"Z is mapped to 'ds' avoiding 'C'.", "La Z se mapea a 'ds' evitando 'C'."},
+			{"Input activated!", "¡Entrada activada!"},
 			{"Stop input text", "Stop input text"},
-			{"Input disabled", "Input disabled"},
-			{"Rules", "Rules"},
+			{"Input disabled", "Entrada deshabilitada"},
+			{"Rules", "Normas"},
 			{"Latin:", "Latin:"},
-			{"Pseudo spanish:", "Pseudo spanish:"},
-			{"Phonemes:", "Phonemes:"},
-			{"Rules conversions:", "Rules conversions:"},
-		},
+			{"Pseudo spanish:", "Pseudo español:"},
+			{"Phonemes:", "Fonemas:"},
+			{"Rules conversions:", "Conversiones reglas:"},
+		}
 	}
 end
 
@@ -175,8 +178,6 @@ function NotesObject:new()
 	self.rulesTextValue:setValue("")
 	self.rulesTextValue:setEnabled(false)
 
-	-- self.rulesTextValue:setValue(self:setRulesText())
-	
 	self:setButtonStartInputControlCallback()
 
 	local infos = getClientInfo()
@@ -192,11 +193,16 @@ function NotesObject:new()
 	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
 	self:addTextPanel(self.infosToDisplay)
 	self:addTextPanel(SV:T("Latin to SV2") .. "...")
+
+	
+    return self
+end
+
+-- Set rules conversions text Initialization
+function NotesObject:setRulesInit()
 	self:setRulesText()
 	self.rulesListChoice = self:getRulesHeaders()
 	self:rulesUpdate(0)
-
-    return self
 end
 
 -- Set rules conversions text
@@ -215,7 +221,7 @@ function NotesObject:setRulesText()
 	  {
 		id= "c_other",
 		title= "C + A / O / U → k",
-		description= SV:T("C before A, O, or U is pronounced like 'k', even though it is spelled with c."),
+		description= SV:T("C before A, O or U is pronounced like 'k'."),
 		exampleLatin= "CORPUS",
 		examplePseudo= "corpus",
 		exampleXsampa= "k o r p u s"
@@ -255,7 +261,7 @@ function NotesObject:setRulesText()
 	  {
 		id= "gn",
 		title= "GN → ñ",
-		description= SV:T("The sequence GN is pronounced like ñ."),
+		description= SV:T("The sequence GN is pronounced like 'ñ'. Leave unchanged if the GN sound is preferred."),
 		exampleLatin= "AGNUS",
 		examplePseudo= "añus",
 		exampleXsampa= "a J u s"
@@ -271,7 +277,7 @@ function NotesObject:setRulesText()
 	  {
 		id= "hiato_iu",
 		title= "IU / UI (JULIUS, FILIUS)",
-		description= SV:T("In words like JULIUS or FILIUS, we break the diphthong IU/UI with a hyphen."),
+		description= SV:T("We break the diphthong IU/UI with a hyphen."),
 		exampleLatin= "JULIUS",
 		examplePseudo= "yuli-us",
 		exampleXsampa= "y u l i u s"
@@ -287,7 +293,7 @@ function NotesObject:setRulesText()
 	  {
 		id= "ll",
 		title= "LL → l-l",
-		description= SV:T("We write 'll' as 'l-l' to force two l's in SynthV. Or you can leave one, doubling its duration."),
+		description= SV:T("The LL has a double articulation which we force with the hyphen to avoid 'll'. An 'l' is pronounced in each syllable as in Italian. The same occurs with the CC group (k+k) where the hyphen is not necessary."),
 		exampleLatin= "ALLELUIA",
 		examplePseudo= "al-lelu-ia",
 		exampleXsampa= "a l l e l u i a"
@@ -309,6 +315,14 @@ function NotesObject:setRulesText()
 		exampleXsampa= "k U o k U e"
 	  },
 	  {
+		id= "sc_e_i",
+		title= "SC + E / I → sh + vocal",
+		description= "When SC comes before E or I, it is pronounced like 'sh'. This phoneme must be added manually to the phoneme label of the note.",
+		exampleLatin= "SUSCIPE",
+		examplePseudo= "sushipe",
+		exampleXsampa= "s u sh i p e"
+	  },
+	  {
 		id= "ti_vowel",
 		title= "TI + vocal → 'tsi' (~ t s I)",
 		description= SV:T("The 't' sounds approximately 'ts'."),
@@ -327,7 +341,7 @@ function NotesObject:setRulesText()
 	  {
 		id= "v",
 		title= "V → b / B",
-		description= SV:T("The Latin V is pronounced like a Spanish B; in pseudocode we write it with 'b'."),
+		description= SV:T("The Latin V is pronounced like the Spanish B; in pseudo we write it with 'b'. In cases, the V may be preferable."),
 		exampleLatin= "VITA",
 		examplePseudo= "bita",
 		exampleXsampa= "b i t a"
@@ -335,7 +349,7 @@ function NotesObject:setRulesText()
 	  {
 		id= "x",
 		title= "X → k s",
-		description= SV:T("The X is pronounced like 'ks'."),
+		description= SV:T("The letter X is pronounced like 'ks', just like in Spanish."),
 		exampleLatin= "EXCELSIS",
 		examplePseudo= "excelsis",
 		exampleXsampa= "e k ch e l s i s"
@@ -343,7 +357,7 @@ function NotesObject:setRulesText()
 	  {
 		id= "z",
 		title= "Z → d s",
-		description= SV:T("The Z is mapped to 'ds' to avoid /C' (zone → dsona)."),
+		description= SV:T("Z is mapped to 'ds' avoiding 'C'."),
 		exampleLatin= "ZONA",
 		examplePseudo= "dsona",
 		exampleXsampa= "d s o n a"
@@ -1356,7 +1370,7 @@ local notesObject = NotesObject:new()
 
 -- Get panel section state called by Synthesizer V internal system
 function getSidePanelSectionState()
-	
+	notesObject:setRulesInit()
 	local section = notesObject:getPanelSectionState()
 
 	return section
