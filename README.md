@@ -47,6 +47,7 @@ Expand current group size to the last existing note inside.
 Get group phonemes and user updated data.
 Add automatic breathing.
 Harmony: Copy selected groups to new tracks (or select one) and transpose all notes in desired scale with AI retakes.
+SplitSelectedGroups: Dreamtonics updated script to split all selected groups.
 
 ## lyrics-scripts
 Extracting lyrics easier to save all lyrics of a song. 
