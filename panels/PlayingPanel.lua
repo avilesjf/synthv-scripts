@@ -11,7 +11,9 @@ Show lyrics when lyrics are set to a full phrase (with + or - for subsequent not
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
 
-Update: Minor updates and automatic following displaying notes scrolling inside editor view
+Update: 2 - Minor updates and automatic following displaying notes scrolling inside editor view
+		3 - Activate current group + scroll arrangement view
+		
 
 2025 - JF AVILES
 --]]
@@ -21,7 +23,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 2,
+		versionNumber = 3,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -76,13 +78,13 @@ NotesObject = {
 	labelApply = "",
 	verticalRange = {},
 	currentNote = 0,
-	previousNote = 0,
     isPageTurning = false,
 	targetPositionLeft = 0,
 	isPageTurningVertical = false,
 	targetPositionVertical = 0,
 	navigEditor = nil,
-	navigArrangement = nil
+	navigArrangement = nil,
+	groupsSelected = nil
 }
 
 -- Constructor method for the NotesObject class
@@ -132,7 +134,41 @@ function NotesObject:new()
 	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
 	self:addTextPanel(self.infosToDisplay)
 
+	-- Register arrangement selection callback
+	self:registerArrangementSelectionCallback()
+
+	-- Register editor view selection callback
+	self:registerEditorViewSelectionCallback()
+
     return 	self
+end
+
+-- Register arrangement selection callback
+function NotesObject:registerArrangementSelectionCallback()
+	
+	-- Register selection callback to load parameters when selection changes
+	SV:getArrangement():getSelection():registerSelectionCallback(function(selectionType, isSelected)
+		SV:getArrangement():getSelection():clearGroups()
+	end)
+	
+	-- Register clear selection callback
+	SV:getArrangement():getSelection():registerClearCallback(function(selectionType)
+		-- No group selected in arrangement view
+	end)
+end
+
+-- Register editor view selection callback
+function NotesObject:registerEditorViewSelectionCallback()
+	
+	-- Register selection callback to load parameters when selection changes
+	SV:getMainEditor():getSelection():registerSelectionCallback(function(selectionType, isSelected)
+		SV:getMainEditor():getSelection():clearGroups()
+	end)
+	
+	-- Register clear selection callback
+	SV:getMainEditor():getSelection():registerClearCallback(function(selectionType)
+		-- No group selected in editor view
+	end)
 end
 
 -- Show message dialog
@@ -242,7 +278,7 @@ function NotesObject:setControlsCallback()
 		control.value:setValueChangeCallback(function()
 				-- self:addLogsInPanel()
 				if control.paramKey == "timeDecay" then
-					self.timeDecay = self.controls.timeDecay.value:getValue()					
+					self.timeDecay = self.controls.timeDecay.value:getValue()
 				end
 				if control.paramKey == "autoScales" then
 					self.autoZoomScales = self.controls.autoScales.value:getValue()
@@ -370,7 +406,7 @@ function NotesObject:setGroupNoteInfos()
 
 	local newInfo = self:secondsToClock(self.currentSeconds)
 	
-	local infos = self:setGroupNotes(newInfo)
+	local infos = self:getGroupNotes(newInfo)
 	self:setlyricsTrackTextPanel(infos)	-- Display infos on panel
 	
 	-- Recursive loop 
@@ -390,7 +426,7 @@ function NotesObject:setEditorViewPos()
 	local viewRange = self.navigEditor:getTimeViewRange()
 	local position = self:getTimeAxis():getBlickFromSeconds(SV:getPlayback():getPlayhead())
 	
-	local realTimeFollowingDisplayActive = false
+	local realTimeFollowingDisplayActive = true
 	
 	-- Real time following scroll display
 	if realTimeFollowingDisplayActive then
@@ -399,6 +435,7 @@ function NotesObject:setEditorViewPos()
 		local newTime = position + ((viewRange[2] - viewRange[1])/2) * multiplier
 
 		self.navigEditor:setTimeRight(position+((viewRange[2]-viewRange[1])/2)*multiplier)
+		self.navigArrangement:setTimeRight(position+((viewRange[2]-viewRange[1])/2)*multiplier)
 	else
 		-- Scroll on right margin only
 		if (self.isPageTurning and viewRange[1] < self.targetPositionLeft - margin) then
@@ -417,7 +454,7 @@ function NotesObject:setEditorViewPos()
 	if self.currentNote > 0 then
 		-- self.verticalRange = self.navigEditor:getValueViewRange()
 		local diffNotes = math.abs(self.targetPositionVertical - self.currentNote)
-		
+
 		if self.isPageTurningVertical and diffNotes > 5 then
 			if self.targetPositionVertical >= self.currentNote then
 				self.isPageTurningVertical = false
@@ -501,8 +538,8 @@ function NotesObject:isTextAccepted(lyrics)
 	return result
 end
 
--- Set the group notes name title with the current playing note infos
-function NotesObject:setGroupNotes(infoTime)
+-- Get the group notes name title with the current playing note infos
+function NotesObject:getGroupNotes(infoTime)
 	local infoNote = ""
 	local lyrics = ""
 	local note = nil
@@ -512,44 +549,52 @@ function NotesObject:setGroupNotes(infoTime)
 	local result = ""
 	local resultLyrics = ""
 	
+	self.currentNote = 0	
 	for iGroupNote = 1, self:getCurrentTrack():getNumGroups() do
-		local groupRef = self:getCurrentTrack():getGroupReference(iGroupNote)
+		groupRef = self:getCurrentTrack():getGroupReference(iGroupNote)
 		local timeOffset = groupRef:getTimeOffset()
 		local group = groupRef:getTarget()	
 		
 		if (groupRef:getOnset()) <= positionBlick and (groupRef:getEnd()) >= positionBlick then
 			groupName = self:simpleTrim(group:getName())
-		end
-		
-		infoNote, lyrics, note = self:getCurrentNoteInfo(group, positionBlick, timeOffset)		
-		infoNote = self:simpleTrim(infoNote)
-		lyrics = self:simpleTrim(lyrics)
-		if note ~= nil then
-			-- if new note
-			if self.currentNote ~= note:getPitch() then
-				self.previousNote = self.currentNote
-				self.currentNote = note:getPitch()
-			end
-		end
+			
+			-- Force display current group (hack available with registered arrangement/editor view)
+			SV:getMainEditor():setCurrentGroup(groupRef)
+			
+			infoNote, lyrics, note = self:getCurrentNoteInfo(group, positionBlick, timeOffset)
+			infoNote = self:simpleTrim(infoNote)
+			lyrics = self:simpleTrim(lyrics)
 
-		if #infoNote > 0 then
-			if #lyrics > 0 then
-				if self:isTextAccepted(lyrics) then
-					resultLyrics = resultLyrics .. lyrics
-					self.lyrics = resultLyrics
+			if note ~= nil then
+				-- if new note
+				if self.currentNote ~= note:getPitch() then
+					self.currentNote = note:getPitch()
+				end
+			else
+				self.currentNote = 0
+			end
+
+			if #infoNote > 0 then
+				if #lyrics > 0 then
+					if self:isTextAccepted(lyrics) then
+						resultLyrics = resultLyrics .. lyrics
+						self.lyrics = resultLyrics
+					end
+				end
+				
+				local iGroup = iGroupNote
+				if isGroupNotesExists and iGroupNote > 1 then
+					iGroup = iGroupNote - 1
+				end
+				if #self:simpleTrim(groupName) > 0 then
+					result = result .. SV:T("Time") .. ": " .. infoTime .. " " .. SV:T("Group") .. " " .. iGroup .. "\r"
+					break
 				end
 			end
-			
-			local iGroup = iGroupNote
-			if isGroupNotesExists and iGroupNote > 1 then
-				iGroup = iGroupNote - 1
-			end
-			if #self:simpleTrim(groupName) > 0 then
-				result = result .. SV:T("Time") .. ": " .. infoTime .. " " .. SV:T("Group") .. " " .. iGroup .. "\r"
-				break
-			end
 		end
+		
 	end
+
 	if #self:simpleTrim(result) == 0 then
 		result = result .. SV:T("Time") .. ": " .. infoTime .. "\r"
 	end
