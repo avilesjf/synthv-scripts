@@ -13,7 +13,7 @@ Notice: Works only with script panel
 
 Update: 2 - Minor updates and automatic following displaying notes scrolling inside editor view
 		3 - Activate current group + scroll arrangement view
-		
+		4 - Debug registering views
 
 2025 - JF AVILES
 --]]
@@ -23,7 +23,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -148,7 +148,7 @@ function NotesObject:registerArrangementSelectionCallback()
 	
 	-- Register selection callback to load parameters when selection changes
 	SV:getArrangement():getSelection():registerSelectionCallback(function(selectionType, isSelected)
-		SV:getArrangement():getSelection():clearGroups()
+		-- Nothing to do
 	end)
 	
 	-- Register clear selection callback
@@ -162,7 +162,7 @@ function NotesObject:registerEditorViewSelectionCallback()
 	
 	-- Register selection callback to load parameters when selection changes
 	SV:getMainEditor():getSelection():registerSelectionCallback(function(selectionType, isSelected)
-		SV:getMainEditor():getSelection():clearGroups()
+		-- Nothing to do
 	end)
 	
 	-- Register clear selection callback
@@ -409,7 +409,7 @@ function NotesObject:setGroupNoteInfos()
 	local infos = self:getGroupNotes(newInfo)
 	self:setlyricsTrackTextPanel(infos)	-- Display infos on panel
 	
-	-- Recursive loop 
+	-- Recursive loop
 	if SV:getPlayback():getStatus() == "playing" or SV:getPlayback():getStatus() == "looping"  then
 		SV:setTimeout(50, function() self:setGroupNoteInfos() end)		
 	else
