@@ -77,6 +77,11 @@ Store and display internal project notes for a track.
 Retrieving all SV:T(text) inside a script and generate a function for translation language.
 Read loudness audio data and apply loudness parameters.
 
+## SynthV V1
+## groups-scripts SynthV 1 (version >= 1.11.2)
+Group name update: Update group name from existing lyrics in notes
+Harmony: Copy selected groups to new tracks (or select one) and transpose all notes in desired scale with time decay.
+
 ## Modifying these scripts or making your own
 If you copy, modify, fork, etc. these scripts, crediting me for the original source could be a good choice and be free to notify me.
 
