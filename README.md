@@ -83,6 +83,10 @@ Read loudness audio data and apply loudness parameters.
 Group name update: Update group name from existing lyrics in notes
 Harmony: Copy selected groups to new tracks (or select one) and transpose all notes in desired scale with time decay.
 
+## Guide
+SynthV2:
+Harmony Panel users guide (pdf)
+
 ## Modifying these scripts or making your own
 If you copy, modify, fork, etc. these scripts, crediting me for the original source could be a good choice and be free to notify me.
 
