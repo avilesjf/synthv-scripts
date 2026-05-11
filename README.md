@@ -77,6 +77,7 @@ Playing SynthV: Displaying time in the track name and key notes inside groups du
 Store and display internal project notes for a track.
 Retrieving all SV:T(text) inside a script and generate a function for translation language.
 Read loudness audio data and apply loudness parameters.
+Drop audio to playhead position
 
 ## SynthV V1
 ## groups-scripts SynthV 1 (version >= 1.11.2)

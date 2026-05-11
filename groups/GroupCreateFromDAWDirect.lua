@@ -22,6 +22,7 @@ A/ If you want to STOP this script without the required drag&drop DAW (multiple 
 
 Update: 0 - Minor updates
 		6 - Add multiple group creation after dropping chords notes from DAW
+		7 - Update to script data instead of hidden group
 		
 2025 - JF AVILES
 --]]
@@ -48,7 +49,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 6,
+		versionNumber = 7,
 		minEditorVersion = 65540
 	}
 end
@@ -62,14 +63,12 @@ NotesObject = {
 	INITIAL_TRACK_NAME_REF = "initialTrackName",
 	NUM_TRACKS_REF = "numTracks",
 	CURRENT_TRACK_REF = "currentTrack",
-	GROUP_TAG = "GroupData:",
-	GROUP_STOP_TAG = "GroupStop:",
 	LINK_NOTES_ACTIVE = "linkNotesActive",
 	TRACK_TARGET_REF = "trackTarget",
-	groupStoredRefFound = nil,
-	groupStoredFound = nil,
-	groupStoredRefToStopPrevious = nil,
-	groupStoredToStopPrevious = nil,
+	scriptDataKey = "SCRIPT_Project_DROP_TO_POS",
+	scriptStopDataKey = "SCRIPT_Project_STOP_DROP",
+	scriptDataKeys = {},
+	scriptDataKeysList = {},
 	linkNotesActive = true,
 	trackTarget = nil,
 	initialTrackName = "",
@@ -77,6 +76,7 @@ NotesObject = {
 	newDAWTrack = nil,
 	newGrouptRef = nil,
 	currentTrack = nil,
+	newAudioTrack = nil,
 	numTracks = 0,
 	selection = nil,
 	selectedNotes = nil,
@@ -87,9 +87,6 @@ NotesObject = {
 	stopProcessOK = false,
 	processing = 0,
 	isTrackClone = true, -- clone current track voice
-	colors = {},
-	currentColorPos = 0,
-	currentColor = "",
 	sepParam = "|",
 	lyricsException = {}
 }
@@ -114,7 +111,6 @@ function NotesObject:new()
 	self.currentTrack = self.editor:getCurrentTrack()
 	self.initialTrackName = self.currentTrack:getName()
 	self.trackTarget = self.currentTrack
-	self.colors = self:getColors()
 	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
 
     return self
@@ -180,47 +176,6 @@ function NotesObject:secondsToClock(timestamp)
 	  timestamp%60):gsub("%.",",")
 end
 
--- Get new color
-function NotesObject:getNewColor(track)
-	if self.currentColorPos == 0 then 
-		self.currentColorPos = self:getCurrentColorPos(track)
-	end
-	self.currentColorPos = self.currentColorPos + 1
-	if self.currentColorPos > #self.colors then
-		self.currentColorPos = 1
-	end
-	return self.colors[self.currentColorPos].val
-end
-
--- Get current color position
-function NotesObject:getCurrentColorPos(track)
-	local newPos = 1
-	for i, color in ipairs(self.colors) do
-		if color.val == track:getDisplayColor() then
-			newPos = i
-			break
-		end
-	end	
-	return newPos
-end
-
--- Get colors
-function NotesObject:getColors()
-	local colors = {}
-	table.insert(colors, {val = "ffd14f5b", name = "red"})
-	table.insert(colors, {val = "ffc27455", name = "orange"})
-	table.insert(colors, {val = "ffc27455", name = "ocher"})
-	table.insert(colors, {val = "ffd6bc43", name = "yellow"})
-	table.insert(colors, {val = "ff7db235", name = "green"})
-	table.insert(colors, {val = "ff3bb26c", name = "greenish"})
-	table.insert(colors, {val = "ff3eb2a8", name = "blue-sky"})
-	table.insert(colors, {val = "ff4794cb", name = "blue"})
-	table.insert(colors, {val = "ff5478c7", name = "turquoise"})
-	table.insert(colors, {val = "ff6959d4", name = "purple"})
-	table.insert(colors, {val = "ffb853b3", name = "pink"})
-	return colors
-end
-
 -- Get first mesure before first note
 function NotesObject:getFirstMesure(notePos)
 	local measurePos = 0
@@ -264,8 +219,6 @@ end
 function NotesObject:cloneTrackReference(trackRef, trackName)
 	local newTrack = trackRef:clone()		
 	local iGroups = newTrack:getNumGroups()
-	local color = self:getNewColor(self.trackTarget)
-	newTrack:setDisplayColor(color)
 	
 	if iGroups > 1 then
 		-- Delete groups
@@ -288,8 +241,6 @@ end
 -- Create track target
 function NotesObject:createTrackTarget(name)
 	local newTrackTarget = SV:create("Track")
-	local color = self:getNewColor(self.trackTarget)
-	newTrackTarget:setDisplayColor(color)
 	
 	local newTrackIndex = self.project:addTrack(newTrackTarget)
 	newTrackTarget = self.project:getTrack(newTrackIndex)
@@ -343,7 +294,7 @@ function NotesObject:createGroup(startPosition, targetPosition)
 			if iGroup == 1 then
 				self.currentTrack:addGroupReference(newGrouptRef)
 			else
-				local trackName = self.initialTrackName .. "-" .. iGroup
+				local trackName = self.initialTrackName .. "-" .. self.project:getNumTracks()
 				if self.isTrackClone then
 					-- Clone track for new groups
 					local track = self:cloneTrackReference(self.currentTrack, trackName)
@@ -509,85 +460,12 @@ function NotesObject:setTrackNameWaiting()
 	end
 end
 
--- Create group for internal data
-function NotesObject:createInternalGroup()
-	-- Create new group 
-	local noteGroup = SV:create("NoteGroup")
-	self.project:addNoteGroup(noteGroup)
-	
-	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
-	
-	return newGrouptRef, noteGroup
-end
-
--- Set new group name with data
-function NotesObject:setNewGroupName(noteGroup, GROUP_TAG, data)
-	noteGroup:setName(GROUP_TAG .. "\r" .. data)
-end
-
--- Get previous stored data group
-function NotesObject:getPreviousStoredGroup(GROUP_TAG)
-	local groupStoredRefFound = nil
-	local groupStoredFound = nil
-	
-	for iNoteGroup = 1, self.project:getNumNoteGroupsInLibrary() do
-		local group = self.project:getNoteGroup(iNoteGroup)
-		if group ~= nil then
-			local groupRef = group:getParent()
-			if groupRef ~= nil then
-				local groupName = group:getName()
-				local pos = string.find(groupName, GROUP_TAG)
-				if pos ~= nil then 
-					groupStoredRefFound = groupRef
-					groupStoredFound = group
-					break
-				end
-			end
-		end
-	end
-	return groupStoredRefFound, groupStoredFound
-end
-
--- Get data content
-function NotesObject:getGroupContentData(data)
-	local pos = string.find(data, self.GROUP_TAG)
-	if pos ~= nil then
-		data = string.sub(data, pos + string.len(self.GROUP_TAG) + 1)
-	end
-	return data
-end
-
--- Get group reference in time position
-function NotesObject:getGroupRef(track, time)
-	local groupRefFound = nil
-	local numGroups = track:getNumGroups()
-	local blicksPos = self.timeAxis:getBlickFromSeconds(time)
-	
-	-- All groups except the main group
-	for iGroup = 2, numGroups do
-		local groupRef = track:getGroupReference(iGroup)
-		if not groupRef:isInstrumental() then
-			local blickSeconds = self:secondsToClock(self.timeAxis:getSecondsFromBlick(groupRef:getOnset()))
-			
-			-- Get group on timing pos
-			if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
-				groupRefFound = groupRef
-				break
-			end
-		end						
-	end						
-	return groupRefFound
-end
-
 -- Main loop
 function NotesObject:loop()
 	local newSelectedNotes = #self.selection:getSelectedNotes()
 	local cause = ""
 
-	self.groupStoredRefToStopPrevious, self.groupStoredToStopPrevious = 
-		self:getPreviousStoredGroup(self.GROUP_STOP_TAG)
-
-	if self.groupStoredToStopPrevious ~= nil then
+	if self:isScriptProjectDataStopped() then
 		self.stopProcess = true
 	end
 	
@@ -619,17 +497,16 @@ end
 
 -- Scan a new track
 function NotesObject:scanNewTrack()
-	SV:setTimeout(200, function() self:setTrackNameWaiting() end)
+	SV:setTimeout(100, function() self:setTrackNameWaiting() end)
 	self.currentSeconds = self.playBack:getPlayhead()
 	local secondsInfo = self:secondsToClock(self.currentSeconds)
 	
 	-- Check if a new track is created
 	if self.numTracks < self.project:getNumTracks() then
 		self.newDAWTrack = self:getLastTrack()
-		local numNotesNewDAWTrack = self:getTrackNumNotes(self.newDAWTrack)
+		local numNotesNewDAWTrack = self:getTrackNumNotes(self.newDAWTrack)		
 		
-		if numNotesNewDAWTrack > 0 then
-			
+		if numNotesNewDAWTrack > 0 then			
 			local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
 			local measureBlick = self:getFirstMesure(newStartPosition)
 
@@ -640,61 +517,90 @@ function NotesObject:scanNewTrack()
 			self.stopProcessOK = true -- End of process OK
 			self:setTrackTarget()
 		else
-			-- a new track is created with no notes
+			-- a new track is created with no notes (audio?)
+			self.newAudioTrack = self:getLastTrack()
+			local numGroups = self.newAudioTrack:getNumGroups()
+			
+			if numGroups == 1 then
+				local groupRef = self.newAudioTrack:getGroupReference(1)
+				local groupTarget = groupRef:getTarget()
+				if groupRef ~= nil then
+					-- Audio?
+					if groupRef:isInstrumental() then
+						local groupOnset = groupRef:getOnset()
+						local newStartPosition = self.timeAxis:getBlickFromSeconds(self.currentSeconds)
+						local duration = groupRef:getDuration()
+						if duration > 0 then
+							groupRef:setTimeRange(newStartPosition, duration)
+							groupRef:setTimeOffset(newStartPosition)					
+							-- self.newAudioTrack:setName(groupTarget:getName())
+							self.stopProcess = true		-- End of process
+							self.stopProcessOK = true	-- End of process OK
+							self:setTrackTarget()
+						end
+					end
+				end
+			end
 		end
 	end
 end
 
 -- Stop script 
 function NotesObject:stopScript()
-		self.stopProcess = true
-		SV:finish()
+	self.stopProcess = true
+	SV:finish()
 end
 
 -- Set track target
 function NotesObject:setTrackTarget()
 	if self.trackTarget ~= nil then
-		self.trackTarget:setName(self.initialTrackName)
+		SV:setTimeout(10, function() self.trackTarget:setName(self.initialTrackName) end)
 	end
 end
 
--- Stop script 
-function NotesObject:stopScript()
-		self.stopProcess = true
-		SV:setTimeout(30, function() self:finishScriptProcess() end)
+-- Clear user project data
+function NotesObject:clearProjectData()
+	self.projectDataInfos = ""
+	self.project:removeScriptData(self.scriptDataKey)
+	self.project:removeScriptData(self.scriptStopDataKey)
 end
 
--- Delete stop stored group
-function NotesObject:deleteStopStoredGroup()
-
-	if self.groupStoredToStopPrevious ~= nil then
-		local groupIndex = self.groupStoredToStopPrevious:getIndexInParent()
-		self.project:removeNoteGroup(groupIndex)
-		self.groupStoredRefToStopPrevious = nil
-		self.groupStoredToStopPrevious = nil
-	end
+-- Save user project data
+function NotesObject:saveProjectData(data)
+	self.project:setScriptData(self.scriptDataKey, data)
 end
 
--- Delete previous stored group
-function NotesObject:deletePreviousStoredGroup()
+-- Get user project data
+function NotesObject:getProjectData()
+	local projectData = ""
+	projectData = self.project:getScriptData(self.scriptDataKey) or ""
+	return projectData
+end
 
-	if self.groupStoredFound ~= nil then
-		local groupIndex = self.groupStoredFound:getIndexInParent()
-		self.project:removeNoteGroup(groupIndex)
-		self.groupStoredRefFound = nil
-		self.groupStoredFound = nil
+-- Get user stop project data
+function NotesObject:getStopProjectData()
+	local stopProjectData = ""
+	stopProjectData = self.project:getScriptData(self.scriptStopDataKey) or ""
+	return stopProjectData
+end
+
+-- Get user project data stopped
+function NotesObject:isScriptProjectDataStopped()
+	local result = false
+	local stopProjectData = self:getStopProjectData()
+	if #stopProjectData > 0 then 
+		result = true
 	end
+	return result
 end
 
 -- End of script 
 function NotesObject:endOfScript()
 	self.stopProcess = true
 	self:setTrackTarget()
-
 	-- clean previous data
-	SV:setTimeout(10, function() self:deletePreviousStoredGroup() end)	
-	SV:setTimeout(20, function() self:deleteStopStoredGroup() end)
-	SV:setTimeout(30, function() self:finishScriptProcess() end)
+	SV:setTimeout(10, function() self:clearProjectData() end)
+	SV:setTimeout(50, function() self:finishScriptProcess() end)
 end
 
 -- Finish script processing
@@ -708,16 +614,14 @@ function NotesObject:trim(s)
 	  return s:match'^()%s*$' and '' or s:match'^%s*(.*%S)'
 end
 
--- Get stored data 
-function NotesObject:getStoredData()
-	local result = false
-	
-	-- self.GROUP_TAG .. self.sepParam .. |initialTrackName=Track 1
-	local groupData = self:getGroupContentData(self.groupStoredFound:getName())
+-- Get stored project data 
+function NotesObject:getStoredProjectData()
+	local result = false	
+	local data = self:getProjectData()
 
-	if self:isParametersOk(groupData) then
+	if data ~= nil and #data > 0 then
 
-		local paramSlitted = self:split(groupData, self.sepParam)
+		local paramSlitted = self:split(data, self.sepParam)
 		for iLine = 1, #paramSlitted do
 			local param = paramSlitted[iLine]
 			local paramArray = self:split(param, "=")
@@ -726,16 +630,12 @@ function NotesObject:getStoredData()
 			
 			if paramArray[1] ~= nil then
 				paramKey = self:trim(paramArray[1])
-			-- else
-				-- self:show(SV:T("Error nil value with param: ") .. param)
 			end
 			
 			if paramArray[2] ~= nil then
 				paramValue = self:trim(paramArray[2])
-			-- else
-				-- self:show(SV:T("Error nil value with param: ") .. param)
 			end
-			self:setParametersFromStoredGroup(paramKey, paramValue)
+			self:setParametersFromStoredData(paramKey, paramValue)
 		end		
 		result = true
 	end
@@ -743,21 +643,8 @@ function NotesObject:getStoredData()
 	return result
 end
 
--- Check if parameters OK
-function NotesObject:isParametersOk(data)
-	local result = false
-	if data ~= nil then
-		if type(data) == "string" then
-			if string.find(data, self.INITIAL_TRACK_NAME_REF) ~= nil then
-				result = true
-			end
-		end
-	end
-	return result
-end
-
--- Set parameters from stored hidden group
-function NotesObject:setParametersFromStoredGroup(paramName, value)
+-- Set parameters from stored data
+function NotesObject:setParametersFromStoredData(paramName, value)
 	if string.find(paramName, self.INITIAL_TRACK_NAME_REF) then
 		self.initialTrackName = value
 	end
@@ -768,18 +655,12 @@ function NotesObject:setParametersFromStoredGroup(paramName, value)
 		local iTrack = tonumber(value)
 		if iTrack <= self.numTracks then
 			self.trackTarget = self.project:getTrack(iTrack)
-		else
-			self:show(SV:T("Error in saved parameters, try again!"))
-			self:stopScript()
 		end
 	end
 	if string.find(paramName,self.CURRENT_TRACK_REF) then
 		local iTrack = tonumber(value)
 		if iTrack <= self.numTracks then
 			self.currentTrack = self.project:getTrack(iTrack)
-		else
-			self:show(SV:T("Error in saved parameters, try again!"))
-			self:stopScript()
 		end
 	end
 	if string.find(paramName, self.LINK_NOTES_ACTIVE) then
@@ -788,7 +669,6 @@ function NotesObject:setParametersFromStoredGroup(paramName, value)
 			self.linkNotesActive = true
 		end
 	end
-
 end
 
 -- Split string by sep char
@@ -801,43 +681,39 @@ function NotesObject:split(str, sep)
    return result
 end
 
--- Store data to hidden group
-function NotesObject:storeToHiddenGroup()
+-- Store data to project script data
+function NotesObject:storeToProjectScriptData()
 	
-	if self.groupStoredFound == nil then
-		self.groupStoredRefFound, self.groupStoredFound = self:createInternalGroup()
-		local data = self.INITIAL_TRACK_NAME_REF	.. "=" .. self.initialTrackName					.. self.sepParam
-			.. self.LINK_NOTES_ACTIVE				.. "=" .. tostring(self.linkNotesActive)		.. self.sepParam
-			.. self.NUM_TRACKS_REF					.. "=" .. self.numTracks						.. self.sepParam
-			.. self.TRACK_TARGET_REF				.. "=" .. self.trackTarget:getIndexInParent()	.. self.sepParam
-			.. self.CURRENT_TRACK_REF				.. "=" .. self.currentTrack:getIndexInParent()
-		self:setNewGroupName(self.groupStoredFound, self.GROUP_TAG, data)
+	local data = self.INITIAL_TRACK_NAME_REF	.. "=" .. self.initialTrackName					.. self.sepParam
+		.. self.LINK_NOTES_ACTIVE				.. "=" .. tostring(self.linkNotesActive)		.. self.sepParam
+		.. self.NUM_TRACKS_REF					.. "=" .. self.numTracks						.. self.sepParam
+		.. self.TRACK_TARGET_REF				.. "=" .. self.trackTarget:getIndexInParent()	.. self.sepParam
+		.. self.CURRENT_TRACK_REF				.. "=" .. self.currentTrack:getIndexInParent()
 
-		-- Get this stored data
-		self:getStoredData()
-	end
+	-- Get this stored data
+	self:saveProjectData(data)
+	
+	-- Get this stored project data
+	self:getStoredProjectData()		
 end
 
--- Create groups to stop process
-function NotesObject:groupToStopProcess()
-	self.groupStoredRefToStopPrevious, self.groupStoredToStopPrevious = self:createInternalGroup()
-	self:setNewGroupName(self.groupStoredFound, self.GROUP_STOP_TAG, "STOP")
+-- Stop process
+function NotesObject:stopCurrentProcess()
+	self.stopProcess = true
+	self.project:setScriptData(self.scriptStopDataKey, "STOP")
 end
 
 -- Start process
 function NotesObject:startProcess()
-	self.groupStoredRefFound, self.groupStoredFound = self:getPreviousStoredGroup(self.GROUP_TAG)
 	
 	-- Is first script processing
-	if self.groupStoredFound == nil then
-		-- self:getProject():newUndoRecord()
-		self:storeToHiddenGroup()
+	if not self:getStoredProjectData() then
+		self.project:newUndoRecord()
+		self:storeToProjectScriptData()
 		SV:setTimeout(100, function() self:loop() end)
 	else
-		local result = self:getStoredData()
-		self:groupToStopProcess()
+		self:stopCurrentProcess()
 		SV:setTimeout(100, function() self:endOfScript() end)
-		
 	end
 end
 
