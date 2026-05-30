@@ -35,6 +35,7 @@ BackupPanel: Backup project file in same svp folder with timestamp.
 ManualMode2: Vibrato (similar V1 "manual mode") with progressive vibrato fade-in or fade-out.
 Latin2svPanel: Convert LATIN to XSAMPA (Spanish, modo "all'italiana" adapted SynthV spanish) + pseudo-spanish support.
 ControlPointsInfosPanel: Display control points position (time or blicks) and value.
+ParametersNotesPanel: Set automation parameters attached to single notes.
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
