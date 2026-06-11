@@ -25,6 +25,7 @@ Update: Minor updates
 		11 - Add rotating voicing with presets, thanks to Enkerli (forum2 Dreamtonics)
 		12 - Update scale list (same as Dreamtonics combobox)
 		13 - Minor update
+		14 - Add ismain in groupref function
 		
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -37,7 +38,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 13,
+		versionNumber = 14,
 		minVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -850,12 +851,14 @@ function NotesObject:getGroupRef(track, blicksPos)
 	-- All groups except the main group
 	for iGroup = 1, numGroups do
 		local groupRef = track:getGroupReference(iGroup)
-		local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
-		
-		-- Get group on timing pos
-		if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
-			groupRefFound = groupRef
-			break
+		if not groupRef:isMain() then
+			local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
+			
+			-- Get group on timing pos
+			if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
+				groupRefFound = groupRef
+				break
+			end
 		end
 	end						
 	return groupRefFound

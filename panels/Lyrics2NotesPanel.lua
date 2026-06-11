@@ -1,19 +1,16 @@
-local SCRIPT_TITLE = '.Melodies'
+local SCRIPT_TITLE = 'Lyrics to notes'
 
 --[[
 
 Synthesizer V Studio Pro Script
  
-lua file name: MelodyPanel.lua
+lua file name: Lyrics2NotesPanel.lua
 
-Melody Generator in Lua with Variable Spacing
 Generates melodies based on scale, style, and rhythm
 Includes variable spacing between notes based on rhythm and style
+Fill lyrics into melody
 
-Update: Added a ComboBox "Note fixed to measure bar 1/16 to 1/64.
-		Improve notes position fixed on timed bar measures related to BPM
-		Add duration coef slider
-		Add ismain in groupref function
+Update: 1 - Creation
 
 Notice: Works only with script panel 
 		introduced with Synthesizer V version >= 2.1.2
@@ -26,7 +23,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 6,
+		versionNumber = 1,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -44,7 +41,8 @@ function getArrayLanguageStrings()
 			{"Version", "Version"},
 			{"author", "author"},
 			{"minEditorVersion", "minEditorVersion"},
-			{"Generate melodies", "Generate melodies"},
+			{"Lyrics to melodies", "Lyrics to melodies"},
+			{"No lyrics in text area!", "No lyrics in text area!"},
 			{"major", "major"},
 			{"natural minor", "natural minor"},
 			{"blues major", "blues major"},
@@ -79,17 +77,13 @@ function getArrayLanguageStrings()
 			{"Note fixed: 1/16", "Note fixed: 1/16"},
 			{"Note fixed: 1/32", "Note fixed: 1/32"},
 			{"Note fixed: 1/64", "Note fixed: 1/64"},
-			{"Group created!", "Group created!"},
-			{"Error: Empty group, nothing created!", "Error: Empty group, nothing created!"},
-			{"Reduce duration", "Reduce duration"},
-			{"Select a key scale:", "Select a key scale:"},
-			{"Auto play melody", "Auto play melody"},
-			{"Loop into melody", "Loop into melody"},
+			{"No lyrics found!", "No lyrics found!"},
 			{"Apply", "Apply"},
 			{"Select a key scale", "Select a key scale"},
 			{"Select a scale type", "Select a scale type"},
 			{"Select a style", "Select a style"},
 			{"Select a rhythm", "Select a rhythm"},
+			{"Reduce duration", "Reduce duration"},
 			{"Select melody length", "Select melody length"},
 			{"Select octave (down:-1, base:0, up:+1)", "Select octave (down:-1, base:0, up:+1)"},
 			{"Note position to measure bar", "Note position to measure bar"},
@@ -99,17 +93,16 @@ end
 
 -- Define a class "NotesObject"
 NotesObject = {
-	playBack = nil,
-	playHeadPosition = nil,
 	displayVersion = true,	-- display version
 	displayAuthor = false,	-- display author
 	currentSeconds = 0,
 	defaultLyrics = "la",
+	linefeed = "[^\r\n]+",
+	words = "%S+",
 	octaveRange = 1,
 	quarterDivider = 4,
 	measureBarVal = 8,		-- Place notes on starting measure bar 1/8
 	minTimeSpacing = 1/8,	-- default minimum time(s) between notes
-	BPM = 120,				-- Beat per minute
 	errorMessages = {},
 	currentPlayheadSeconds = 0,
 	beginGroup = nil,
@@ -128,8 +121,9 @@ NotesObject = {
 	allscalesActive = false, -- true to list all scales
 	scales = {},
 	styles = {},	
+	stylesRef = {},			-- {"pop", "edm", "jazz", "ballad"}
 	rhythms = {},
-	melodyNotesLength = 0,
+	rhythmsLyrics = {},
 	melodyLength = {},
 	octaveUpDown = {},
 	measureBar = {},
@@ -140,34 +134,20 @@ NotesObject = {
 	octaveUpDownList = {},
 	controls = {},				-- controls panel
 	applyButtonValue = nil, 	-- button apply
+	createProjectValue = nil, 	-- button create project
 	statusTextValue = nil,   	-- text panel
 	keyScaleChoice = {},
 	styleChoice = {},
-	melodyLengthChoice = {},
-	durationCoefChoice = {},
 	measureBarChoice = {},
-	lyricsException = {},
 	infosToDisplay = "",
 	logs = {},
+	lyrics2NotesTextChoice = {},
 	coefMinValue = 0.25,
 	coefMaxValue = 1,
 	coefInterval = 0.25,
-	durationCoef = 1	-- Multiplier/divider for note duration (1 = normal, 0.5 = shorter)
+	durationCoef = 0.75	-- Multiplier/divider for note duration (1 = normal, 0.5 = shorter)
 }
 
--- Define a class "NoteEvent"
-NoteEvent = {
-	event = nil,
-	parent = nil -- NotesObject
-}
-
--- Define a class "Melody"
-Melody = {
-	id = 0,
-	melody = nil,
-	melody_counter = 0,
-	parent = nil -- NotesObject
-}
 
 -- Constructor method for the NotesObject class
 function NotesObject:new()
@@ -181,7 +161,6 @@ function NotesObject:new()
 	self.currentSeconds = self:getPlayhead()
 	
 	self.keyNames = {"C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"}
-	self.lyricsException = {"+", "++", "-", "br", "'", ".cl", ".pau", ".sil"}
 	
 	-- Note names with values
 	self.note_names = {
@@ -197,6 +176,9 @@ function NotesObject:new()
 	self.scales = self:getScalesData(self.allscalesActive) -- init activated scales or all
 	self.styles = self:getStylesData()
 	self.rhythms = self:getRhythmsData()
+	-- self.rhythmsLyrics = {"sentimental", "powerful", "tragic", "emotional", "happy"}
+	self.stylesRef = {"pop", "edm", "jazz", "ballad"}
+
 	self.melodyLength = self:getMelodyLengthData()
 	self.octaveUpDown = self:getOctaveUpDownData()
 	self.measureBar = self:getMeasureBarData()
@@ -207,12 +189,16 @@ function NotesObject:new()
 	self:setControlsCallback()
 	
 	self.applyButtonValue = SV:create("WidgetValue")
+	self.lyrics2NotesTextValue = SV:create("WidgetValue")
+	self.lyrics2NotesTextValue:setValue("")
+	self.lyrics2NotesTextValue:setEnabled(false)
+	self.createProjectValue = SV:create("WidgetValue")
 	self.statusTextValue = SV:create("WidgetValue")
 	self.statusTextValue:setValue("")
 	self.statusTextValue:setEnabled(false)
 	
 	self:setButtonApplyControlCallback()
-	
+
 	-- load combox data
 	self:getComboLists()
 	
@@ -227,7 +213,7 @@ function NotesObject:new()
 	end
 	-- self.infosToDisplay = self.infosToDisplay .. SV:T("minEditorVersion") .. ": " ..  infos.minEditorVersion
 	self:addTextPanel(self.infosToDisplay)
-	self:addTextPanel(SV:T("Generate melodies") .. "...")
+	self:addTextPanel(SV:T("Lyrics to melodies") .. "...")
 	
     return self
 end
@@ -238,7 +224,7 @@ function NotesObject:show(message)
 end
 
 -- Get selected groups
-function NotesObject:getSelectedGroups()	
+function NotesObject:getSelectedGroups()
 	return SV:getArrangement():getSelection():getSelectedGroups()
 end
 
@@ -298,16 +284,6 @@ function NotesObject:getControls()
 			defaultValue = self.durationCoef,
 			paramKey = "durationCoef"
 		},
-		autoPlay = {
-			value = SV:create("WidgetValue"),
-			defaultValue = false,
-			paramKey = "autoPlay"
-		},
-		loopAutoPlay = {
-			value = SV:create("WidgetValue"),
-			defaultValue = false,
-			paramKey = "loopAutoPlay"
-		},
 		scaleKey = {
 			value = SV:create("WidgetValue"),
 			defaultValue = 0, -- C
@@ -363,13 +339,9 @@ function NotesObject:setControlsCallback()
 		control.value:setValueChangeCallback(function()
 			-- do something may be
 				-- self:addLogsInPanel()
-				if control.paramKey == "style" then
-					-- Update scale type from style scale_preference
-					local styleChoice = self.stylesList[control.value:getValue() + 1]
-					local style = self.styles[control.value:getValue() + 1]
-					local scale_preference = style.val.scale_preference
-					local posScale = self:getPosScaleFromScaleName(scale_preference)
-					self.controls.scaleType.value:setValue(posScale - 1)
+				if control.paramKey == "rhythm" then
+					local rhythm = self.rhythmsList[self.controls.rhythm.value:getValue() + 1]
+					local rhythm_config = self:get_rhythm(rhythm).val
 				end
 			end
 		)
@@ -415,18 +387,31 @@ function NotesObject:setButtonApplyControlCallback()
 	self.applyButtonValue:setValueChangeCallback(function()
 			self:getProject():newUndoRecord()
 			
-			self.durationCoef = self.controls.durationCoef.value:getValue()
-			
-			self:createMelody(self.controls.scaleKey.value:getValue(),
-				self.controls.scaleType.value:getValue(), self.controls.style.value:getValue(), 
-				self.controls.rhythm.value:getValue(), self.controls.melodyLength.value:getValue(), 
-				self.controls.octaveUpDown.value:getValue(),
-				self.controls.measureBar.value:getValue()
-				)
+			local lyrics = self.lyrics2NotesTextValue:getValue()
+			if #lyrics > 0 then
+				self:lyrics2NotesGroup(lyrics)
+			else
+				self:show(SV:T("No lyrics in text area!"))
+			end
 		end
 	)
 end
-	
+
+-- Get next measure bar
+function NotesObject:getNextMeasure(groupName, currentBlicksPos)
+	local next = 0
+	if currentBlicksPos == 0 then
+		next = 0
+	else
+		local posSecond = self:getTimeAxis():getSecondsFromBlick(currentBlicksPos)
+		local posSecondFloor = math.floor(posSecond) + 1
+		local nextPosMod = (posSecondFloor % 2)
+		local nextPos = posSecondFloor + nextPosMod
+		next = self:getTimeAxis():getBlickFromSeconds(nextPos)
+	end	
+	return next
+end
+
 -- Get scales data
 function NotesObject:getScalesData(allscalesActive)
 	local scales = {}
@@ -468,7 +453,7 @@ function NotesObject:getStylesData()
 	local styles = {}
 	
 	local stylesReference = { 
-		{name = SV:T("Style pop"), val = {
+		{name = SV:T("Style pop"), key="pop", val = {
 			scale_preference = "major",
 			octave_range = 1,
 			jump_probability = 0.3,
@@ -479,8 +464,8 @@ function NotesObject:getStylesData()
 			syncopation_chance = 0.2,
 			staccato_chance = 0.4
 		}},
-		{name = SV:T("Style ballad"), val = {
-			scale_preference = "natural minor",
+		{name = SV:T("Style ballad"), key="ballad",  val = {
+			scale_preference = "major",
 			octave_range = 1,
 			jump_probability = 0.2,
 			repetition_chance = 0.5,
@@ -490,8 +475,8 @@ function NotesObject:getStylesData()
 			syncopation_chance = 0.1,
 			staccato_chance = 0.2
 		}},
-		{name = SV:T("Style edm"), val = {
-			scale_preference = "natural minor", -- Note names to MIDI mapping
+		{name = SV:T("Style edm"), key="edm", val = {
+			scale_preference = "major", -- Note names to MIDI mapping
 			octave_range = 2,
 			jump_probability = 0.4,
 			repetition_chance = 0.3,
@@ -501,7 +486,7 @@ function NotesObject:getStylesData()
 			syncopation_chance = 0.4,  -- Probability of syncopated rhythm
 			staccato_chance = 0.6      -- Probability of short, detached notes
 		}},
-		{name = SV:T("Style jazz"), val = {
+		{name = SV:T("Style jazz"), key="jazz", val = {
 			scale_preference = "dorian",
 			octave_range = 2,
 			jump_probability = 0.6,
@@ -525,28 +510,37 @@ end
 -- Get rhythms data
 function NotesObject:getRhythmsData()
 	local rhythms = {}
-	
+
 	local rhythmsReference = {
-		{name = SV:T("Speed fast"), val = {
-			durations = {0.25, 0.5, 0.5, 0.25, 0.5}, -- Rhythm configurations (note durations and spacing multipliers)
+		{name = SV:T("Speed fast"), key = "fast",
+			val = {
+			tempo = 140,
+			durations = {0.5, 0.5, 0.5, 0.25, 0.5}, -- Rhythm configurations (note durations and spacing multipliers)
 			spacing_multiplier = 0.8,	-- Faster = less spacing
-			groove_factor = 1.2			-- Slightly uneven timing
+			groove_factor = 1.2,		-- Slightly uneven timing
+			speed = 8 					-- note divider
 		}},
-		{name = SV:T("Speed medium"), val = {
+		{name = SV:T("Speed medium"), key = "medium",
+			val = {
+			tempo = 120,
 			durations = {0.5, 1, 0.5, 1, 0.5},
 			spacing_multiplier = 1.0,
-			groove_factor = 1.1
+			groove_factor = 1.1,
+			speed = 6
 		}},
-		{name = SV:T("Speed slow"), val = {
+		{name = SV:T("Speed slow"), key = "slow",
+			val = {
+			tempo = 70,
 			durations = {1, 2, 1, 1.5, 2},
 			spacing_multiplier = 1.5,	-- Slower = more breathing room
-			groove_factor = 1.05
+			groove_factor = 1.05,
+			speed = 4
 		}}
 	}
 	
 	-- loop into data
 	for i = 1, #rhythmsReference do
-			table.insert(rhythms, rhythmsReference[i])
+		table.insert(rhythms, rhythmsReference[i])
 	end
 	
 	return rhythms
@@ -606,28 +600,6 @@ function NotesObject:getMeasureBarData()
 	return measureBar
 end
 
--- Get group reference in time position
-function NotesObject:getGroupRef(track, time)
-	local groupRefFound = nil
-	local numGroups = track:getNumGroups()
-	local blicksPos = self:getTimeAxis():getBlickFromSeconds(time)
-	
-	-- All groups except the main group
-	for iGroup = 1, numGroups do
-		local groupRef = track:getGroupReference(iGroup)
-		if not groupRef:isMain() then
-			local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
-			
-			-- Get group on timing pos
-			if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
-				groupRefFound = groupRef
-				break
-			end
-		end						
-	end						
-	return groupRefFound
-end
-
 -- Get playhead position in first nearest measure
 function NotesObject:getPlayhead()
 	-- Get playhead first measure
@@ -650,98 +622,24 @@ function NotesObject:displayErrors()
 	return result
 end
 
+-- Note to MIDI pitch conversion
+function NotesObject:noteToPitch(noteName, octave)
+    for i, name in ipairs(self.keyNames) do
+        if name == noteName then
+            return (octave + 1) * 12 + (i - 1)
+        end
+    end
+    return 60 -- C4 default
+end
+
 -- Get host informations
 function NotesObject:getHostInformations()
 	self.hostinfo = SV:getHostInfo()
 	self.osType = self.hostinfo.osType  -- "macOS", "Linux", "Unknown", "Windows"
 	self.osName = self.hostinfo.osName
 	self.hostName = self.hostinfo.hostName
-	self.languageCode = self.hostinfo.languageCode
 	self.hostVersion = self.hostinfo.hostVersion
 	self.hostVersionNumber = self.hostinfo.hostVersionNumber
-end
-
--- Constructor method for the NoteEvent class
-function NoteEvent:new(midi_note, start_time, duration, velocity, parent)
-    local noteEvent = {}
-	self.__index = NoteEvent
-
-    local event = {
-        midi_note = midi_note,
-        start_time = start_time,
-        duration = duration,
-        velocity = velocity or 80,
-        end_time = start_time + duration
-    }
-    setmetatable(event, NoteEvent)
-	self.event = event
-	self.parent = parent -- NotesObject
-    return event
-end
-
--- Display note event content
-function NoteEvent:display()
-    return string.format("Note: %d, Start: %.3f, Duration: %.3f, End: %.3f", 
-                        self.midi_note, self.start_time, self.duration, self.end_time)
-end
-
--- Constructor method for the Melody class
-function Melody:new(note_events, scale, style, rhythm, root_note, total_duration, parent)
-    local melody = {}
-	self.__index = Melody
-	
-    local melody = {
-        id = self.melody_counter + 1,
-        note_events = note_events,
-        scale = scale,
-        style = style,
-        rhythm = rhythm,
-        root_note = root_note,
-        total_duration = total_duration,
-        created_at = os.date("%Y-%m-%d %H:%M:%S")
-    }
-	
-    setmetatable(melody, Melody)
-	
-	self.id = melody.id
-	self.melody = melody
-    self.melody_counter = self.melody_counter + 1
-	self.parent = parent -- NotesObject
-	
-    return melody
-end
-
--- Display melody content
-function Melody:display()
-	local result = ""
-    result = result .. "Melody ID: " .. self.id .. "\r"
-    result = result .. "Scale: " .. self.scale .. " | Style: " .. self.style .. " | Rhythm: " .. self.rhythm .. "\r"
-    result = result .. "Root note: " .. self.root_note .. " (MIDI: " .. self.parent.note_names[self.root_note] .. ")" .. "\r"
-    result = result .. "Total duration: " .. string.format("%.3f", self.total_duration) .. " beats" .. "\r"
-    result = result .. "Created: " .. self.created_at .. "\r"
-    result = result .. "Note Events:" .. "\r"
-    
-    for i, event in ipairs(self.note_events) do
-        result = result .. "  " .. i .. ". " .. event:display() .. "\r"
-    end
-    result = result .. "---" .. "\r"
-	return result
-end
-
--- Get midi sequence
-function Melody:get_midi_sequence()
-    -- Returns simple arrays for compatibility
-    local notes = {}
-    local start_times = {}
-    local durations = {}
-    
-    for _, event in ipairs(self.note_events) do
-        table.insert(notes, event.midi_note)
-        table.insert(start_times, event.start_time)
-        table.insert(durations, event.duration)
-    end
-    
-    return notes, start_times, durations
 end
 
 -- Get scale from scale type
@@ -877,139 +775,13 @@ function NotesObject:calculate_note_duration(base_duration, style_config, rhythm
     return math.max(0.1, duration)  -- Ensure minimum duration
 end
 
--- Generate a melody with variable spacing
-function NotesObject:generate_melody(root_note, scale_type, style_name, 
-										rhythm_name, length, octaveUpDown, measureBar)
-    self.melodyNotesLength = length or 16  -- Default melody length
-	self.measureBarVal = measureBar -- measure bar default 8 for 1/16
-	
-	self.currentSeconds = SV:getPlayback():getPlayhead()
-	self.BPM = self:getProjectTempo(self.currentSeconds)
-	
-	-- 120/120 = 1, 120/90 = 1.333, 120/60 = 2
-	local BPM_ratio = 120 / self.BPM
-	-- 120 1/8 = 0.125  94 1.27/8=0.160   90 1.333/8=0.1666 60 2/8 = 0.25
-	local measureBarTime = BPM_ratio / self.measureBarVal
-	self.minTimeSpacing = measureBarTime
-	-- self:addLogs("BPM_ratio: " .. BPM_ratio 
-				-- .. ", measureBarVal:" .. self.measureBarVal 
-				-- .. ", BPM: " .. self.BPM
-				-- .. ", measureBarTime: " .. measureBarTime)
-	
-    -- Validate inputs
-    if not self.note_names[root_note] then
-        self:error("Invalid root note. Use: C, Db, D, Eb, E, F, Gb, G, Ab, A, Bb, B")
-		return nil
-    end
-    if not self:get_scale(scale_type) then
-        self:error("Invalid scale. Use: major, minor, dorian, blues_major, etc...")
-		return nil
-    end
-	
-    if not self:get_style(style_name) then
-        self:error("Invalid style. Use: edm, jazz, pop, ballad")
-		return nil
-    end
-    if not self:get_rhythm(rhythm_name) then
-        self:error("Invalid rhythm. Use: fast, medium, slow")
-		return nil
-    end
-	
-	math.randomseed(os.time())
-	
-    local scale_notes = self:get_scale_notes(root_note, scale_type, octaveUpDown)
-    local style_config = self:get_style(style_name).val
-    local rhythm_config = self:get_rhythm(rhythm_name).val
-    local rhythm_pattern = rhythm_config.durations
-    
-    local note_events = {}
-    local current_time = 0
-    local new_next_time = 0
-    local current_note_index = math.random(1, #scale_notes)
-	local newCurrent_note_index = 0
-	local result = ""
-	local iCurrentNote = 1
-
-    for i = 1, self.melodyNotesLength do
-		iCurrentNote = i
-        -- Get base duration from rhythm pattern
-        local duration_index = ((i - 1) % #rhythm_pattern) + 1
-        local base_duration = rhythm_pattern[duration_index] * self.durationCoef
-        
-        -- Calculate actual note duration with style modifications
-        local note_duration = self:calculate_note_duration(base_duration, style_config, rhythm_config)
-        
-		if new_next_time > 0 then
-			current_time = new_next_time
-		end
-		
-        -- Create note event
-        local midi_note = scale_notes[current_note_index]
-		result = result .. "midi_note: " .. midi_note
-		result = result .. ", current_time: " .. current_time
-		result = result .. ", note_duration: " .. note_duration
-		result = result .. "\r"
-        local velocity = 70 + math.random(20)  -- Random velocity 70-90
-		
-        -- Calculate spacing after this note
-        local spacing = self:calculate_spacing(style_config, rhythm_config)
-		-- result = result .. ", spacing: " .. spacing
-		
-        if spacing < self.minTimeSpacing then
-			spacing = 0
-			result = result .. ", new: " .. spacing
-		end
-		
-        -- Update current time (note duration + spacing)
-        local next_time = current_time + note_duration + spacing
-		result = result .. ", next_time: " .. next_time
-		
-		-- Place next note to next measure bar 1/16
-		new_next_time = self:getNextMeasurePos(next_time, measureBarTime)  -- Get next measure position
-		result = result .. ", new_next_time: " .. new_next_time .. "\r"
-		
-		-- Force duration to join notes (without space)
-		if new_next_time > next_time then
-			-- note_duration = note_duration + new_next_time - next_time
-			note_duration = new_next_time - current_time
-		end
-		
-		local note_event = NoteEvent:new(midi_note, current_time, note_duration, velocity, self)
-		
-        table.insert(note_events, note_event) -- Add note
-	
-		newCurrent_note_index = current_note_index
-        -- Determine next note
-        if math.random() < style_config.repetition_chance then
-            -- Repeat current note (do nothing)
-        elseif math.random() < style_config.jump_probability then
-            -- Make a jump
-            local jump_size = math.random(-5, 5)
-            current_note_index = math.max(1, math.min(#scale_notes, current_note_index + jump_size))
-        else
-            -- Step movement
-            local step = math.random() < 0.5 and -1 or 1
-            current_note_index = math.max(1, math.min(#scale_notes, current_note_index + step))
-        end
-    end
-
-	if self.debug then SV:setHostClipboard(result) end
-	
-    -- Create and save melody
-    local melody = Melody:new(note_events, scale_type, style_name, rhythm_name, 
-								root_note, current_time, self)
-    table.insert(self.saved_melodies, melody)
-    
-    return melody
-end
-
 -- Get next measure Position
-function NotesObject:getNextMeasurePos(current_time, timeMeasureBar)
+function NotesObject:getNextMeasurePos(current_time, timeMeasureBar, melodyLength)
 	local newtime =  current_time
 	local current_time_Int = math.floor(current_time)
 	
 	local new_next_time = current_time_Int
-	local maxTime = self.melodyNotesLength * 10
+	local maxTime = melodyLength * 10
 	for i = 1, maxTime do
 		if current_time <= new_next_time then
 			newtime = new_next_time
@@ -1022,7 +794,7 @@ end
 
 -- Get current project tempo
 function NotesObject:getProjectTempo(seconds)
-	local tempoActive = 120
+	local tempoActive = 120 -- default
 	local blicks = self:getTimeAxis():getBlickFromSeconds(seconds)
 	local tempoMarks = self:getTimeAxis():getAllTempoMarks()
 	for iTempo = 1, #tempoMarks do
@@ -1032,116 +804,6 @@ function NotesObject:getProjectTempo(seconds)
 		end
 	end
 	return math.floor(tempoActive)
-end
-
--- List all saved melodies
-function NotesObject:list_melodies()
-    if #self.saved_melodies == 0 then
-        self:error("No melodies saved yet.")
-        return
-    end
-	
-    local result = "=== SAVED MELODIES ==="  .. "\r"
-    for _, melody in ipairs(self.saved_melodies) do
-        result = result .. melody:display() .. "\r"
-    end
-	return result
-end
-
--- Get a melody by ID
-function NotesObject:get_melody(id)
-    for _, melody in ipairs(self.saved_melodies) do
-        if melody.id == id then
-            return melody
-        end
-    end
-    return nil
-end
-
--- Delete a melody
-function NotesObject:delete_melody(id)
-    for i, melody in ipairs(self.saved_melodies) do
-        if melody.id == id then
-            table.remove(self.saved_melodies, i)
-            -- Melody id deleted
-            return true
-        end
-    end
-    self:error("Melody " .. id .. " not found.")
-    return false
-end
-
--- Export melody with timing information
-function NotesObject:export_melody(melody)
-    if not melody then return nil end
-    
-    local notes, start_times, durations = melody:get_midi_sequence()
-    
-    local export_data = {
-        id = melody.id,
-        notes = notes,
-        start_times = start_times,
-        durations = durations,
-        total_duration = melody.total_duration,
-        scale = melody.scale,
-        style = melody.style,
-        rhythm = melody.rhythm,
-        root_note = melody.root_note,
-        note_events = {}
-    }
-    
-    -- Export detailed note events
-    for _, event in ipairs(melody.note_events) do
-        table.insert(export_data.note_events, {
-            midi_note = event.midi_note,
-            start_time = event.start_time,
-            duration = event.duration,
-            end_time = event.end_time,
-            velocity = event.velocity
-        })
-    end
-    
-    return export_data
-end
-
--- Analyze melody timing
-function NotesObject:analyze_melody_timing(melody)
-    if not melody or #melody.note_events == 0 then
-        self:error("No melody to analyze")
-        return
-    end
-    local result = ""
-    result = result .. "=== TIMING ANALYSIS ===" .. "\r"
-    result = result .. "Melody ID: " .. melody.id .. "\r"
-    result = result .. "Total duration: " .. string.format("%.3f", melody.total_duration) .. " beats" .. "\r"
-    
-    local gaps = {}
-    for i = 2, #melody.note_events do
-        local prev_event = melody.note_events[i-1]
-        local curr_event = melody.note_events[i]
-        local gap = curr_event.start_time - prev_event.end_time
-        table.insert(gaps, gap)
-    end
-    
-    if #gaps > 0 then
-        local total_gap = 0
-        local min_gap = gaps[1]
-        local max_gap = gaps[1]
-        
-        for _, gap in ipairs(gaps) do
-            total_gap = total_gap + gap
-            min_gap = math.min(min_gap, gap)
-            max_gap = math.max(max_gap, gap)
-        end
-        
-        local avg_gap = total_gap / #gaps
-        result = result .. "Average gap between notes: " .. string.format("%.3f", avg_gap) .. " beats" .. "\r"
-        result = result .. "Minimum gap: " .. string.format("%.3f", min_gap) .. " beats" .. "\r"
-        result = result .. "Maximum gap: " .. string.format("%.3f", max_gap) .. " beats" .. "\r"
-    end
-    
-    result = result .. "---" .. "\r"
-	return result
 end
 
 -- Get object properties (debug only)
@@ -1167,40 +829,13 @@ function NotesObject:getObjectProperties(obj, level)
 	return result
 end
 
--- Limit string max length
-function NotesObject:limitStringLength(resultLyrics, maxLengthResult)
-	-- Limit string max length
-	if string.len(resultLyrics) > maxLengthResult then
-		local posStringChar = string.find(resultLyrics," ", maxLengthResult - 10)
-		if posStringChar == nil then posStringChar = maxLengthResult end
-		resultLyrics = string.sub(resultLyrics, 1, posStringChar)
+-- Split string by sep char
+function NotesObject:split(str, sep)
+	local result = {}
+	local regex = ("([^%s]+)"):format(sep)
+	for each in str:gmatch(regex) do
+		table.insert(result, each)
 	end
-	return resultLyrics
-end
-
--- Check lyrics "a" less than .1s for special effect
-function NotesObject:isLyricsEffect(note)
-	local result = false
-	local notelength = self:getTimeAxis():getSecondsFromBlick(note:getDuration())
-	-- ie: 0.0635
-	if notelength < 0.1 then
-		result = true
-	end
-	return result
-end
-
--- Is lyrics is a text accepted
-function NotesObject:isTextAccepted(lyrics)
-	local result = true
-	
-	-- Filter char '+' & '++' & '-' & 'br' & .cl & .pau & .sil
-	for i, lyricsExcept in pairs(self.lyricsException) do
-		if lyrics == lyricsExcept then
-			result = false
-			break
-		end
-	end
-
 	return result
 end
 
@@ -1235,167 +870,216 @@ function NotesObject:getFirstMesure(notePos, nextPos)
 	return measureBlick
 end
 
--- Rename one group
-function NotesObject:renameOneGroup(maxLengthResult, noteGroup)
-	local resultLyrics = ""
-	local groupName = noteGroup:getName()
-	local notesCount = noteGroup:getNumNotes()
+-- lyrics to Notes to group
+function NotesObject:lyrics2NotesGroup(lyrics)
+	math.randomseed(os.time())
+	local resultFunction = false	
+	local scaleKeyCtrl = self.controls.scaleKey.value:getValue()
+	local scaleTypeCtrl = self.controls.scaleType.value:getValue()
+	local octaveUpDownCtrl = self.controls.octaveUpDown.value:getValue()
+	local styleCtrl = self.controls.style.value:getValue()
+	local rhythmCtrl = self.controls.rhythm.value:getValue()
+	local measureBarCtrl = self.controls.measureBar.value:getValue()
+	local newGrouptRef = {}
+	local noteGroup = {}
+	local result = ""
 
-	if notesCount > 0 then
-		local lyricsLine = ""
-		local sep = ""
+	local root_note = self.keyNames[scaleKeyCtrl + 1]
+	local scale_type = self.scalesList[scaleTypeCtrl + 1 ]
+	local octaveUpDown = self:get_octaveUpDown(self.octaveUpDownList[octaveUpDownCtrl + 1]).val
+    local scale_notes = self:get_scale_notes(root_note, scale_type, octaveUpDown)
+	local style_name = self.stylesList[styleCtrl + 1]
+    local style_config = self:get_style(style_name).val
+	local rhythm_name = self.rhythmsList[rhythmCtrl + 1]
+    local rhythm_config = self:get_rhythm(rhythm_name).val
+    local rhythm_pattern = rhythm_config.durations
+	
+	
+	self.durationCoef = self.controls.durationCoef.value:getValue()
+	-- measure bar default 8 for 1/16
+	self.measureBarVal = self:get_measureBar(self.measureBarList[measureBarCtrl + 1]).val
+	self.currentSeconds = SV:getPlayback():getPlayhead()
+	self.BPM = self:getProjectTempo(self.currentSeconds)
+	local BPM_ratio = 120 / self.BPM
+	local measureBarTime = BPM_ratio / self.measureBarVal
+	self.minTimeSpacing = measureBarTime
+	
+	if #lyrics == 0  then
+		self:show(SV:T("No lyrics found!"))
+	else
+		local previousNoteOnset = nil
+		local previousNoteDuration = 0
+		local previousMidi_note = 48
+		local previousWord = ""
 
-		for i = 1, notesCount do
-			local infos = ""
-			local note = noteGroup:getNote(i)
+		local matchSentences = string.gmatch(lyrics, self.linefeed)
+		for lyricsLine in matchSentences do
+		
+			-- Create a note group
+			local noteGroup = SV:create("NoteGroup")
+			local newGrouptRef = SV:create("NoteGroupReference")
+			local iNote = 0
+			local noteOnset = nil
+			local noteDuration = 0
+			local noteGetEnd = 0
+			local newNote = nil
+			local matchWordsCount = 0
+			local current_time = 0
+			local new_next_time = 0
+			local current_note_index = math.random(1, #scale_notes)
 			
-			if note ~= nil then
-				local lyrics = note:getLyrics()
-				if string.len(lyrics) > 0 then
+			-- Count words in line
+			local matchWords = string.gmatch(lyricsLine, self.words)
+			for word in matchWords do
+				matchWordsCount = matchWordsCount + 1			
+			end
+			
+			-- Get words from lyrics
+			local matchWords = string.gmatch(lyricsLine, self.words)
+			for word in matchWords do
+				iNote = iNote + 1
+				-- Get base duration from rhythm pattern
+				local duration_index = ((iNote - 1) % #rhythm_pattern) + 1
+				local base_duration = rhythm_pattern[duration_index] * self.durationCoef
 				
-					-- Filter char '+' & '-' & 'br' & .cl & .pau & .sil
-					if self:isTextAccepted(note) then
-						-- Replace following note char '-'
-						if lyrics == "-" then lyrics = ".." end 
-						-- Add lyrics for each note
-						lyricsLine = lyricsLine .. sep .. lyrics
-						sep = " "
-					end				  
+				-- Calculate actual note duration with style modifications
+				local note_duration = self:calculate_note_duration(base_duration, style_config, rhythm_config)
+				
+				if new_next_time > 0 then
+					current_time = new_next_time
+				end
+			
+				-- Create note event
+				local midi_note = scale_notes[current_note_index]
+				result = result .. "midi_note: " .. midi_note
+				result = result .. ", current_time: " .. current_time
+				result = result .. ", note_duration: " .. note_duration
+				result = result .. "\r"
+						
+				-- Calculate spacing after this note
+				local spacing = self:calculate_spacing(style_config, rhythm_config)
+				
+				if spacing < self.minTimeSpacing then
+					spacing = 0
+					result = result .. ", new: " .. spacing
+				end
+				-- Update current time (note duration + spacing)
+				local next_time = current_time + note_duration + spacing
+				result = result .. ", next_time: " .. next_time
+				
+				-- Place next note to next measure bar 1/16
+				new_next_time = self:getNextMeasurePos(next_time, measureBarTime, matchWordsCount) -- Get next measure position
+				result = result .. ", new_next_time: " .. new_next_time .. "\r"
+				
+				-- Force duration to join notes (without space)
+				if new_next_time > next_time then
+					-- note_duration = note_duration + new_next_time - next_time
+					note_duration = new_next_time - current_time
+				end
+				
+				-- current note recorded and created in next loop
+				noteOnset = math.floor(self:getTimeAxis():getBlickFromSeconds(current_time))
+				noteDuration = math.floor(self:getTimeAxis():getBlickFromSeconds(note_duration))
+				
+				if iNote == 1 then
+				else
+					-- New note for one	word (note from previous loop)
+					newNote = SV:create("Note")
+					newNote:setLyrics(previousWord)
+
+					-- Set new duration if it is too long
+					if iNote < matchWordsCount then					
+						local previousNoteGetEnd = previousNoteOnset + previousNoteDuration
+						if previousNoteGetEnd > noteOnset then
+							previousNoteDuration = noteOnset - previousNoteOnset
+							result = result .. ", previousNoteDuration: " .. previousNoteDuration .. "\r"
+						end
+					end
+			
+					newNote:setDuration(previousNoteDuration)
+					newNote:setPitch(previousMidi_note)
+					newNote:setOnset(previousNoteOnset)
+					
+					-- Add the note to the note group
+					noteGroup:addNote(newNote)
+				end
+				previousNoteOnset = noteOnset
+				previousNoteDuration = noteDuration
+				previousMidi_note = midi_note
+				previousWord = word				
+				
+				-- Determine next note
+				if math.random() < style_config.repetition_chance then
+					-- Repeat current note (do nothing)
+				elseif math.random() < style_config.jump_probability then
+					-- Make a jump
+					local jump_size = math.random(-5, 5)
+					current_note_index = math.max(1, math.min(#scale_notes, current_note_index + jump_size))
+				else
+					-- Step movement
+					local step = math.random() < 0.5 and -1 or 1
+					current_note_index = math.max(1, math.min(#scale_notes, current_note_index + step))
 				end
 			end
+			
+			-- New note for one	word (note from last loop)
+			local newNote = SV:create("Note")
+			newNote:setLyrics(previousWord)
+			newNote:setDuration(previousNoteDuration)
+			newNote:setPitch(previousMidi_note)
+			newNote:setOnset(previousNoteOnset)
+					
+			-- Add the note to the note group
+			noteGroup:addNote(newNote)
+			
+			noteGroup:setName(lyricsLine)			
+			-- Add the note group to the project
+			self:getProject():addNoteGroup(noteGroup)
+
+			newGrouptRef:setTarget(noteGroup)
+			
+			self.currentSeconds = SV:getPlayback():getPlayhead()
+			local checkGroup = self:getGroupRef(self:getCurrentTrack(), self.currentSeconds)
+			if checkGroup ~= nil then
+				self.currentSeconds = self:getNextEmptyPosition(self:getCurrentTrack(), checkGroup:getEnd())
+				SV:getPlayback():seek(self.currentSeconds)
+			else
+				local newPositionBlicks = self:getTimeAxis():getBlickFromSeconds(self.currentSeconds)
+				measureBlick = self:getFirstMesure(newPositionBlicks, 0)
+				self.currentSeconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
+				SV:getPlayback():seek(self.currentSeconds)
+			end
+			
+			local startPositionBlicks = self:getTimeAxis():getBlickFromSeconds(self.currentSeconds)
+			local firstNote = noteGroup:getNote(1)
+			local lastNote = noteGroup:getNote(noteGroup:getNumNotes())
+			
+			local newTimeOffset, newDuration = self:getGroupNewTimeRange(startPositionBlicks, firstNote, lastNote)
+			newGrouptRef:setTimeOffset(newTimeOffset)			
+			newGrouptRef:setTimeRange(startPositionBlicks, newDuration) -- v2.1.1		
+			
+			self:getCurrentTrack():addGroupReference(newGrouptRef)
 		end
 
-		-- Add lyrics
-		resultLyrics = self:limitStringLength(lyricsLine, maxLengthResult)
-		-- Update if new lyrics only
-				if string.len(resultLyrics)> 0 and
-			noteGroup:getName() ~= resultLyrics then
-			noteGroup:setName(resultLyrics)
-		end
+		if self.debug then SV:setHostClipboard(result) end
+		
+		resultFunction = true
 	end
-
-	return resultLyrics
+	return result
 end
 
--- Create group for new track with new notes
-function NotesObject:createGroup(startPosition, track, melody)
-	local maxLengthResult = 30
-	
-	-- Create new note group 
-	local noteGroup = SV:create("NoteGroup")
-	local lastNote = nil
-	local firstNote = nil
-	local notesCount = #melody.note_events
-	
-	-- Loop into generated notes
-	for i, event in ipairs(melody.note_events) do
-		local note = SV:create("Note")
-		note:setOnset(self:getTimeAxis():getBlickFromSeconds(event.start_time))
-		note:setLyrics(self.defaultLyrics)
-		note:setPitch(event.midi_note)
-		note:setDuration(self:getTimeAxis():getBlickFromSeconds(event.duration))
-
-		-- Set new duration if it is too long
-		if i < notesCount then
-			local nextEvent = melody.note_events[i + 1]
-			local nextNotePos = self:getTimeAxis():getBlickFromSeconds(nextEvent.start_time)
-			if note:getEnd() > nextNotePos then
-				note:setDuration(nextNotePos - note:getOnset())
-			end
-		end
-
-		noteGroup:addNote(note)
-		if i == 1 then 
-			firstNote = note
-		end
-		lastNote = note
-	end
-	
-	-- Set group name with existing lyrics notes
-	noteGroup:setName("")
-	self:getProject():addNoteGroup(noteGroup)
-	local resultLyrics = self:renameOneGroup(maxLengthResult, noteGroup)
-	
-	-- Create note group reference
-	local newGrouptRef = SV:create("NoteGroupReference", noteGroup)
-	
-	-- Define start & end group length
-	local startPositionBlicks = self:getTimeAxis():getBlickFromSeconds(startPosition)
+-- Get group new time range
+function NotesObject:getGroupNewTimeRange(startPositionBlicks, firstNote, lastNote)
 	local endPositionBlicks = lastNote:getOnset() + lastNote:getDuration() - firstNote:getOnset()
 	-- New end position to next bar
 	local newEndPosition = self:getFirstMesure(endPositionBlicks, 1) - 10
-	newGrouptRef:setTimeOffset(startPositionBlicks)
-	newGrouptRef:setTimeRange(startPositionBlicks, newEndPosition) -- v2.1.1
-	
-	-- Add group reference in current track
-	track:addGroupReference(newGrouptRef)
-	
-	return newGrouptRef
-end
 
--- Generate group
-function NotesObject:generateGroup(root_note, scale_type, style_name, rhythm_name, 
-									melodyLength_name, octaveUpDown_name, measureBar_name)
-	local newGrouptRef = nil
-	local length = self:get_melodyLength(melodyLength_name).val
-	local octaveUpDown = self:get_octaveUpDown(octaveUpDown_name).val
-	local measureBar = self:get_measureBar(measureBar_name).val
-	
-	local melody = self:generate_melody(root_note, scale_type, style_name, rhythm_name, 
-		length, octaveUpDown, measureBar)
-	
-	if #self.errorMessages > 0 then
-		self:addTextPanel(self:displayErrors())
-		self:show("Error:" .. "\r" .. self:displayErrors())
-	else
-		self.currentSeconds = SV:getPlayback():getPlayhead()
-		local checkGroup = self:getGroupRef(self:getCurrentTrack(), self.currentSeconds)
-		if checkGroup ~= nil then
-			self.currentSeconds = self:getNextEmptyPosition(self:getCurrentTrack(), checkGroup:getEnd())
-			SV:getPlayback():seek(self.currentSeconds)
-		else
-			local newPositionBlicks = self:getTimeAxis():getBlickFromSeconds(self.currentSeconds)
-			measureBlick = self:getFirstMesure(newPositionBlicks, 0)
-			self.currentSeconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
-			SV:getPlayback():seek(self.currentSeconds)
-		end
-
-		newGrouptRef = self:createGroup(self.currentSeconds, self:getCurrentTrack(), melody)
-		
-		if newGrouptRef ~= nil then
-			self:displayMessage(SV:T("Group created!"))
-						
-			self.currentPlayheadSeconds = SV:getPlayback():getPlayhead()
-			-- Update currentSeconds to next position
-			self.beginGroup = newGrouptRef:getOnset()
-			self.endGroup = newGrouptRef:getEnd()
-			
-			-- playBack option
-			if self.controls.autoPlay.value:getValue() then
-				local startPosSeconds = self:getTimeAxis():getSecondsFromBlick(self.beginGroup)
-				local endPosSeconds = self:getTimeAxis():getSecondsFromBlick(self.endGroup)
-				SV:getPlayback():seek(startPosSeconds)
-				if self.controls.loopAutoPlay.value:getValue()then
-					SV:getPlayback():loop(startPosSeconds, endPosSeconds)
-				end
-				SV:getPlayback():play()
-			else
-				if SV:getPlayback():getStatus() == "playing" or SV:getPlayback():getStatus() == "looping" then
-					SV:getPlayback():stop()
-				end
-			end
-		else
-			local errorMessage = SV:T("Error: Empty group, nothing created!")
-			self:error(errorMessage)
-			self:show(errorMessage)
-		end
-	end
-	return newGrouptRef
+	return	startPositionBlicks - firstNote:getOnset(), newEndPosition
 end
 
 -- Get next empty position on track
 function NotesObject:getNextEmptyPosition(currentTrack, lastPositionBlicks)
-	local measureBlick = self:getFirstMesure(lastPositionBlicks, 1)
+	local measureBlick = self:getFirstMesure(lastPositionBlicks, 0)
 	local seconds = self:getTimeAxis():getSecondsFromBlick(measureBlick)
 	local checkGroup = self:getGroupRef(currentTrack, seconds)
 	
@@ -1410,13 +1094,33 @@ function NotesObject:getNextEmptyPosition(currentTrack, lastPositionBlicks)
 	return seconds
 end
 
+-- Get group reference in time position
+function NotesObject:getGroupRef(track, time)
+	local groupRefFound = nil
+	local numGroups = track:getNumGroups()
+	local blicksPos = self:getTimeAxis():getBlickFromSeconds(time)
+	
+	-- All groups except the main group
+	for iGroup = 1, numGroups do
+		local groupRef = track:getGroupReference(iGroup)
+		if not groupRef:isMain() then
+			local blickSeconds = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
+			
+			-- Get group on timing pos
+			if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
+				groupRefFound = groupRef
+				break
+			end
+		end
+	end						
+	return groupRefFound
+end
+
 -- Get combo box data
 function NotesObject:getComboLists()
 	self.scalesList = {}
 	self.stylesList = {}
 	self.rhythmsList = {}
-	self.melodyLengthList = {}
-	self.octaveUpDownList = {}
 	self.measureBarList = {}
 	
 	-- scales list
@@ -1447,60 +1151,33 @@ end
 
 -- Get section
 function NotesObject:getSection()
+	
 	-- Define all ComboBox	
 	self:setComboChoices()
 
-	self.durationCoefChoice = 
-		{
-			type = "Container",
-			columns = {
-				{
-					type = "Slider",
-					text = SV:T("Reduce duration"),
-					format = "%1.2f coef",
-					minValue = self.coefMinValue, 
-					maxValue = self.coefMaxValue, 
-					interval = self.coefInterval,
-					value = self.controls.durationCoef.value,
-					width = 1.0
-				}
+	self.lyrics2NotesTextChoice = {
+		type = "Container",
+		columns = {
+			{
+				name = "lyrics2Notes",
+				type = "TextArea",
+				label = "Lyrics",
+				height = 200,
+				value = self.lyrics2NotesTextValue
 			}
 		}
+	}
+	
 
 	-- Define CheckBox & button & textarea
 	local section = {
 		title = SV:T(SCRIPT_TITLE),
 		rows = {
-			{
-				type = "Label",
-				text = SV:T("Select a key scale:"),
-			},
+			self.lyrics2NotesTextChoice,
 			self.keyScaleChoice,
 			self.styleChoice,
 			self.melodyLengthChoice,
 			self.durationCoefChoice,
-			{
-				type = "Container",
-				columns = {
-					{
-					type = "CheckBox",
-					text = SV:T("Auto play melody"),
-					value = self.controls.autoPlay.value,
-					width = 1.0
-					}
-				}
-			},
-			{
-				type = "Container",
-				columns = {
-					{
-					type = "CheckBox",
-					text = SV:T("Loop into melody"),
-					value = self.controls.loopAutoPlay.value,
-					width = 1.0
-					}
-				}
-			},
 			self.measureBarChoice,
 			{
 				type = "Container",
@@ -1510,18 +1187,6 @@ function NotesObject:getSection()
 						text = SV:T("Apply"),
 						width = 1.0,
 						value = self.applyButtonValue
-					}
-				}
-			},
-			{
-				type = "Container",
-				columns = {
-					{
-						type = "TextArea",
-						value = self.statusTextValue,
-						height = 40,
-						width = 1.0,
-						readOnly = true
 					}
 				}
 			}
@@ -1562,17 +1227,34 @@ function NotesObject:setComboChoices()
 				text = SV:T("Select a style"),
 				value = self.controls.style.value,
 				choices = self.stylesList,
-				width = 0.4
+				width = 0.5
 			},
 			{
 				type = "ComboBox",
 				text = SV:T("Select a rhythm"),
 				value = self.controls.rhythm.value,
 				choices = self.rhythmsList,
-				width = 0.6
+				width = 0.5
 			}
         }
     }
+
+	self.durationCoefChoice = 
+		{
+			type = "Container",
+			columns = {
+				{
+					type = "Slider",
+					text = SV:T("Reduce duration"),
+					format = "%1.2f coef",
+					minValue = self.coefMinValue, 
+					maxValue = self.coefMaxValue, 
+					interval = self.coefInterval,
+					value = self.controls.durationCoef.value,
+					width = 1.0
+				}
+			}
+		}
 	
 	self.melodyLengthChoice = {
         type = "Container",
@@ -1593,7 +1275,7 @@ function NotesObject:setComboChoices()
 			}
         }
     }
-
+	
 	self.measureBarChoice = {
         type = "Container",
         columns = {
@@ -1609,40 +1291,11 @@ function NotesObject:setComboChoices()
 	
 end
 
--- Create a melody
-function NotesObject:createMelody(scaleKey, scale, style, rhythm, melodyLength, octaveUpDown, measureBarChoice)
-	-- Combo box item start to 0 => +1 for data
-	local scaleKeyOutput = scaleKey + 1
-	local scaleOutput = scale + 1 
-	local styleOutput = style + 1
-	local rhythmsOutput = rhythm + 1
-	local melodyLengthOutput = melodyLength + 1
-	local octaveUpDownOutput = octaveUpDown + 1
-	local measureBarChoiceOutput = measureBarChoice + 1
-
-	-- Get keys values
-	local scaleKey = self.keyNames[scaleKeyOutput]
-	local scaleChoice = self.scalesList[scaleOutput]
-	local styleChoice = self.stylesList[styleOutput]
-	local rhythmChoice = self.rhythmsList[rhythmsOutput]
-	local melodylengthChoice = self.melodyLengthList[melodyLengthOutput]
-	local octaveUpDownChoice = self.octaveUpDownList[octaveUpDownOutput]
-	local measureBarChoice = self.measureBarList[measureBarChoiceOutput]
-	
-	-- Generate a melody in a new group
-	local newGrouptRef = self:generateGroup(scaleKey, scaleChoice, styleChoice, 
-						rhythmChoice, melodylengthChoice, octaveUpDownChoice, measureBarChoice)
-	
-	if newGrouptRef ~= nil then
-		SV:getArrangement():getSelection():selectGroup(newGrouptRef)
-		SV:getMainEditor():getSelection():selectGroup(newGrouptRef)
-	end
-end
-
 -- Get panel section state
 function NotesObject:getPanelSectionState()
 
 	self.applyButtonValue:setEnabled(true)
+	self.createProjectValue:setEnabled(true)
 	local errors = self:displayErrors()
 	if #errors > 0 then
 		self:addTextPanel(errors)

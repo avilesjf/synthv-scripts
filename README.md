@@ -36,6 +36,8 @@ ManualMode2: Vibrato (similar V1 "manual mode") with progressive vibrato fade-in
 Latin2svPanel: Convert LATIN to XSAMPA (Spanish, modo "all'italiana" adapted SynthV spanish) + pseudo-spanish support.
 ControlPointsInfosPanel: Display control points position (time or blicks) and value.
 ParametersNotesPanel: Set automation parameters attached to single notes.
+Lyrics2NotesPanel: Generates melodies based on scale, style, and rhythm, fill lyrics into melody.
+Lyrics2SimpleNotesPanel: Generates simple notes with variable spacing, fill lyrics into generated notes.
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).

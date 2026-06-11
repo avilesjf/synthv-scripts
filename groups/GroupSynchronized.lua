@@ -47,7 +47,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Groups",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 2,
 		minEditorVersion = 65540
 	}
 end
@@ -87,6 +87,7 @@ NotesObject = {
 	numTracks = 0,
 	playBack = nil,
 	currentSeconds = 0,
+	currentSecondsDisplay = "",
 	stopProcess = false,
 	sepParam = "|"
 }
@@ -102,7 +103,7 @@ function NotesObject:new()
     self.editor =  SV:getMainEditor()
 	self.numTracks = self.project:getNumTracks()
 	
-	self.playBack = SV:getPlayback()	
+	self.playBack = SV:getPlayback()
 	self.currentSeconds = self.playBack:getPlayhead()
 	self.currentSecondsDisplay = self:secondsToClock(self.currentSeconds)
 
@@ -209,13 +210,15 @@ function NotesObject:getGroupRef(track, time)
 	-- All groups 
 	for iGroup = 1, numGroups do
 		local groupRef = track:getGroupReference(iGroup)
-		if not groupRef:isInstrumental() then
-			local blickSeconds = self:secondsToClock(self.timeAxis:getSecondsFromBlick(groupRef:getOnset()))
-			
-			-- Get group on timing pos
-			if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
-				groupRefFound = groupRef
-				break
+		if not groupRef:isMain() then
+			if not groupRef:isInstrumental() then
+				local blickSeconds = self:secondsToClock(self.timeAxis:getSecondsFromBlick(groupRef:getOnset()))
+				
+				-- Get group on timing pos
+				if blicksPos >= groupRef:getOnset() and blicksPos <= groupRef:getEnd() then
+					groupRefFound = groupRef
+					break
+				end
 			end
 		end						
 	end						

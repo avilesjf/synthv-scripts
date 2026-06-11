@@ -774,7 +774,7 @@ function NotesObject:copyFile(source, destination)
 	local result = false
 	local sourceLines, err, errMessage = self:readTextFile(source)
 	if err then
-		self.show(SV:T("Unable to open file:") .. "\r" .. errMessage)
+		self:show(SV:T("Unable to open file:") .. "\r" .. errMessage)
 	else
 		local newFileContent = table.concat(sourceLines, "\n")
 		result = self:saveTextFile(newFileContent, destination)

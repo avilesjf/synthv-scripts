@@ -98,7 +98,7 @@ function NotesObject:saveNotesToTextFile(notes)
 	  fo:write(notes)
 	  fo:close()
 	else
-	  self.show(SV:T("Unable to save notes:") .. "\r" .. errMessage)
+	  self:show(SV:T("Unable to save notes:") .. "\r" .. errMessage)
 	end
 end
 

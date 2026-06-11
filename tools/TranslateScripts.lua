@@ -449,7 +449,7 @@ function NotesObject:fileProcess(file, languageCode)
 
 	local scriptLines, err, errMessage = self:readTextFile(file)
 	if err then
-		self.show(SV:T("Unable to open file:") .. "\r" .. errMessage)
+		self:show(SV:T("Unable to open file:") .. "\r" .. errMessage)
 	else
 		for iPos = 1, #scriptLines do
 			local line = scriptLines[iPos]
@@ -578,7 +578,7 @@ function NotesObject:saveTextFile(text, filename)
 	  fo:write(text)
 	  fo:close()
 	else
-	  self.show(SV:T("Unable to save file:") .. "\r" .. errMessage)
+	  self:show(SV:T("Unable to save file:") .. "\r" .. errMessage)
 	end
 end
 
