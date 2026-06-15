@@ -12,6 +12,7 @@ Notice: Works only with script panel
 Update: Creation
 		Add resize form coef button
 		Add linking notes positioning
+		Add resizing coef default variable
 
 2025 - JF AVILES
 --]]
@@ -21,7 +22,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 3,
+		versionNumber = 4,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -75,6 +76,10 @@ NotesObject = {
 	isInfosToDisplay = false,   -- debug notes
 	halveNoteCoef = 0.5,		-- Halve notes coef
 	doubleNoteCoef = 2,			-- Double notes coef
+	coefMinValue = 0.25,		-- Slider Min value
+	coefMaxValue = 2,			-- Slider Max value
+	coefInterval = 0.25,		-- Slider Interval value
+	coefDefaultValue = 1,		-- Slider default value
 	notesPositioningLinked = false,
 	debug = false,
 	logs = {}
@@ -259,7 +264,7 @@ function NotesObject:getControls()
 	local controls = {
 		coef = {
 			value = SV:create("WidgetValue"),
-			defaultValue = 0.5,  -- /2
+			defaultValue = self.coefDefaultValue,
 			paramKey = "coef"
 		},
 		notesPositioningLinked = {
@@ -530,9 +535,9 @@ function NotesObject:getSection()
 					type = "Slider",
 					text = SV:T("Coef"),
 					format = "%1.2f",
-					minValue = 0.25,
-					maxValue = 2,
-					interval = 0.25,
+					minValue = self.coefMinValue,
+					maxValue = self.coefMaxValue,
+					interval = self.coefInterval,
 					value = self.controls.coef.value,
 					width = 1
 				  }
