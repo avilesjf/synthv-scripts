@@ -13,6 +13,8 @@ Update: Creation
 		Add resize form coef button
 		Add linking notes positioning
 		Add resizing coef default variable
+		Add resizing button to new target position
+		Add Auto resize from last note update
 
 2025 - JF AVILES
 --]]
@@ -22,7 +24,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 4,
+		versionNumber = 5,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -47,7 +49,8 @@ function getArrayLanguageStrings()
 			{"lyrics: ", "lyrics: "},
 			{"Track seconds: ", "Track seconds: "},
 			{"Selected notes: ", "Selected notes: "},
-			{"Select at least one group!", "Select at least one group!"},
+			{"Resize to new position", "Resize to new position"},
+			{"Auto resize from last note", "Auto resize from last note"},
 			{"Notes positioning linked", "Notes positioning linked"},
 			{"Coef", "Coef"},
 			{"Resize from coef", "Resize from coef"},
@@ -74,6 +77,7 @@ NotesObject = {
 	statusNoteValue = nil,   	-- text panel
 	infosToDisplay = "",
 	isInfosToDisplay = false,   -- debug notes
+	currentSeconds = "",
 	halveNoteCoef = 0.5,		-- Halve notes coef
 	doubleNoteCoef = 2,			-- Double notes coef
 	coefMinValue = 0.25,		-- Slider Min value
@@ -81,6 +85,16 @@ NotesObject = {
 	coefInterval = 0.25,		-- Slider Interval value
 	coefDefaultValue = 1,		-- Slider default value
 	notesPositioningLinked = false,
+	autoResize = false,
+	stopProcess = false,
+	stopProcessOK = false,
+	lastNote = nil,
+	lastNotePos = 0,
+	lastNotePosTime = 0,
+	lastNoteDuration = 0,
+	lastNoteDurationTime = 0,
+	lastNoteEndPos = 0,
+	lastNoteEndPosTime = 0,
 	debug = false,
 	logs = {}
 }
@@ -102,6 +116,7 @@ function NotesObject:new()
 	self.halveNotesValue = SV:create("WidgetValue")
 	self.doubleNotesValue = SV:create("WidgetValue")
 	self.resizeNotesValue = SV:create("WidgetValue")
+	self.resizeNotesToNewPosValue = SV:create("WidgetValue")
 	
 	self.statusTextValue = SV:create("WidgetValue")
 	self.statusTextValue:setValue("")
@@ -111,7 +126,8 @@ function NotesObject:new()
 	self.statusNoteValue:setValue("")
 	self.statusNoteValue:setEnabled(false)
 	
-	self:setButtonResizeNotesLengthControlCallback()
+	self:setButtonResizeNotesLengthToNewPositionControlCallback()
+	self:setButtonResizeNotesLengthFromCoefControlCallback()
 	self:setButtonHalveNotesLengthControlCallback()
 	self:setButtonDoubleNotesLengthControlCallback()
 
@@ -193,7 +209,6 @@ function NotesObject:simpleTrim(s)
   return string.gsub(s, '[ \t]+%f[\r\n%z]', '')
 end
 
-
 -- Show message dialog
 function NotesObject:show(message)
 	SV:showMessageBox(SV:T(SCRIPT_TITLE), message)
@@ -202,6 +217,11 @@ end
 -- Get selected groups
 function NotesObject:getSelectedGroups()
 	return SV:getArrangement():getSelection():getSelectedGroups()
+end
+
+-- Get selected groups from MainEditor TrackInnerSelectionState
+function NotesObject:getSelectedGroupsFromMainEditor()
+	return SV:getMainEditor():getSelection():getSelectedGroups()
 end
 
 -- Get current track
@@ -271,6 +291,11 @@ function NotesObject:getControls()
 			value = SV:create("WidgetValue"),
 			defaultValue = self.notesPositioningLinked,  -- true/false
 			paramKey = "notesPositioningLinked"
+		},
+		autoResize = {
+			value = SV:create("WidgetValue"),
+			defaultValue = self.autoResize,  -- true/false
+			paramKey = "autoResize"
 		}
 	}
 	return controls
@@ -289,7 +314,19 @@ function NotesObject:setControlsCallback()
 	for key, control in pairs(self.controls) do
 		control.value:setValueChangeCallback(function()
 			-- do something may be
-			-- self:addLogsInPanel()
+				-- self:addLogsInPanel()
+				if control.paramKey == "autoResize" then
+					self:getProject():newUndoRecord()
+					self.autoResize = self.controls.autoResize.value:getValue()
+					
+					if self.autoResize then
+						self.stopProcess = false
+						self.firstLoop  = true
+						SV:setTimeout(100, function() self:loopProcess() end)
+					else
+						self.stopProcess = true
+					end
+				end
 			end
 		)
 	end
@@ -302,13 +339,24 @@ function NotesObject:displayMessage(message)
 	self:addTextPanel(message)
 end
 
--- Set button resize notes length control callback
-function NotesObject:setButtonResizeNotesLengthControlCallback()
+-- Set button resize notes length to new position callback
+function NotesObject:setButtonResizeNotesLengthToNewPositionControlCallback()
 
-	-- Button resize notes length
+	-- Button resize notes length to new position
+	self.resizeNotesToNewPosValue:setValueChangeCallback(function()
+			self:getProject():newUndoRecord()		
+			self:updateNotesLengthFromPosition() 
+		end
+	)
+end
+
+-- Set button resize notes length from coef control callback
+function NotesObject:setButtonResizeNotesLengthFromCoefControlCallback()
+
+	-- Button resize notes length from coef
 	self.resizeNotesValue:setValueChangeCallback(function()
-			self:getProject():newUndoRecord()			
-			self:updateNotesLength(self.controls.coef.value:getValue()) 
+			self:getProject():newUndoRecord()
+			self:updateNotesLengthFromCoef(self.controls.coef.value:getValue())
 		end
 	)
 end
@@ -319,7 +367,7 @@ function NotesObject:setButtonHalveNotesLengthControlCallback()
 	-- Button halve notes length
 	self.halveNotesValue:setValueChangeCallback(function()
 			self:getProject():newUndoRecord()			
-			self:updateNotesLength(self.halveNoteCoef) -- * 0.5
+			self:updateNotesLengthFromCoef(self.halveNoteCoef) -- * 0.5
 		end
 	)
 end
@@ -329,72 +377,154 @@ function NotesObject:setButtonDoubleNotesLengthControlCallback()
 
 	-- Button double notes length
 	self.doubleNotesValue:setValueChangeCallback(function()
-			self:getProject():newUndoRecord()			
-			self:updateNotesLength(self.doubleNoteCoef) -- * 2
+			self:getProject():newUndoRecord()
+			self:updateNotesLengthFromCoef(self.doubleNoteCoef) -- * 2
 		end
 	)
 end
 
--- Update notes length()
-function NotesObject:updateNotesLength(coef)
+-- Update notes length from coef
+function NotesObject:updateNotesLengthFromCoef(coef)
 	local selectedNotes = {}
-	local groupsSelected = self:getSelectedGroups()
-	local notesPositioningLinked = self.controls.notesPositioningLinked.value:getValue()
+	local currentGroupRef = SV:getMainEditor():getCurrentGroup()
+	self.notesPositioningLinked = self.controls.notesPositioningLinked.value:getValue()
+	self.autoResize = self.controls.autoResize.value:getValue()
 	
-	if #groupsSelected > 0 then
-	
-		for _, refGroup in pairs(groupsSelected) do
-			selectedNotes = {}
-			local noteGroup = refGroup:getTarget()
-			local notesCount = noteGroup:getNumNotes()
-			local previousNote = 0
-			local diffPos = 0
-			
-			if notesCount > 0 then
-				local firstNote = noteGroup:getNote(1)
-				-- Get all notes before sorting
-				for iNote = 1, notesCount do
-					local note = noteGroup:getNote(iNote)
-					table.insert(selectedNotes, note)
-				end
-				
-				-- Sort by onset values
-				table.sort(selectedNotes, function (noteA, noteB)
-					return noteA:getOnset() < noteB:getOnset()
-				end)
-				
-				-- Loop notes sorted to update
-				for i = 1, #selectedNotes do
-					local currEnd = selectedNotes[i]:getEnd()
-					local currOnset = self:getNewTimeNote(selectedNotes[i]:getOnset(), coef)
-					if i == 1 then
-						diffPos = currOnset - firstNote:getOnset()
-					end
-					
-					if not notesPositioningLinked then
-						local newPos = currOnset - diffPos
-						-- Update position
-						selectedNotes[i]:setOnset(newPos)
-					else
-						if i > 1 and selectedNotes[i-1]:getEnd() > selectedNotes[i]:getOnset()  then
-							selectedNotes[i]:setOnset(selectedNotes[i-1]:getEnd())
-						end
-					end
-					
-					-- Update duration
-					local newDuration = self:getNewTimeNote(selectedNotes[i]:getDuration(), coef)
-					selectedNotes[i]:setDuration(newDuration)
-					previousNote = selectedNotes[i]
-				end
-				refGroup:setTimeRange(refGroup:getOnset(), previousNote:getEnd() - firstNote:getOnset())
-			end
-		end
-	else
-		-- No group selected
-		self:show(SV:T("Select at least one group!"))
-	end
+	self:updateNotesLength(currentGroupRef, coef)
 end
 
+-- Update notes length from new target playhead position
+function NotesObject:updateNotesLengthFromPosition()
+	local selectedNotes = {}
+	local currentGroupRef = SV:getMainEditor():getCurrentGroup()
+	self.notesPositioningLinked = self.controls.notesPositioningLinked.value:getValue()
+	self.autoResize = false
+	
+	-- Get new target playhead position
+	self.currentSeconds = SV:getPlayback():getPlayhead()
+	local secondsInfo = self:secondsToClock(self.currentSeconds)
+
+	local noteGroup = currentGroupRef:getTarget()
+	local notesCount = noteGroup:getNumNotes()
+	self.lastNote  = noteGroup:getNote(notesCount)
+	self.lastNotePos  = noteGroup:getNote(notesCount):getOnset()
+	self.lastNotePosTime  = self:getTimeAxis():getSecondsFromBlick(self.lastNotePos)
+	self.newLastNoteDuration = self.currentSeconds - self.lastNotePosTime
+	self.lastNoteDuration = noteGroup:getNote(notesCount):getDuration()
+	self.lastNoteDurationTime = self:getTimeAxis():getSecondsFromBlick(self.lastNoteDuration)
+	
+	local diff = self.newLastNoteDuration - self.lastNoteDurationTime
+	if diff ~= 0 then
+		local coef = 1 + (diff / self.lastNoteDurationTime) / (notesCount + 1)
+		-- self:addNoteInfoPanel("Diff: " .. tostring(diff) .. ", coef: " .. tostring(coef))
+		self:updateNotesLength(currentGroupRef,  coef)
+	end
+	
+end
+
+-- loop process
+function NotesObject:loopProcess()
+
+	if not self.stopProcess then
+		local selectedNotes = {}
+		local currentGroupRef = SV:getMainEditor():getCurrentGroup()
+		
+		if currentGroupRef ~= nil then
+			local noteGroup = currentGroupRef:getTarget()
+			local notesCount = noteGroup:getNumNotes()
+			
+			if self.firstLoop then
+				self.firstLoop  = false
+				-- Save first length from last note
+				self.lastNote = noteGroup:getNote(notesCount)
+				self.lastNoteDuration = noteGroup:getNote(notesCount):getDuration()
+				self.lastNoteDurationTime = self:getTimeAxis():getSecondsFromBlick(self.lastNoteDuration)
+			else
+				if self.lastNote ~= nil then
+					-- Check if length is different
+					local lastNoteModified = noteGroup:getNote(notesCount)
+					local newDuration = lastNoteModified:getDuration()
+					local newDurationTime = self:getTimeAxis():getSecondsFromBlick(newDuration)
+					local diff = newDurationTime - self.lastNoteDurationTime
+					if diff ~= 0 then
+						-- self:addNoteInfoPanel("Diff: " .. tostring(diff))
+						local coef = 1 + diff / self.lastNoteDurationTime
+						-- self:addNoteInfoPanel("Diff: " .. tostring(diff) .. ", coef: " .. tostring(coef))
+						self:updateNotesLength(currentGroupRef,  coef, self.lastNote)
+						self.firstLoop = true
+						self.stopProcess = true
+						self.autoResize = false
+						self.controls.autoResize.value:setValue(self.autoResize)
+					end
+				end
+			end			
+		end
+		
+		SV:setTimeout(500, function() self:loopProcess() end)
+	end	
+end
+
+-- Update notes length
+function NotesObject:updateNotesLength(refGroup, coef, lastNote)
+	local selectedNotes = {}
+	local noteGroup = refGroup:getTarget()
+	local notesCount = noteGroup:getNumNotes()
+	
+	if notesCount > 0 then
+		local firstNote = noteGroup:getNote(1)
+		-- Get all notes before sorting
+		for iNote = 1, notesCount do
+			local note = noteGroup:getNote(iNote)
+			table.insert(selectedNotes, note)
+		end
+		
+		-- Sort by onset values
+		table.sort(selectedNotes, function (noteA, noteB)
+			return noteA:getOnset() < noteB:getOnset()
+		end)
+		
+		-- Loop notes sorted to update
+		for i = 1, #selectedNotes do
+			local currEnd = selectedNotes[i]:getEnd()
+			local currOnset = self:getNewTimeNote(selectedNotes[i]:getOnset(), coef)
+			if i == 1 then
+				diffPos = currOnset - firstNote:getOnset()
+			end
+			
+			-- if not self.notesPositioningLinked then
+				local newPos = currOnset - diffPos
+				-- Update position
+				selectedNotes[i]:setOnset(newPos)
+			-- else
+				-- if i > 1 and selectedNotes[i-1]:getEnd() > selectedNotes[i]:getOnset()  then
+					-- selectedNotes[i]:setOnset(selectedNotes[i-1]:getEnd())
+				-- end
+			-- end
+			
+			-- not the last note
+			if lastNote == nil or (lastNote ~= nil and i < #selectedNotes) then
+				-- Update duration
+				local newDuration = self:getNewTimeNote(selectedNotes[i]:getDuration(), coef)
+				
+				if self.notesPositioningLinked then
+					if i > 1 then
+						if i == #selectedNotes then
+							selectedNotes[i]:setDuration(newDuration)
+						end
+						selectedNotes[i-1]:setDuration(selectedNotes[i]:getOnset() - selectedNotes[i-1]:getOnset())
+					end
+				else
+					selectedNotes[i]:setDuration(newDuration)
+				end
+				
+			end
+			
+			previousNote = selectedNotes[i]
+		end
+		refGroup:setTimeRange(refGroup:getOnset(), previousNote:getEnd() - firstNote:getOnset())
+	end
+end
+			
 -- Get new time note
 function NotesObject:getNewTimeNote(posNote, coef)
 	local timePos = self:getTimeAxis():getSecondsFromBlick(posNote)
@@ -521,6 +651,28 @@ function NotesObject:getSection()
 				type = "Container",
 				columns = {
 					{
+						type = "Button",
+						text = SV:T("Resize to new position"),
+						width = 1.0,
+						value = self.resizeNotesToNewPosValue
+					}
+				}
+			},
+			{
+				type = "Container",
+				columns = {
+					{
+						type = "CheckBox",
+						text = SV:T("Auto resize from last note"),
+						value = self.controls.autoResize.value,
+						width = 1
+					}
+				}
+			},
+			{
+				type = "Container",
+				columns = {
+					{
 						type = "CheckBox",
 						text = SV:T("Notes positioning linked"),
 						value = self.controls.notesPositioningLinked.value,
@@ -597,9 +749,12 @@ end
 function NotesObject:getPanelSectionState()
 
 	self.resizeNotesValue:setEnabled(true)
+	self.resizeNotesToNewPosValue:setEnabled(true)
 	self.halveNotesValue:setEnabled(true)
 	self.doubleNotesValue:setEnabled(true)
 	self.controls.notesPositioningLinked.value:setValue(self.notesPositioningLinked)
+	self.controls.autoResize.value:setValue(self.autoResize)
+	
 	local errors = self:displayErrors()
 	if #errors > 0 then
 		self:addTextPanel(errors)
