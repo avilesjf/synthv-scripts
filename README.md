@@ -29,7 +29,7 @@ Notes:   Create project notes saved inside project.
 Lyrics:  Get lyrics tracks into panel.
 Playing: Show lyrics and time while playing.
 ProjectInfos: Show information on the project.
-SizingNotes: Halve and double notes length.
+SizingNotes: Stretch notes to new position, Halve and double notes length.
 TransposeNotes: Transpose notes by semitones for selected groups (or all groups in project).
 BackupPanel: Backup project file in same svp folder with timestamp.
 ManualMode2: Vibrato (similar V1 "manual mode") with progressive vibrato fade-in or fade-out.
