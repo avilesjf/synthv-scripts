@@ -15,6 +15,7 @@ Update: Creation
 		Add resizing coef default variable
 		Add resizing button to new target position
 		Add Auto resize from last note update
+		Update some computing positions
 
 2025 - JF AVILES
 --]]
@@ -24,7 +25,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		-- category = "_JFA_Panels",
 		author = "JFAVILES",
-		versionNumber = 5,
+		versionNumber = 6,
 		minEditorVersion = 131329,
 		type = "SidePanelSection"
 	}
@@ -49,9 +50,11 @@ function getArrayLanguageStrings()
 			{"lyrics: ", "lyrics: "},
 			{"Track seconds: ", "Track seconds: "},
 			{"Selected notes: ", "Selected notes: "},
-			{"Resize to new position", "Resize to new position"},
-			{"Auto resize from last note", "Auto resize from last note"},
-			{"Notes positioning linked", "Notes positioning linked"},
+			{"Stretch notes to new position", "Stretch notes to new position"},
+			{"Auto stretch from last note", "Auto stretch from last note"},
+			{"Tie note durations", "Tie note durations"},
+			{"______________________________", "______________________________"},
+			{"Fixed resizing notes length:", "Fixed resizing notes length:"},
 			{"Coef", "Coef"},
 			{"Resize from coef", "Resize from coef"},
 			{"Halve", "Halve"},
@@ -402,23 +405,9 @@ function NotesObject:updateNotesLengthFromPosition()
 	
 	-- Get new target playhead position
 	self.currentSeconds = SV:getPlayback():getPlayhead()
-	local secondsInfo = self:secondsToClock(self.currentSeconds)
+	-- local secondsInfo = self:secondsToClock(self.currentSeconds)
 
-	local noteGroup = currentGroupRef:getTarget()
-	local notesCount = noteGroup:getNumNotes()
-	self.lastNote  = noteGroup:getNote(notesCount)
-	self.lastNotePos  = noteGroup:getNote(notesCount):getOnset()
-	self.lastNotePosTime  = self:getTimeAxis():getSecondsFromBlick(self.lastNotePos)
-	self.newLastNoteDuration = self.currentSeconds - self.lastNotePosTime
-	self.lastNoteDuration = noteGroup:getNote(notesCount):getDuration()
-	self.lastNoteDurationTime = self:getTimeAxis():getSecondsFromBlick(self.lastNoteDuration)
-	
-	local diff = self.newLastNoteDuration - self.lastNoteDurationTime
-	if diff ~= 0 then
-		local coef = 1 + (diff / self.lastNoteDurationTime) / (notesCount + 1)
-		-- self:addNoteInfoPanel("Diff: " .. tostring(diff) .. ", coef: " .. tostring(coef))
-		self:updateNotesLength(currentGroupRef,  coef)
-	end
+	self:stretchingNotes(currentGroupRef,  self.currentSeconds)
 	
 end
 
@@ -447,10 +436,13 @@ function NotesObject:loopProcess()
 					local newDurationTime = self:getTimeAxis():getSecondsFromBlick(newDuration)
 					local diff = newDurationTime - self.lastNoteDurationTime
 					if diff ~= 0 then
-						-- self:addNoteInfoPanel("Diff: " .. tostring(diff))
+
 						local coef = 1 + diff / self.lastNoteDurationTime
 						-- self:addNoteInfoPanel("Diff: " .. tostring(diff) .. ", coef: " .. tostring(coef))
-						self:updateNotesLength(currentGroupRef,  coef, self.lastNote)
+						-- self:updateNotesLength(currentGroupRef,  coef, self.lastNote)
+						local lastNoteEndTime = self:getTimeAxis():getSecondsFromBlick(self.lastNote:getEnd())
+						self:stretchingNotes(currentGroupRef, lastNoteEndTime, self.lastNoteDuration)
+						
 						self.firstLoop = true
 						self.stopProcess = true
 						self.autoResize = false
@@ -462,6 +454,91 @@ function NotesObject:loopProcess()
 		
 		SV:setTimeout(500, function() self:loopProcess() end)
 	end	
+end
+
+-- Stretching notes
+function NotesObject:stretchingNotes(refGroup, targetTimePosition, initialLastNoteDuration)
+	local selectedNotes = {}
+	local noteGroup = refGroup:getTarget()
+	local notesCount = noteGroup:getNumNotes()
+	-- self:addNoteInfoPanel("targetTimePosition: " .. tostring(targetTimePosition))
+		
+	if notesCount > 0 then
+		local firstNote = noteGroup:getNote(1)
+		-- Get all notes before sorting
+		for iNote = 1, notesCount do
+			local note = noteGroup:getNote(iNote)
+			table.insert(selectedNotes, note)
+		end
+		
+		-- Sort by onset values
+		table.sort(selectedNotes, function (noteA, noteB)
+			return noteA:getOnset() < noteB:getOnset()
+		end)
+		
+		if initialLastNoteDuration ~= nil then
+			selectedNotes[#selectedNotes]:setDuration(initialLastNoteDuration)
+		end
+		local lastNoteEndPosition = selectedNotes[#selectedNotes]:getEnd()
+		local lastNoteEndPositionTime = self:getTimeAxis():getSecondsFromBlick(lastNoteEndPosition)
+		local diffLastNoteEnd2Target = targetTimePosition - lastNoteEndPositionTime
+		-- self:addNoteInfoPanel("Diff: " .. tostring(diffLastNoteEnd2Target) .. ", lastNoteEndPosition: " .. lastNoteEndPositionTime)
+		
+		-- Compute denominators & weight
+		local kCoef = 0
+		local totalDenomitators = 0
+		local denominators = {}
+		for i = 1, #selectedNotes do
+			local weight = math.floor(1 + (i/#selectedNotes))
+			local duration = selectedNotes[i]:getDuration()
+			local durationTime = self:getTimeAxis():getSecondsFromBlick(duration)
+			local denominator = durationTime * weight
+			-- self:addNoteInfoPanel("weight: " .. tostring(weight) .. ", denominator: " .. tostring(denominator) .. ", durationTime: " .. tostring(durationTime))
+			table.insert(denominators, denominator)
+			totalDenomitators = totalDenomitators + denominator
+		end
+		kCoef = diffLastNoteEnd2Target / totalDenomitators
+		-- self:addNoteInfoPanel("kCoef: " .. tostring(kCoef) .. ", totalDenomitators: " .. totalDenomitators)
+		
+		-- Compute new notes length & position
+		local newNotes = {}
+		local lengths = 0
+		for i = 1, #selectedNotes do
+			local length2Add = denominators[i] * kCoef
+			local duration = selectedNotes[i]:getDuration()
+			local durationTime = self:getTimeAxis():getSecondsFromBlick(duration)
+			local newLength = durationTime + length2Add
+			
+			local position = self:getTimeAxis():getSecondsFromBlick(selectedNotes[i]:getOnset())
+			local oldPosition = position
+			if i > 1 then
+				position = position + lengths
+			end
+			-- self:addNoteInfoPanel("newLength2Add: " .. tostring(length2Add) 
+				-- .. ", newLength: " .. tostring(newLength) 
+				-- .. ", newPos: " .. tostring(position) 
+				-- .. ", oldPosition: " .. tostring(oldPosition))
+			table.insert(newNotes, {length = newLength, position = position})
+			
+			lengths = lengths + length2Add
+		end
+		
+		-- Set new notes values
+		for i = 1, #selectedNotes do
+			selectedNotes[i]:setOnset(self:getTimeAxis():getBlickFromSeconds(newNotes[i].position))
+			if self.notesPositioningLinked then
+				if i > 1 then
+					if i == #selectedNotes then
+						selectedNotes[i]:setDuration(self:getTimeAxis():getBlickFromSeconds(newNotes[i].length))
+					end
+					selectedNotes[i-1]:setDuration(selectedNotes[i]:getOnset() - selectedNotes[i-1]:getOnset())
+				end
+			else
+				selectedNotes[i]:setDuration(self:getTimeAxis():getBlickFromSeconds(newNotes[i].length))
+			end
+		end
+		refGroup:setTimeRange(refGroup:getOnset(), selectedNotes[#selectedNotes]:getEnd() - selectedNotes[1]:getOnset())
+	end
 end
 
 -- Update notes length
@@ -485,21 +562,14 @@ function NotesObject:updateNotesLength(refGroup, coef, lastNote)
 		
 		-- Loop notes sorted to update
 		for i = 1, #selectedNotes do
-			local currEnd = selectedNotes[i]:getEnd()
 			local currOnset = self:getNewTimeNote(selectedNotes[i]:getOnset(), coef)
 			if i == 1 then
 				diffPos = currOnset - firstNote:getOnset()
 			end
 			
-			-- if not self.notesPositioningLinked then
-				local newPos = currOnset - diffPos
-				-- Update position
-				selectedNotes[i]:setOnset(newPos)
-			-- else
-				-- if i > 1 and selectedNotes[i-1]:getEnd() > selectedNotes[i]:getOnset()  then
-					-- selectedNotes[i]:setOnset(selectedNotes[i-1]:getEnd())
-				-- end
-			-- end
+			local newPos = currOnset - diffPos
+			-- Update position
+			selectedNotes[i]:setOnset(newPos)
 			
 			-- not the last note
 			if lastNote == nil or (lastNote ~= nil and i < #selectedNotes) then
@@ -524,7 +594,7 @@ function NotesObject:updateNotesLength(refGroup, coef, lastNote)
 		refGroup:setTimeRange(refGroup:getOnset(), previousNote:getEnd() - firstNote:getOnset())
 	end
 end
-			
+
 -- Get new time note
 function NotesObject:getNewTimeNote(posNote, coef)
 	local timePos = self:getTimeAxis():getSecondsFromBlick(posNote)
@@ -644,15 +714,11 @@ function NotesObject:getSection()
 		rows = {
 			infoNoteDisplay,
 			{
-				type = "Label",
-				text = SV:T("Resizing notes length"),
-			},
-			{
 				type = "Container",
 				columns = {
 					{
 						type = "Button",
-						text = SV:T("Resize to new position"),
+						text = SV:T("Stretch notes to new position"),
 						width = 1.0,
 						value = self.resizeNotesToNewPosValue
 					}
@@ -663,7 +729,7 @@ function NotesObject:getSection()
 				columns = {
 					{
 						type = "CheckBox",
-						text = SV:T("Auto resize from last note"),
+						text = SV:T("Auto stretch from last note"),
 						value = self.controls.autoResize.value,
 						width = 1
 					}
@@ -674,11 +740,19 @@ function NotesObject:getSection()
 				columns = {
 					{
 						type = "CheckBox",
-						text = SV:T("Notes positioning linked"),
+						text = SV:T("Tie note durations"),
 						value = self.controls.notesPositioningLinked.value,
 						width = 1
 					}
 				}
+			},
+			{
+				type = "Label",
+				text = SV:T("______________________________"),
+			},
+			{
+				type = "Label",
+				text = SV:T("Fixed resizing notes length:"),
 			},
 			{
 				type = "Container",
