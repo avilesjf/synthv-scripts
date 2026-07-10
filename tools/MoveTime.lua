@@ -6,7 +6,9 @@ Synthesizer V Studio Pro Script
  
 lua file name: MoveTime.lua
 
-Move times notes with all parameters & tempo in current track
+Move times notes with all parameters & tempo in all tracks
+	Version 1 : Creation
+			2 : Add multitrack
 
 !! Version for synthesizer V 2 ONLY !!
 
@@ -115,19 +117,23 @@ end
 
 -- Move time notes
 function NotesObject:moveNotes(newTime)
-	local numGroup = self:getCurrentTrack():getNumGroups()
-	-- Loop groups
-	for iGroupNote = 1, self:getCurrentTrack():getNumGroups() do
-		local groupRef = self:getCurrentTrack():getGroupReference(iGroupNote)
-		local noteGroup = groupRef:getTarget()
-		numNotes = noteGroup:getNumNotes()
-		if numNotes > 0 then
-			local firstNote = noteGroup:getNote(1)
-			local lastNote = noteGroup:getNote(numNotes)
-			local newTimeBlicks = groupRef:getOnset() + self:getTimeAxis():getBlickFromSeconds(newTime)
-			
-			groupRef:setTimeOffset(newTimeBlicks - groupRef:getOnset())
-			groupRef:setTimeRange(newTimeBlicks, lastNote:getEnd() - groupRef:getOnset())
+	for iTrack = 1, self.numTracks do
+		local track = self:getProject():getTrack(iTrack)
+		local numGroup = track:getNumGroups()
+		
+		-- Loop groups
+		for iGroupNote = 1, track:getNumGroups() do
+			local groupRef = track:getGroupReference(iGroupNote)
+			local noteGroup = groupRef:getTarget()
+			numNotes = noteGroup:getNumNotes()
+			if numNotes > 0 then
+				local firstNote = noteGroup:getNote(1)
+				local lastNote = noteGroup:getNote(numNotes)
+				local newTimeBlicks = groupRef:getOnset() + self:getTimeAxis():getBlickFromSeconds(newTime)
+				
+				groupRef:setTimeOffset(newTimeBlicks - groupRef:getOnset())
+				groupRef:setTimeRange(newTimeBlicks, lastNote:getEnd() - groupRef:getOnset())
+			end
 		end
 	end
 	self:moveTempoMarks(newTime)
@@ -136,15 +142,24 @@ end
 -- Get first group position
 function NotesObject:getFirstGroup()
 	local result = -1
-	local numGroup = self:getCurrentTrack():getNumGroups()
+	local previousResult = -1
 	
-	-- Loop groups
-	for iGroupNote = 1, self:getCurrentTrack():getNumGroups() do
-		local groupRef = self:getCurrentTrack():getGroupReference(iGroupNote)		
-		if not groupRef:isMain() then
-			result = groupRef:getOnset()
-			break
+	for iTrack = 1,  self.numTracks do
+		local track = self:getProject():getTrack(iTrack)
+		local numGroup = track:getNumGroups()
+		
+		-- Loop groups
+		for iGroupNote = 1, track:getNumGroups() do
+			local groupRef = track:getGroupReference(iGroupNote)		
+			if not groupRef:isMain() then
+				result = groupRef:getOnset()
+				break
+			end
 		end
+		if result > -1 and previousResult > -1 and result > previousResult then
+			result = previousResult
+		end
+		previousResult = result
 	end
 	return result
 end
@@ -230,7 +245,6 @@ end
 function NotesObject:start()
 	local title = SV:T("Click OK button to start!")
 	
-	self.currentTrack = self:getCurrentTrack()
 	self.BPM = self:getProjectTempo(0)
 	local BPM_ratio = 240 / self.BPM
 	self.currentSeconds = BPM_ratio

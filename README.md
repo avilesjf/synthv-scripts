@@ -81,7 +81,7 @@ Store and display internal project notes for a track.
 Retrieving all SV:T(text) inside a script and generate a function for translation language.
 Read loudness audio data and apply loudness parameters.
 Drop audio to playhead position
-Move times notes with all parameters & tempo in current track
+Move times notes with all parameters & tempo in all tracks
 
 ## SynthV V1
 ## groups-scripts SynthV 1 (version >= 1.11.2)
