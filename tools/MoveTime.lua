@@ -9,6 +9,7 @@ lua file name: MoveTime.lua
 Move times notes with all parameters & tempo in all tracks
 	Version 1 : Creation
 			2 : Add multitrack
+			3 : TimeOffset internal gaps
 
 !! Version for synthesizer V 2 ONLY !!
 
@@ -38,7 +39,7 @@ function getClientInfo()
 		name = SV:T(SCRIPT_TITLE),
 		category = "_JFA_Tools",
 		author = "JFAVILES",
-		versionNumber = 1,
+		versionNumber = 3,
 		minEditorVersion = 65540
 	}
 end
@@ -110,7 +111,6 @@ end
 -- Get string format from seconds
 function NotesObject:secondsToClock(timestamp)
 	return string.format("%02d:%06.3f", 
-	  --math.floor(timestamp/3600), 
 	  math.floor(timestamp/60)%60, 
 	  timestamp%60):gsub("%.",",")
 end
@@ -126,17 +126,29 @@ function NotesObject:moveNotes(newTime)
 			local groupRef = track:getGroupReference(iGroupNote)
 			local noteGroup = groupRef:getTarget()
 			numNotes = noteGroup:getNumNotes()
+			
 			if numNotes > 0 then
-				local firstNote = noteGroup:getNote(1)
-				local lastNote = noteGroup:getNote(numNotes)
-				local newTimeBlicks = groupRef:getOnset() + self:getTimeAxis():getBlickFromSeconds(newTime)
+				-- Update timeoffset to normalize notes behavior
+				self:updateTimeOffset(groupRef, noteGroup)
 				
-				groupRef:setTimeOffset(newTimeBlicks - groupRef:getOnset())
-				groupRef:setTimeRange(newTimeBlicks, lastNote:getEnd() - groupRef:getOnset())
+				local newTimeBlicks = groupRef:getOnset() + self:getTimeAxis():getBlickFromSeconds(newTime)
+				groupRef:setTimeOffset(newTimeBlicks)
+				groupRef:setTimeRange(newTimeBlicks, groupRef:getDuration())
 			end
 		end
 	end
 	self:moveTempoMarks(newTime)
+end
+
+-- Update timeOffset
+function NotesObject:updateTimeOffset(groupRef, noteGroup)
+	local newTimeUpdated = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
+	local newTimeBlicksUpdated = self:getTimeAxis():getBlickFromSeconds(newTimeUpdated)
+	for iNote = 1, numNotes do
+		noteGroup:getNote(iNote):setOnset(noteGroup:getNote(iNote):getOnset() - newTimeBlicksUpdated + groupRef:getTimeOffset())
+	end
+	groupRef:setTimeOffset(newTimeBlicksUpdated)
+	groupRef:setTimeRange(newTimeBlicksUpdated, groupRef:getDuration())
 end
 
 -- Get first group position
@@ -169,8 +181,17 @@ function NotesObject:getFirstTempoMarks()
 	local tempoMarks = self:getTimeAxis():getAllTempoMarks()
 	local tempoMarkPos = -1
 	local tempoSeconds = -1
+	local InitialTempoBpm = 0
+	local InitialTtempoMarkPos = 0
+	local InitialTtempoSeconds = -1
 	for iTempo = 1, #tempoMarks do
 		local tempoMark = tempoMarks[iTempo]
+		if tempoMark ~= nil and iTempo == 0 then
+			tempoPos = tempoMark.position
+			InitialTtempoSeconds = tempoMark.positionSeconds
+			InitialTtempoBpm = tempoMark.bpm
+			InitialTtempoMarkPos = tempoPos
+		end
 		if tempoMark ~= nil and iTempo > 1 then
 			tempoPos = tempoMark.position
 			tempoSeconds = tempoMark.positionSeconds
@@ -179,7 +200,7 @@ function NotesObject:getFirstTempoMarks()
 			break
 		end
 	end
-	return tempoMarkPos, tempoSeconds
+	return tempoMarkPos, tempoSeconds, InitialTtempoMarkPos, InitialTtempoSeconds, InitialTtempoBpm
 end
 
 -- Move time tempo marks
@@ -273,11 +294,14 @@ function NotesObject:start()
 		if (firstGroupPos >= 0 and diffGroupPosSeconds < 0) then
 			self:show(SV:T("Notes cannot be lower than the starting track!"))
 		else
-			local firstTempoMark, firstTempoMarkSeconds = self:getFirstTempoMarks()
-			if self.currentSeconds > 0 and self.currentSeconds > firstTempoMarkSeconds then
+			local firstTempoMark, firstTempoMarkSeconds, InitialTempoMarkPos, InitialTempoSeconds, InitialTempoBpm = self:getFirstTempoMarks()
+			-- self:show("firstTempoMark: " .. firstTempoMark .. ", firstTempoMarkSeconds: " .. firstTempoMarkSeconds .. ", currentSeconds: " .. self.currentSeconds)
+			if firstTempoMark > -1 and self.currentSeconds > 0 and self.currentSeconds > firstTempoMarkSeconds then
 				self:show(SV:T("Tempo markings are affected; pay attention to the time-stretching behavior!"))
 			end
-			self:moveNotes(self.currentSeconds)
+			if self.currentSeconds ~= 0 then
+				self:moveNotes(self.currentSeconds)
+			end
 		end
 	end
 end

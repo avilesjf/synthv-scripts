@@ -37,7 +37,7 @@ function getArrayLanguageStrings()
 	return {
 		["en-us"] = {
 			{"No such file or directory", "No such file or directory"},
-			{"Enter the full path audio filename", "Enter the full path audio filename"},
+			{"Enter the full path filename", "Enter the full path filename"},
 			{"Cannot find automatically the script path. Please insert the full path here:", "Cannot find automatically the script path. Please insert the full path here:"},
 			{"Cannot find user profile. Please insert the full path here:", "Cannot find user profile. Please insert the full path here:"},
 			{"Cannot find automatically the script folder path. Please insert the folder path here:", "Cannot find automatically the script folder path. Please insert the folder path here:"},
@@ -214,7 +214,7 @@ end
 
 -- Get wave file path
 function NotesObject:getScriptFile()
-	local filename = SV:showInputBox(SV:T(SCRIPT_TITLE), SV:T("Enter the full path audio filename"), "")
+	local filename = SV:showInputBox(SV:T(SCRIPT_TITLE), SV:T("Enter the full path filename"), "")
 	return filename
 end
 

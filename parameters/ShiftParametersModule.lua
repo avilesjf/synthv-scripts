@@ -159,8 +159,6 @@ function MainObject:setParameters()
 		table.insert(self.PARAMETERS_REFERENCE, {display = "Voicing",			ref = "Voicing"})
 		table.insert(self.PARAMETERS_REFERENCE, {display = "Gender",			ref = "Gender"})
 		table.insert(self.PARAMETERS_REFERENCE, {display = "Tone Shift",		ref = "ToneShift"})
-		 -- Crash app v2.0.5
-		-- table.insert(self.PARAMETERS_REFERENCE, {display = "Rap Intonation",	ref = "rapIntonation"})
 		table.insert(self.PARAMETERS_REFERENCE, {display = "Mouth Opening",		ref = "MouthOpening"})
 	end
 end

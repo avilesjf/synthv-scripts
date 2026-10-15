@@ -13,6 +13,8 @@ Set shortcut to ALT + cursor up
 2025 - JF AVILES
 --]]
 
+SV:setHostClipboard(package.path)
+
 -- Define a class "LocalObject"
 LocalObject = {
 	currentMode = 1,	-- 1=up 2=down 3=left 4=right
@@ -23,7 +25,8 @@ LocalObject = {
 	macosPath = "/Library/Application Support/Dreamtonics/Synthesizer V Studio 2/scripts/",
 	windowsPath = "/AppData/Roaming/Dreamtonics/Synthesizer V Studio 2/scripts/",
 	rootPath = "",
-	modulePath = ""
+	modulePath = "",
+	mainObjectModule = ""
 }
 
 -- Constructor method for the MainObject class
@@ -83,8 +86,8 @@ function getClientInfo()
 end
 
 -- Main process
-function main()
-	localObject = LocalObject:new()	
+function main()	
+	localObject = LocalObject:new()
 	if not localObject.mainObjectModule then
 		SV:showMessageBox(SV:T(SCRIPT_TITLE), SV:T("Module: ") .. localObject.moduleName .. " " .. SV:T("not found!"))
 	else

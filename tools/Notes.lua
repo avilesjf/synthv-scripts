@@ -214,7 +214,7 @@ function NotesObject:showForm(title, notes)
 		}
 	}
 	self.dialogTitle = title
-	self.onResponse = function(response) self:dialogResponse(response) end
+	-- self.onResponse = function(response) self:dialogResponse(response) end
 	return SV:showCustomDialog(form)
 end
 
