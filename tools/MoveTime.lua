@@ -10,6 +10,7 @@ Move times notes with all parameters & tempo in all tracks
 	Version 1 : Creation
 			2 : Add multitrack
 			3 : TimeOffset internal gaps
+			4 : TimeOffset corrected version
 
 !! Version for synthesizer V 2 ONLY !!
 
@@ -118,37 +119,29 @@ end
 -- Move time notes
 function NotesObject:moveNotes(newTime)
 	for iTrack = 1, self.numTracks do
+		local newTimeBlicks = self:getTimeAxis():getBlickFromSeconds(newTime)
 		local track = self:getProject():getTrack(iTrack)
 		local numGroup = track:getNumGroups()
+		local groups = {}
+		
+		for iGroupNote = 1, numGroup do
+			table.insert(groups, track:getGroupReference(iGroupNote))
+		end
 		
 		-- Loop groups
-		for iGroupNote = 1, track:getNumGroups() do
-			local groupRef = track:getGroupReference(iGroupNote)
-			local noteGroup = groupRef:getTarget()
-			numNotes = noteGroup:getNumNotes()
+		for iGroupNote = 1, numGroup do
+			local groupRef = groups[iGroupNote]
+			local numNotes = groupRef:getTarget():getNumNotes()
 			
 			if numNotes > 0 then
-				-- Update timeoffset to normalize notes behavior
-				self:updateTimeOffset(groupRef, noteGroup)
-				
-				local newTimeBlicks = groupRef:getOnset() + self:getTimeAxis():getBlickFromSeconds(newTime)
-				groupRef:setTimeOffset(newTimeBlicks)
-				groupRef:setTimeRange(newTimeBlicks, groupRef:getDuration())
+				local newTimeBlicksGap = groupRef:getOnset() + newTimeBlicks
+
+				groupRef:setTimeOffset(groupRef:getTimeOffset() + self:getTimeAxis():getBlickFromSeconds(newTime))
+				groupRef:setTimeRange(newTimeBlicksGap, groupRef:getDuration())
 			end
 		end
 	end
 	self:moveTempoMarks(newTime)
-end
-
--- Update timeOffset
-function NotesObject:updateTimeOffset(groupRef, noteGroup)
-	local newTimeUpdated = self:getTimeAxis():getSecondsFromBlick(groupRef:getOnset())
-	local newTimeBlicksUpdated = self:getTimeAxis():getBlickFromSeconds(newTimeUpdated)
-	for iNote = 1, numNotes do
-		noteGroup:getNote(iNote):setOnset(noteGroup:getNote(iNote):getOnset() - newTimeBlicksUpdated + groupRef:getTimeOffset())
-	end
-	groupRef:setTimeOffset(newTimeBlicksUpdated)
-	groupRef:setTimeRange(newTimeBlicksUpdated, groupRef:getDuration())
 end
 
 -- Get first group position
@@ -268,11 +261,11 @@ function NotesObject:start()
 	
 	self.BPM = self:getProjectTempo(0)
 	local BPM_ratio = 240 / self.BPM
-	self.currentSeconds = BPM_ratio
+	self.initialCurrentSeconds = BPM_ratio
 	-- local measureBarTime = BPM_ratio / 8 -- 1/16
 	
 	local secondsInfo = "BPM: " .. tostring(self.BPM)
-	secondsInfo = secondsInfo .. ", " .. SV:T("for 1 bar, shift time in seconds: ") .. self:secondsToClock(self.currentSeconds)
+	secondsInfo = secondsInfo .. ", " .. SV:T("for 1 bar, shift time in seconds: ") .. self:secondsToClock(self.initialCurrentSeconds)
 	
 	local userInput = self:showForm(title, secondsInfo)
 	if userInput.status then
@@ -280,7 +273,7 @@ function NotesObject:start()
 		-- self.infos = userInput.answers.infos
 		self.newTimeGap = userInput.answers.newTimeGap
 		
-		self.currentSeconds = self.newTimeGap * self.currentSeconds
+		self.currentSeconds = self.newTimeGap * self.initialCurrentSeconds
 		local currentSecondsInBlick = self:getTimeAxis():getBlickFromSeconds(self.currentSeconds)
 
 		local firstGroupPos = self:getFirstGroup()
