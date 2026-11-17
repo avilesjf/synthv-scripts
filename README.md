@@ -38,6 +38,7 @@ ControlPointsInfosPanel: Display control points position (time or blicks) and va
 ParametersNotesPanel: Set automation parameters attached to single notes.
 Lyrics2NotesPanel: Generates melodies based on scale, style, and rhythm, fill lyrics into melody.
 Lyrics2SimpleNotesPanel: Generates simple notes with variable spacing, fill lyrics into generated notes.
+FrenchVowelsAdjustmentPanel:French Vowels Adjustment, Mouth Opening & Tension
 
 ## groups-scripts
 Especially made to help using group of notes inside the Synthesizer V Studio Pro editor (Dreamtonics).
